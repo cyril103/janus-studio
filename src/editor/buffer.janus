@@ -85,6 +85,25 @@ private val redoStates : Array[BufferSnapshot]
         modified = true
     }
 
+    private def insertAt(position : usize, value : char) : Unit {
+        characters.push('\0')
+        var index : usize = characters.size() - usize(1)
+        while index > position {
+            characters.set(index, characters.get(index - usize(1)))
+            index = index - usize(1)
+        }
+        characters.set(position, value)
+    }
+
+    private def insertLineAt(position : usize, line : Array[char]) : Unit {
+        var index : usize = usize(0)
+        while index < line.size() {
+            this.insertAt(position + index, line.get(index))
+            index = index + usize(1)
+        }
+        this.insertAt(position + line.size(), '\n')
+    }
+
     def size() : usize {
         return characters.size()
     }
@@ -151,13 +170,7 @@ private val redoStates : Array[BufferSnapshot]
 
     def insert(value : char) : Unit {
         this.rememberChange()
-        characters.push('\0')
-        var index : usize = characters.size() - usize(1)
-        while index > cursorPosition {
-            characters.set(index, characters.get(index - usize(1)))
-            index = index - usize(1)
-        }
-        characters.set(cursorPosition, value)
+        this.insertAt(cursorPosition, value)
         cursorPosition = cursorPosition + usize(1)
         modified = true
     }
@@ -169,13 +182,7 @@ private val redoStates : Array[BufferSnapshot]
         this.rememberChange()
         var index : usize = usize(0)
         while index < count {
-            characters.push('\0')
-            var shifted : usize = characters.size() - usize(1)
-            while shifted > cursorPosition {
-                characters.set(shifted, characters.get(shifted - usize(1)))
-                shifted = shifted - usize(1)
-            }
-            characters.set(cursorPosition, ' ')
+            this.insertAt(cursorPosition, ' ')
             cursorPosition = cursorPosition + usize(1)
             index = index + usize(1)
         }
@@ -345,6 +352,58 @@ private val redoStates : Array[BufferSnapshot]
         }
         this.rememberChange()
         this.eraseRange(start, end)
+    }
+
+    def copyCurrentLine(output : Array[char]) : bool {
+        output.clear()
+        if characters.isEmpty() {
+            return false
+        }
+        val start : usize = this.lineStart(cursorPosition)
+        val end : usize = this.lineEnd(start)
+        var index : usize = start
+        while index < end {
+            output.push(characters.get(index))
+            index = index + usize(1)
+        }
+        return true
+    }
+
+    def pasteLineBelow(line : Array[char]) : Unit {
+        if characters.isEmpty() {
+            this.rememberChange()
+            this.insertLineAt(usize(0), line)
+            val _newline : char = characters.remove(characters.size() - usize(1))
+            cursorPosition = usize(0)
+            modified = true
+            return
+        }
+        val start : usize = this.lineStart(cursorPosition)
+        val end : usize = this.lineEnd(start)
+        this.rememberChange()
+        if end < characters.size() {
+            val insertion : usize = end + usize(1)
+            this.insertLineAt(insertion, line)
+            cursorPosition = insertion
+        } else {
+            this.insertAt(end, '\n')
+            val insertion : usize = end + usize(1)
+            var index : usize = usize(0)
+            while index < line.size() {
+                this.insertAt(insertion + index, line.get(index))
+                index = index + usize(1)
+            }
+            cursorPosition = insertion
+        }
+        modified = true
+    }
+
+    def pasteLineAbove(line : Array[char]) : Unit {
+        val insertion : usize = this.lineStart(cursorPosition)
+        this.rememberChange()
+        this.insertLineAt(insertion, line)
+        cursorPosition = insertion
+        modified = true
     }
 
     def openLineBelow() : Unit {

@@ -62,7 +62,9 @@ Janus Studio démarre en mode **NORMAL**. `Esc` revient toujours dans ce mode.
 | `w`, `b` | aller au mot suivant ou précédent |
 | `0`, `$` | aller au début ou à la fin de la ligne |
 | `gg`, `G` | aller au début ou à la fin du fichier |
-| `x`, `dd` | supprimer un caractère ou la ligne courante |
+| `x`, `dd` | supprimer un caractère ou couper la ligne courante |
+| `yy` | copier la ligne courante dans le registre interne |
+| `p`, `P` | coller la ligne du registre dessous ou dessus |
 | `u`, `Ctrl+R` | annuler ou rétablir |
 | `:` | passer en mode COMMAND |
 | flèches, `Home`, `End` | déplacer le curseur |

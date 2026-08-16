@@ -55,6 +55,41 @@ def handlesNormalCommandSequences() : Unit {
 }
 
 /// @test
+def pastesDeletedAndYankedLines() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val controller : VimController = vimController()
+    defer delete controller
+    buffer.load("first\nsecond\nthird")
+    buffer.moveFileStart()
+
+    controller.handleNormal('d', buffer)
+    controller.handleNormal('d', buffer)
+    controller.handleNormal('p', buffer)
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "second\nfirst\nthird")
+
+    buffer.moveFileStart()
+    controller.handleNormal('y', buffer)
+    controller.handleNormal('y', buffer)
+    controller.handleNormal('p', buffer)
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "second\nsecond\nfirst\nthird")
+
+    controller.handleNormal('P', buffer)
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](
+    output.view(),
+    "second\nsecond\nsecond\nfirst\nthird"
+    )
+}
+
+/// @test
 def parsesColonCommands() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer

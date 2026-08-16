@@ -2,6 +2,7 @@
 module editor.vim
 
 import editor.buffer
+import std.array
 import std.text
 
 enum EditorMode derives Copy, Equality, Debug {
@@ -22,7 +23,10 @@ class VimController(
 private var currentMode : EditorMode,
 private var pendingG : bool,
 private var pendingD : bool,
-private val command : TextBuilder
+private var pendingY : bool,
+private var hasLineRegister : bool,
+private val command : TextBuilder,
+private val lineRegister : Array[char]
 ) {
     def mode() : EditorMode {
         return currentMode
@@ -41,6 +45,9 @@ private val command : TextBuilder
         if pendingD {
             output.append("  d")
         }
+        if pendingY {
+            output.append("  y")
+        }
         if currentMode == EditorMode.Command {
             output.append("  :")
             output.append(command.view())
@@ -51,6 +58,7 @@ private val command : TextBuilder
         currentMode = EditorMode.Normal
         pendingG = false
         pendingD = false
+        pendingY = false
         command.clear()
     }
 
@@ -58,6 +66,7 @@ private val command : TextBuilder
         currentMode = EditorMode.Command
         pendingG = false
         pendingD = false
+        pendingY = false
         command.clear()
     }
 
@@ -72,7 +81,17 @@ private val command : TextBuilder
         if pendingD {
             pendingD = false
             if value == 'd' {
-                buffer.deleteCurrentLine()
+                hasLineRegister = buffer.copyCurrentLine(lineRegister)
+                if hasLineRegister {
+                    buffer.deleteCurrentLine()
+                }
+            }
+            return EditorAction.None
+        }
+        if pendingY {
+            pendingY = false
+            if value == 'y' {
+                hasLineRegister = buffer.copyCurrentLine(lineRegister)
             }
             return EditorAction.None
         }
@@ -100,6 +119,16 @@ private val command : TextBuilder
             buffer.deleteCharacter()
         } else if value == 'd' {
             pendingD = true
+        } else if value == 'y' {
+            pendingY = true
+        } else if value == 'p' {
+            if hasLineRegister {
+                buffer.pasteLineBelow(lineRegister)
+            }
+        } else if value == 'P' {
+            if hasLineRegister {
+                buffer.pasteLineAbove(lineRegister)
+            }
         } else if value == 'u' {
             buffer.undo()
         } else if value == 'i' {
@@ -162,6 +191,7 @@ private val command : TextBuilder
 
     destructor {
         delete command
+        delete lineRegister
     }
 }
 
@@ -170,6 +200,9 @@ def vimController() : VimController {
     EditorMode.Normal,
     false,
     false,
-    new TextBuilder()
+    false,
+    false,
+    new TextBuilder(),
+    new Array[char](usize(64))
     )
 }
