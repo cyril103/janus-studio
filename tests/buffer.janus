@@ -75,3 +75,44 @@ def movesRightOnlyAfterLineEnd() : Unit {
     assertEqual[usize](buffer.line(), usize(1))
     assertEqual[usize](buffer.column(), usize(0))
 }
+
+/// @test
+def navigatesWordsAndFileBounds() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("alpha beta\nsecond")
+    buffer.moveFileStart()
+
+    buffer.moveWordForward()
+    assertEqual[usize](buffer.column(), usize(6))
+    buffer.moveWordBackward()
+    assertEqual[usize](buffer.column(), usize(0))
+
+    buffer.moveFileEnd()
+    assertEqual[usize](buffer.line(), usize(1))
+    assertEqual[usize](buffer.column(), usize(6))
+}
+
+/// @test
+def deletesLinesAndRestoresHistory() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("first\nsecond\nthird")
+    buffer.moveFileStart()
+    buffer.deleteCurrentLine()
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "second\nthird")
+
+    assertTrue(buffer.undo())
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "first\nsecond\nthird")
+
+    assertTrue(buffer.redo())
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "second\nthird")
+}

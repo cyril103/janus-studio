@@ -10,6 +10,8 @@ Cette première version fournit :
 - le rechargement du fichier avec `Ctrl+O` ;
 - l'exécution de `janus check` avec `F5` ;
 - un panneau affichant les diagnostics du compilateur ;
+- une édition modale inspirée de Vim avec modes NORMAL, INSERT et COMMAND ;
+- un historique local de 100 états avec annulation et rétablissement ;
 - la saisie Unicode respectant la disposition active du clavier, notamment AZERTY ;
 - DejaVu Sans pour l'interface et Consolas pour le code lorsque la police est
   disponible sous Windows ou WSL ; DejaVu Sans Mono est embarquée comme police
@@ -48,15 +50,36 @@ Le chemin par défaut est `samples/welcome.janus`.
 
 ## Raccourcis
 
+Janus Studio démarre en mode **NORMAL**. `Esc` revient toujours dans ce mode.
+
+### Mode NORMAL
+
 | Raccourci | Action |
 | --- | --- |
+| `i`, `a` | passer en mode INSERT avant ou après le curseur |
+| `o`, `O` | ouvrir une ligne dessous ou dessus et passer en INSERT |
+| `h`, `j`, `k`, `l` | déplacer le curseur |
+| `w`, `b` | aller au mot suivant ou précédent |
+| `0`, `$` | aller au début ou à la fin de la ligne |
+| `gg`, `G` | aller au début ou à la fin du fichier |
+| `x`, `dd` | supprimer un caractère ou la ligne courante |
+| `u`, `Ctrl+R` | annuler ou rétablir |
+| `:` | passer en mode COMMAND |
+| flèches, `Home`, `End` | déplacer le curseur |
+
+### Mode INSERT et commandes
+
+| Raccourci | Action |
+| --- | --- |
+| `Esc` | revenir en mode NORMAL |
+| `:w` | enregistrer |
+| `:q` | quitter si le fichier n'est pas modifié |
+| `:q!` | quitter sans enregistrer |
+| `:wq`, `:x` | enregistrer puis quitter |
 | `Ctrl+S` | enregistrer le fichier actif |
 | `Ctrl+O` | recharger depuis le disque |
 | `F5` | enregistrer puis lancer `janus check` |
-| flèches, `Home`, `End` | déplacer le curseur |
-| `Backspace`, `Delete` | supprimer du texte |
-| `Tab` | insérer quatre espaces |
-| `Escape` | quitter |
+| `Backspace`, `Delete`, `Tab` | éditer en mode INSERT |
 
 ## Limites connues du MVP
 

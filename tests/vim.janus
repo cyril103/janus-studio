@@ -1,0 +1,73 @@
+import editor.buffer
+import editor.vim
+import std.testing
+import std.text
+
+/// @test
+def switchesModesAndEditsText() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val controller : VimController = vimController()
+    defer delete controller
+    buffer.load("ac")
+    buffer.moveFileStart()
+
+    controller.handleNormal('i', buffer)
+    assertEqual[EditorMode](controller.mode(), EditorMode.Insert)
+    controller.handleInsert('b', buffer)
+    controller.escape()
+    assertEqual[EditorMode](controller.mode(), EditorMode.Normal)
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "bac")
+}
+
+/// @test
+def handlesNormalCommandSequences() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val controller : VimController = vimController()
+    defer delete controller
+    buffer.load("first\nsecond")
+    buffer.moveFileStart()
+
+    controller.handleNormal('d', buffer)
+    controller.handleNormal('d', buffer)
+    assertEqual[usize](buffer.line(), usize(0))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "second")
+
+    controller.handleNormal('u', buffer)
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "first\nsecond")
+
+    controller.handleNormal('G', buffer)
+    assertEqual[usize](buffer.line(), usize(1))
+    controller.handleNormal('g', buffer)
+    controller.handleNormal('g', buffer)
+    assertEqual[usize](buffer.line(), usize(0))
+}
+
+/// @test
+def parsesColonCommands() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val controller : VimController = vimController()
+    defer delete controller
+
+    controller.handleNormal(':', buffer)
+    assertEqual[EditorMode](controller.mode(), EditorMode.Command)
+    controller.handleCommand('w')
+    controller.handleCommand('q')
+    assertEqual[EditorAction](
+    controller.executeCommand(),
+    EditorAction.SaveAndQuit
+    )
+    assertEqual[EditorMode](controller.mode(), EditorMode.Normal)
+}

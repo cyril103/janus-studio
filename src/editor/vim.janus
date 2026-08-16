@@ -1,0 +1,175 @@
+/// Interpréteur modal inspiré de Vim pour Janus Studio.
+module editor.vim
+
+import editor.buffer
+import std.text
+
+enum EditorMode derives Copy, Equality, Debug {
+    Normal,
+    Insert,
+    Command
+}
+
+enum EditorAction derives Copy, Equality, Debug {
+    None,
+    Save,
+    Quit,
+    ForceQuit,
+    SaveAndQuit
+}
+
+class VimController(
+private var currentMode : EditorMode,
+private var pendingG : bool,
+private var pendingD : bool,
+private val command : TextBuilder
+) {
+    def mode() : EditorMode {
+        return currentMode
+    }
+
+    def appendStatus(output : TextBuilder) : Unit {
+        output.clear()
+        output.append(match currentMode {
+            Normal => "-- NORMAL --",
+            Insert => "-- INSERT --",
+            Command => "-- COMMAND --"
+        })
+        if pendingG {
+            output.append("  g")
+        }
+        if pendingD {
+            output.append("  d")
+        }
+        if currentMode == EditorMode.Command {
+            output.append("  :")
+            output.append(command.view())
+        }
+    }
+
+    def escape() : Unit {
+        currentMode = EditorMode.Normal
+        pendingG = false
+        pendingD = false
+        command.clear()
+    }
+
+    def enterCommand() : Unit {
+        currentMode = EditorMode.Command
+        pendingG = false
+        pendingD = false
+        command.clear()
+    }
+
+    def handleNormal(value : char, buffer : EditorBuffer) : EditorAction {
+        if pendingG {
+            pendingG = false
+            if value == 'g' {
+                buffer.moveFileStart()
+            }
+            return EditorAction.None
+        }
+        if pendingD {
+            pendingD = false
+            if value == 'd' {
+                buffer.deleteCurrentLine()
+            }
+            return EditorAction.None
+        }
+        if value == 'h' {
+            buffer.moveLeft()
+        } else if value == 'j' {
+            buffer.moveDown()
+        } else if value == 'k' {
+            buffer.moveUp()
+        } else if value == 'l' {
+            buffer.moveRightInLine()
+        } else if value == 'w' {
+            buffer.moveWordForward()
+        } else if value == 'b' {
+            buffer.moveWordBackward()
+        } else if value == '0' {
+            buffer.moveHome()
+        } else if value == '$' {
+            buffer.moveEnd()
+        } else if value == 'g' {
+            pendingG = true
+        } else if value == 'G' {
+            buffer.moveFileEnd()
+        } else if value == 'x' {
+            buffer.deleteCharacter()
+        } else if value == 'd' {
+            pendingD = true
+        } else if value == 'u' {
+            buffer.undo()
+        } else if value == 'i' {
+            currentMode = EditorMode.Insert
+        } else if value == 'a' {
+            buffer.moveRightInLine()
+            currentMode = EditorMode.Insert
+        } else if value == 'o' {
+            buffer.openLineBelow()
+            currentMode = EditorMode.Insert
+        } else if value == 'O' {
+            buffer.openLineAbove()
+            currentMode = EditorMode.Insert
+        } else if value == ':' {
+            this.enterCommand()
+        }
+        return EditorAction.None
+    }
+
+    def handleInsert(value : char, buffer : EditorBuffer) : Unit {
+        buffer.insert(value)
+    }
+
+    def handleCommand(value : char) : Unit {
+        command.appendChar(value)
+    }
+
+    def commandBackspace() : Unit {
+        if command.size() == usize(0) {
+            this.escape()
+            return
+        }
+        val shortened : TextBuilder = new TextBuilder()
+        defer delete shortened
+        val current : string = command.view()
+        var index : usize = usize(0)
+        while index + usize(1) < stringLength(current) {
+            shortened.appendChar(char(stringData(current).load(index)))
+            index = index + usize(1)
+        }
+        command.clear()
+        command.append(shortened.view())
+    }
+
+    def executeCommand() : EditorAction {
+        val value : string = command.view()
+        var action : EditorAction = EditorAction.None
+        if value == "w" {
+            action = EditorAction.Save
+        } else if value == "q" {
+            action = EditorAction.Quit
+        } else if value == "q!" {
+            action = EditorAction.ForceQuit
+        } else if value == "wq" || value == "x" {
+            action = EditorAction.SaveAndQuit
+        }
+        this.escape()
+        return action
+    }
+
+    destructor {
+        delete command
+    }
+}
+
+def vimController() : VimController {
+    return new VimController(
+    EditorMode.Normal,
+    false,
+    false,
+    new TextBuilder()
+    )
+}

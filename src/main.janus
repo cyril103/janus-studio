@@ -1,4 +1,5 @@
 import editor.buffer
+import editor.vim
 import tooling.compiler
 import std.fs
 import std.graphics
@@ -51,6 +52,7 @@ buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
     buffer.load(data.view())
+    buffer.moveFileStart()
     delete data
     setStatus(status, "Fichier chargé.")
     return true
@@ -113,12 +115,28 @@ def controlDown() : bool {
     return isKeyDown(Key.LeftControl) || isKeyDown(Key.RightControl)
 }
 
-def handleEditingKeys(buffer : EditorBuffer) : Unit {
+def handleModeKeys(
+controller : VimController,
+buffer : EditorBuffer
+) : EditorAction {
+    if isKeyPressed(Key.Escape) {
+        controller.escape()
+        return EditorAction.None
+    }
+    if controller.mode() == EditorMode.Command {
+        if isKeyPressed(Key.Backspace) {
+            controller.commandBackspace()
+        }
+        if isKeyPressed(Key.Enter) {
+            return controller.executeCommand()
+        }
+        return EditorAction.None
+    }
     if isKeyPressed(Key.Left) {
         buffer.moveLeft()
     }
     if isKeyPressed(Key.Right) {
-        buffer.moveRight()
+        buffer.moveRightInLine()
     }
     if isKeyPressed(Key.Up) {
         buffer.moveUp()
@@ -132,6 +150,15 @@ def handleEditingKeys(buffer : EditorBuffer) : Unit {
     if isKeyPressed(Key.End) {
         buffer.moveEnd()
     }
+    if controller.mode() == EditorMode.Normal {
+        if isKeyPressed(Key.Delete) {
+            buffer.deleteCharacter()
+        }
+        if controlDown() && isKeyPressed(Key.R) {
+            buffer.redo()
+        }
+        return EditorAction.None
+    }
     if isKeyPressed(Key.Backspace) {
         buffer.backspace()
     }
@@ -144,17 +171,56 @@ def handleEditingKeys(buffer : EditorBuffer) : Unit {
     if isKeyPressed(Key.Tab) {
         buffer.insertSpaces(usize(4))
     }
+    return EditorAction.None
 }
 
-def handlePrintableKeys(buffer : EditorBuffer) : Unit {
+def handlePrintableKeys(
+controller : VimController,
+buffer : EditorBuffer
+) : EditorAction {
     val control : bool = controlDown()
+    var action : EditorAction = EditorAction.None
     var codepoint : int = characterPressed()
     while codepoint != 0 {
         if !control && codepoint >= 32 && codepoint != 127 {
-            buffer.insert(char(codepoint))
+            val value : char = char(codepoint)
+            if controller.mode() == EditorMode.Insert {
+                controller.handleInsert(value, buffer)
+            } else if controller.mode() == EditorMode.Command {
+                controller.handleCommand(value)
+            } else {
+                action = controller.handleNormal(value, buffer)
+            }
         }
         codepoint = characterPressed()
     }
+    return action
+}
+
+def applyEditorAction(
+action : EditorAction,
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if action == EditorAction.Save {
+        saveFile(path, buffer, status)
+        return false
+    }
+    if action == EditorAction.Quit {
+        if buffer.isModified() {
+            setStatus(status, "Modifications non enregistrées — utilisez :q!")
+            return false
+        }
+        return true
+    }
+    if action == EditorAction.ForceQuit {
+        return true
+    }
+    if action == EditorAction.SaveAndQuit {
+        return saveFile(path, buffer, status)
+    }
+    return false
 }
 
 def keepCursorVisible(
@@ -228,6 +294,8 @@ visibleText : TextBuilder,
 statusLine : TextBuilder,
 status : TextBuilder,
 toolOutput : TextBuilder,
+modeLine : TextBuilder,
+mode : EditorMode,
 uiFont : Font,
 codeFont : Font,
 glyphAdvance : float,
@@ -257,12 +325,12 @@ maximumLines : usize
     drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
     drawUiText(uiFont, path, 18, 104, 17.0f, White)
     drawUiText(uiFont, "RACCOURCIS", 18, 164, 16.0f, muted)
-    drawUiText(uiFont, "Ctrl+S  enregistrer", 18, 196, 16.0f, White)
-    drawUiText(uiFont, "Ctrl+O  recharger", 18, 222, 16.0f, White)
-    drawUiText(uiFont, "F5      vérifier", 18, 248, 16.0f, White)
-    drawUiText(uiFont, "Esc     quitter", 18, 274, 16.0f, White)
-    drawUiText(uiFont, "MVP ASCII", 18, 330, 16.0f, accent)
-    drawUiText(uiFont, "Client LSP à venir", 18, 358, 15.0f, muted)
+    drawUiText(uiFont, "i/a/o   insertion", 18, 196, 16.0f, White)
+    drawUiText(uiFont, "h/j/k/l déplacement", 18, 222, 16.0f, White)
+    drawUiText(uiFont, "dd/x    supprimer", 18, 248, 16.0f, White)
+    drawUiText(uiFont, ":w/:q   sauver/quitter", 18, 274, 15.0f, White)
+    drawUiText(uiFont, "MODE", 18, 330, 16.0f, muted)
+    drawUiText(uiFont, modeLine.view(), 18, 358, 16.0f, accent)
     drawUiText(uiFont, "ÉTAT", 18, 414, 16.0f, muted)
     drawUiText(uiFont, status.view(), 18, 442, 15.0f, White)
 
@@ -274,7 +342,9 @@ maximumLines : usize
     val cursorX : int = editorLeft + truncatingCast[int](cursorColumn * glyphAdvance)
     val cursorY : int = editorTop + 12 +
     truncatingCast[int](cursorLine * lineAdvance)
-    drawRectangle(cursorX, cursorY, 2, 23, accent)
+    val cursorWidth : int =
+    if mode == EditorMode.Insert { 2 } else { truncatingCast[int](glyphAdvance) }
+    drawRectangle(cursorX, cursorY, cursorWidth, 23, accent)
 
     drawUiText(uiFont, "SORTIE JANUS", editorLeft, 606, 15.0f, accent)
     drawCodeText(codeFont, toolOutput.view(), editorLeft, 632, 15.0f, muted)
@@ -293,6 +363,10 @@ def main() : int {
     defer delete statusLine
     val toolOutput : TextBuilder = new TextBuilder()
     defer delete toolOutput
+    val modeLine : TextBuilder = new TextBuilder()
+    defer delete modeLine
+    val controller : VimController = vimController()
+    defer delete controller
 
     loadFile(path, buffer, status)
     toolOutput.append("F5 lance `janus check` sur le fichier actif.")
@@ -342,7 +416,8 @@ def main() : int {
     setTargetFps(60)
 
     var firstLine : usize = usize(0)
-    while !windowShouldClose() && !isKeyPressed(Key.Escape) {
+    var quitRequested : bool = false
+    while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
         if control && isKeyPressed(Key.S) {
             saveFile(path, buffer, status)
@@ -356,9 +431,16 @@ def main() : int {
             }
         }
 
-        handleEditingKeys(buffer)
-        handlePrintableKeys(buffer)
+        val keyAction : EditorAction = handleModeKeys(controller, buffer)
+        val characterAction : EditorAction = handlePrintableKeys(controller, buffer)
+        quitRequested = applyEditorAction(
+        if keyAction != EditorAction.None { keyAction } else { characterAction },
+        path,
+        buffer,
+        status
+        )
         firstLine = keepCursorVisible(buffer, firstLine, maximumLines)
+        controller.appendStatus(modeLine)
         drawStudio(
         path,
         buffer,
@@ -367,6 +449,8 @@ def main() : int {
         statusLine,
         status,
         toolOutput,
+        modeLine,
+        controller.mode(),
         uiFont,
         codeFont,
         glyphAdvance,
