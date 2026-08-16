@@ -1,12 +1,14 @@
 import std.array
 
 def greet(name : string) : Unit {
-    print("Bonjour ")
+    val xs = [1,2,3]
+    xs.sortWith((a:int,b:int) => a>b)
+    defer delete xs
+    print("bonjour ")
     println(name)
 }
 
 def main() : int {
-    val a = [1,2,3]
     greet("depuis Janus Studio")
     return 0
 }
