@@ -376,6 +376,7 @@ def main() : int {
         return 1
     }
     defer closeWindow()
+    disableExitKey()
 
     val fontCharacters : string =
     " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~•€ÀÂÇÉÈÊËÎÏÔÙÛÜŸàâçéèêëîïôùûüÿŒœ"
