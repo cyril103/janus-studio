@@ -1,0 +1,66 @@
+/// Saisie modale d'un chemin pour les opérations de fichier de Janus Studio.
+module editor.path_prompt
+
+import std.text
+
+enum PathPromptAction derives Copy, Equality, Debug {
+    None,
+    Open,
+    Create,
+    SaveAs
+}
+
+class PathPrompt(
+private var currentAction : PathPromptAction,
+private val text : TextBuilder
+) {
+    def isVisible() : bool {
+        return currentAction != PathPromptAction.None
+    }
+
+    def action() : PathPromptAction {
+        return currentAction
+    }
+
+    def value() : string {
+        return text.view()
+    }
+
+    def begin(action : PathPromptAction, initialValue : string) : Unit {
+        currentAction = action
+        text.clear()
+        text.append(initialValue)
+    }
+
+    def append(value : char) : Unit {
+        text.appendChar(value)
+    }
+
+    def backspace() : Unit {
+        if text.size() == usize(0) {
+            return
+        }
+        val current : string = text.view()
+        val data : Ptr[byte] = stringData(current)
+        var keep : usize = stringLength(current) - usize(1)
+        while keep > usize(0) && data.load(keep) < byte(-64) {
+            keep = keep - usize(1)
+        }
+        val shortened : TextBuilder = new TextBuilder()
+        defer delete shortened
+        shortened.append(stringView(data, keep))
+        text.clear()
+        text.append(shortened.view())
+    }
+
+    def dismiss() : Unit {
+        currentAction = PathPromptAction.None
+        text.clear()
+    }
+
+    destructor { delete text }
+}
+
+def pathPrompt() : PathPrompt {
+    return new PathPrompt(PathPromptAction.None, new TextBuilder())
+}

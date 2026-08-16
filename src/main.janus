@@ -1,5 +1,6 @@
 import editor.buffer
 import editor.completion
+import editor.path_prompt
 import editor.syntax
 import editor.vim
 import tooling.compiler
@@ -83,6 +84,23 @@ status : TextBuilder
     }
 }
 
+def openFailed(status : TextBuilder) : bool {
+    setStatus(status, "Impossible d'ouvrir ce fichier.")
+    return false
+}
+
+def openExistingFile(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val result : Result[FileData, SystemError] = readFile(path)
+    return match move result {
+        Ok(data) => acceptFile(move data, buffer, status),
+        Error(error) => openFailed(status)
+    }
+}
+
 def saveSucceeded(
 buffer : EditorBuffer,
 status : TextBuilder
@@ -117,6 +135,69 @@ status : TextBuilder
 
 def controlDown() : bool {
     return isKeyDown(Key.LeftControl) || isKeyDown(Key.RightControl)
+}
+
+def shiftDown() : bool {
+    return isKeyDown(Key.LeftShift) || isKeyDown(Key.RightShift)
+}
+
+def pathPromptTitle(action : PathPromptAction) : string {
+    return match action {
+        Open => "OUVRIR UN FICHIER",
+        Create => "NOUVEAU FICHIER",
+        SaveAs => "ENREGISTRER SOUS",
+        None => "FICHIER"
+    }
+}
+
+def handlePathPromptKeys(prompt : PathPrompt) : bool {
+    if isKeyPressed(Key.Escape) {
+        prompt.dismiss()
+        return false
+    }
+    if isKeyPressed(Key.Backspace) {
+        prompt.backspace()
+    }
+    if isKeyPressed(Key.Enter) {
+        return true
+    }
+    var codepoint : int = characterPressed()
+    while codepoint != 0 {
+        if !controlDown() && codepoint >= 32 && codepoint != 127 {
+            prompt.append(char(codepoint))
+        }
+        codepoint = characterPressed()
+    }
+    return false
+}
+
+def applyPathPrompt(
+prompt : PathPrompt,
+activePath : TextBuilder,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if prompt.value() == "" {
+        setStatus(status, "Saisissez un chemin de fichier.")
+        return false
+    }
+    val action : PathPromptAction = prompt.action()
+    if action == PathPromptAction.Open &&
+    !openExistingFile(prompt.value(), buffer, status) {
+        return false
+    }
+    if action == PathPromptAction.SaveAs &&
+    !saveFile(prompt.value(), buffer, status) {
+        return false
+    }
+    if action == PathPromptAction.Create {
+        buffer.clear()
+        setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+    }
+    activePath.clear()
+    activePath.append(prompt.value())
+    prompt.dismiss()
+    return true
 }
 
 def handleModeKeys(
@@ -436,6 +517,7 @@ syntaxSpans : Array[SyntaxSpan],
 glyph : TextBuilder,
 completion : CompletionModel,
 completionText : TextBuilder,
+pathPrompt : PathPrompt,
 statusLine : TextBuilder,
 status : TextBuilder,
 toolOutput : TextBuilder,
@@ -469,15 +551,14 @@ maximumLines : usize
 
     drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
     drawUiText(uiFont, path, 18, 104, 17.0f, White)
-    drawUiText(uiFont, "RACCOURCIS", 18, 164, 16.0f, muted)
-    drawUiText(uiFont, "i/a/o   insertion", 18, 196, 16.0f, White)
-    drawUiText(uiFont, "h/j/k/l déplacement", 18, 222, 16.0f, White)
-    drawUiText(uiFont, "dd/yy   couper/copier", 18, 248, 15.0f, White)
-    drawUiText(uiFont, "p/P     coller", 18, 274, 16.0f, White)
-    drawUiText(uiFont, "MODE", 18, 330, 16.0f, muted)
-    drawUiText(uiFont, modeLine.view(), 18, 358, 16.0f, accent)
-    drawUiText(uiFont, "ÉTAT", 18, 414, 16.0f, muted)
-    drawUiText(uiFont, status.view(), 18, 442, 15.0f, White)
+    drawUiText(uiFont, "FICHIERS", 18, 164, 16.0f, muted)
+    drawUiText(uiFont, "Ctrl+O  ouvrir", 18, 196, 16.0f, White)
+    drawUiText(uiFont, "Ctrl+N  nouveau", 18, 222, 16.0f, White)
+    drawUiText(uiFont, "Ctrl+Maj+S enregistrer sous", 18, 248, 14.0f, White)
+    drawUiText(uiFont, "MODE", 18, 304, 16.0f, muted)
+    drawUiText(uiFont, modeLine.view(), 18, 332, 16.0f, accent)
+    drawUiText(uiFont, "ÉTAT", 18, 388, 16.0f, muted)
+    drawUiText(uiFont, status.view(), 18, 416, 15.0f, White)
 
     drawHighlightedCode(
     codeFont,
@@ -530,13 +611,53 @@ maximumLines : usize
         )
     }
 
+    if pathPrompt.isVisible() {
+        val dialogX : int = editorLeft + 70
+        val dialogY : int = 230
+        val dialogWidth : int = 720
+        drawRectangle(dialogX, dialogY, dialogWidth, 154, rgb(31, 43, 57))
+        drawUiText(
+        uiFont,
+        pathPromptTitle(pathPrompt.action()),
+        dialogX + 20,
+        dialogY + 18,
+        18.0f,
+        accent
+        )
+        drawRectangle(
+        dialogX + 20,
+        dialogY + 55,
+        dialogWidth - 40,
+        42,
+        rgb(18, 24, 33)
+        )
+        drawCodeText(
+        codeFont,
+        pathPrompt.value(),
+        dialogX + 30,
+        dialogY + 64,
+        17.0f,
+        White
+        )
+        drawUiText(
+        uiFont,
+        "Entrée : valider    Esc : annuler",
+        dialogX + 20,
+        dialogY + 116,
+        15.0f,
+        muted
+        )
+    }
+
     drawUiText(uiFont, "SORTIE JANUS", editorLeft, 606, 15.0f, accent)
     drawCodeText(codeFont, toolOutput.view(), editorLeft, 632, 15.0f, muted)
     endDrawing()
 }
 
 def main() : int {
-    val path : string = selectedPath()
+    val activePath : TextBuilder = new TextBuilder()
+    defer delete activePath
+    activePath.append(selectedPath())
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
     val status : TextBuilder = new TextBuilder()
@@ -555,6 +676,8 @@ def main() : int {
     defer delete completionError
     val completionText : TextBuilder = new TextBuilder()
     defer delete completionText
+    val filePrompt : PathPrompt = pathPrompt()
+    defer delete filePrompt
     val statusLine : TextBuilder = new TextBuilder()
     defer delete statusLine
     val toolOutput : TextBuilder = new TextBuilder()
@@ -564,7 +687,7 @@ def main() : int {
     val controller : VimController = vimController()
     defer delete controller
 
-    loadFile(path, buffer, status)
+    loadFile(activePath.view(), buffer, status)
     toolOutput.append("F5 lance `janus check` sur le fichier actif.")
 
     if !initWindow(1200, 760, "Janus Studio") {
@@ -616,19 +739,49 @@ def main() : int {
     var quitRequested : bool = false
     while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
-        if control && isKeyPressed(Key.S) {
-            saveFile(path, buffer, status)
-        }
-        if control && isKeyPressed(Key.O) {
-            loadFile(path, buffer, status)
-        }
-        if isKeyPressed(Key.F5) {
-            if saveFile(path, buffer, status) {
-                checkFile(path, toolOutput)
+        val shift : bool = shiftDown()
+        var fileInputConsumed : bool = false
+        if filePrompt.isVisible() {
+            if handlePathPromptKeys(filePrompt) {
+                applyPathPrompt(filePrompt, activePath, buffer, status)
+                firstLine = usize(0)
             }
+            fileInputConsumed = true
+        } else if control && shift && isKeyPressed(Key.S) {
+            filePrompt.begin(PathPromptAction.SaveAs, activePath.view())
+            completion.dismiss()
+            fileInputConsumed = true
+        } else if control && isKeyPressed(Key.O) {
+            if buffer.isModified() {
+                setStatus(status, "Enregistrez les modifications avant d'ouvrir un fichier.")
+            } else {
+                filePrompt.begin(PathPromptAction.Open, "")
+                completion.dismiss()
+            }
+            fileInputConsumed = true
+        } else if control && isKeyPressed(Key.N) {
+            if buffer.isModified() {
+                setStatus(status, "Enregistrez les modifications avant de créer un fichier.")
+            } else {
+                filePrompt.begin(PathPromptAction.Create, "")
+                completion.dismiss()
+            }
+            fileInputConsumed = true
         }
 
-        val completionConsumed : bool = handleCompletionKeys(completion, buffer)
+        if !fileInputConsumed && control && isKeyPressed(Key.S) {
+            saveFile(activePath.view(), buffer, status)
+            fileInputConsumed = true
+        }
+        if !fileInputConsumed && isKeyPressed(Key.F5) {
+            if saveFile(activePath.view(), buffer, status) {
+                checkFile(activePath.view(), toolOutput)
+            }
+            fileInputConsumed = true
+        }
+
+        val completionConsumed : bool =
+        if fileInputConsumed { true } else { handleCompletionKeys(completion, buffer) }
         var keyAction : EditorAction = EditorAction.None
         var characterAction : EditorAction = EditorAction.None
         if !completionConsumed {
@@ -640,7 +793,7 @@ def main() : int {
         isKeyPressed(Key.Space)
         if characterAction == EditorAction.Complete || manualCompletion {
             refreshCompletion(
-            path,
+            activePath.view(),
             buffer,
             completion,
             completionLabels,
@@ -659,14 +812,14 @@ def main() : int {
         }
         quitRequested = applyEditorAction(
         if keyAction != EditorAction.None { keyAction } else { characterAction },
-        path,
+        activePath.view(),
         buffer,
         status
         )
         firstLine = keepCursorVisible(buffer, firstLine, maximumLines)
         controller.appendStatus(modeLine)
         drawStudio(
-        path,
+        activePath.view(),
         buffer,
         firstLine,
         visibleCharacters,
@@ -674,6 +827,7 @@ def main() : int {
         glyph,
         completion,
         completionText,
+        filePrompt,
         statusLine,
         status,
         toolOutput,

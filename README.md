@@ -6,8 +6,9 @@ Cette première version fournit :
 
 - un buffer éditable avec curseur et défilement vertical automatique ;
 - l'ouverture d'un fichier passé en argument ;
+- l'ouverture et la création de fichiers depuis l'interface, ainsi que
+  l'enregistrement sous un nouveau chemin ;
 - une sauvegarde atomique avec `Ctrl+S` ;
-- le rechargement du fichier avec `Ctrl+O` ;
 - l'exécution de `janus check` avec `F5` ;
 - un panneau affichant les diagnostics du compilateur ;
 - une édition modale inspirée de Vim avec modes NORMAL, INSERT et COMMAND ;
@@ -85,13 +86,21 @@ Janus Studio démarre en mode **NORMAL**. `Esc` revient toujours dans ce mode.
 | `:q!` | quitter sans enregistrer |
 | `:wq`, `:x` | enregistrer puis quitter |
 | `Ctrl+S` | enregistrer le fichier actif |
-| `Ctrl+O` | recharger depuis le disque |
+| `Ctrl+O` | saisir le chemin d'un fichier à ouvrir |
+| `Ctrl+N` | saisir le chemin d'un nouveau fichier |
+| `Ctrl+Shift+S` | enregistrer le fichier sous un nouveau chemin |
 | `F5` | enregistrer puis lancer `janus check` |
 | `Backspace`, `Delete`, `Tab` | éditer en mode INSERT |
 | `.` ou `Ctrl+Espace` | ouvrir les propositions d'autocomplétion |
 | `↑`, `↓` | sélectionner une proposition |
 | `Entrée`, `Tab` | insérer la proposition sélectionnée |
 | `Esc` | fermer les propositions |
+
+Les commandes de fichier ouvrent une fenêtre de saisie de chemin intégrée.
+`Entrée` valide le chemin et `Esc` annule l'opération. Les chemins relatifs sont
+résolus depuis le répertoire dans lequel Janus Studio a été lancé. Pour éviter
+une perte de travail, `Ctrl+O` et `Ctrl+N` demandent d'abord d'enregistrer les
+modifications éventuelles.
 
 ## Limites connues du MVP
 

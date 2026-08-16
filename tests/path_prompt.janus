@@ -1,0 +1,32 @@
+import editor.path_prompt
+import std.testing
+
+/// @test
+def editsAndDismissesPathPrompt() : Unit {
+    val prompt : PathPrompt = pathPrompt()
+    defer delete prompt
+
+    prompt.begin(PathPromptAction.Open, "src/main.janus")
+    assertTrue(prompt.isVisible())
+    assertEqual[PathPromptAction](prompt.action(), PathPromptAction.Open)
+    prompt.backspace()
+    assertEqual[string](prompt.value(), "src/main.janu")
+    prompt.append('s')
+    assertEqual[string](prompt.value(), "src/main.janus")
+
+    prompt.dismiss()
+    assertTrue(!prompt.isVisible())
+    assertEqual[string](prompt.value(), "")
+}
+
+/// @test
+def removesOneUnicodeCharacterFromPathPrompt() : Unit {
+    val prompt : PathPrompt = pathPrompt()
+    defer delete prompt
+
+    prompt.begin(PathPromptAction.SaveAs, "src/été")
+    prompt.backspace()
+    assertEqual[string](prompt.value(), "src/ét")
+    prompt.backspace()
+    assertEqual[string](prompt.value(), "src/é")
+}
