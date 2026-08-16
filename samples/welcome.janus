@@ -1,0 +1,12 @@
+import std.array
+
+def greet(name : string) : Unit {
+    print("Bonjour ")
+    println(name)
+}
+
+def main() : int {
+    val a = [1,2,3]
+    greet("depuis Janus Studio")
+    return 0
+}

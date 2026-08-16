@@ -1,0 +1,10 @@
+import tooling.compiler
+import std.testing
+import std.text
+
+/// @test
+def checksTheWelcomeSample() : Unit {
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    assertTrue(checkFile("samples/welcome.janus", output))
+}

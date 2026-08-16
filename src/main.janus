@@ -1,0 +1,379 @@
+import editor.buffer
+import tooling.compiler
+import std.fs
+import std.graphics
+import std.option
+import std.process
+import std.result
+import std.system
+import std.text
+
+const editorLeft : int = 236
+const editorTop : int = 54
+const editorBottom : int = 590
+const codeFontSize : float = 20.0f
+const codeFontSpacing : float = 1.0f
+
+def isFile(path : string) : bool {
+    return match metadata(path) {
+        Ok(value) => value.kind == FileType.File,
+        Error(error) => false
+    }
+}
+
+def codeFontPath() : string {
+    val windowsPath : string = "C:/Windows/Fonts/consola.ttf"
+    if isFile(windowsPath) {
+        return windowsPath
+    }
+    val wslPath : string = "/mnt/c/Windows/Fonts/consola.ttf"
+    if isFile(wslPath) {
+        return wslPath
+    }
+    return "assets/fonts/DejaVuSansMono.ttf"
+}
+
+def selectedPath() : string {
+    return match programArgument(usize(1)) {
+        Some(path) => path,
+        None => "samples/welcome.janus"
+    }
+}
+
+def setStatus(status : TextBuilder, message : string) : Unit {
+    status.clear()
+    status.append(message)
+}
+
+def acceptFile(
+data : FileData,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    buffer.load(data.view())
+    delete data
+    setStatus(status, "Fichier chargé.")
+    return true
+}
+
+def startEmptyFile(
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    buffer.clear()
+    setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+    return false
+}
+
+def loadFile(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val result : Result[FileData, SystemError] = readFile(path)
+    return match move result {
+        Ok(data) => acceptFile(move data, buffer, status),
+        Error(error) => startEmptyFile(buffer, status)
+    }
+}
+
+def saveSucceeded(
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    buffer.markSaved()
+    setStatus(status, "Fichier enregistré.")
+    return true
+}
+
+def saveFailed(status : TextBuilder) : bool {
+    setStatus(status, "Échec de l'enregistrement.")
+    return false
+}
+
+def saveFile(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val content : TextBuilder = new TextBuilder()
+    defer delete content
+    buffer.appendText(content)
+    return match writeTextFileAtomic(path, content.view()) {
+        Ok(written) => if written {
+            saveSucceeded(buffer, status)
+        } else {
+            saveFailed(status)
+        },
+        Error(error) => saveFailed(status)
+    }
+}
+
+def controlDown() : bool {
+    return isKeyDown(Key.LeftControl) || isKeyDown(Key.RightControl)
+}
+
+def handleEditingKeys(buffer : EditorBuffer) : Unit {
+    if isKeyPressed(Key.Left) {
+        buffer.moveLeft()
+    }
+    if isKeyPressed(Key.Right) {
+        buffer.moveRight()
+    }
+    if isKeyPressed(Key.Up) {
+        buffer.moveUp()
+    }
+    if isKeyPressed(Key.Down) {
+        buffer.moveDown()
+    }
+    if isKeyPressed(Key.Home) {
+        buffer.moveHome()
+    }
+    if isKeyPressed(Key.End) {
+        buffer.moveEnd()
+    }
+    if isKeyPressed(Key.Backspace) {
+        buffer.backspace()
+    }
+    if isKeyPressed(Key.Delete) {
+        buffer.deleteForward()
+    }
+    if isKeyPressed(Key.Enter) {
+        buffer.insert('\n')
+    }
+    if isKeyPressed(Key.Tab) {
+        buffer.insertSpaces(usize(4))
+    }
+}
+
+def handlePrintableKeys(buffer : EditorBuffer) : Unit {
+    val control : bool = controlDown()
+    var codepoint : int = characterPressed()
+    while codepoint != 0 {
+        if !control && codepoint >= 32 && codepoint != 127 {
+            buffer.insert(char(codepoint))
+        }
+        codepoint = characterPressed()
+    }
+}
+
+def keepCursorVisible(
+buffer : EditorBuffer,
+firstLine : usize,
+maximumLines : usize
+) : usize {
+    val cursorLine : usize = buffer.line()
+    if cursorLine < firstLine {
+        return cursorLine
+    }
+    if cursorLine >= firstLine + maximumLines {
+        return cursorLine - maximumLines + usize(1)
+    }
+    return firstLine
+}
+
+def buildStatusLine(
+output : TextBuilder,
+path : string,
+buffer : EditorBuffer
+) : Unit {
+    output.clear()
+    output.append(path)
+    output.append(if buffer.isModified() { "  • modifié" } else { "  • enregistré" })
+    output.append("    ligne ")
+    output.appendUSize(buffer.line() + usize(1))
+    output.append(", colonne ")
+    output.appendUSize(buffer.column() + usize(1))
+}
+
+def drawUiText(
+font : Font,
+text : string,
+x : int,
+y : int,
+size : float,
+color : Color
+) : Unit {
+    font.draw(
+    text,
+    vector2(numericCast[float](x), numericCast[float](y)),
+    size,
+    0.25f,
+    color
+    )
+}
+
+def drawCodeText(
+font : Font,
+text : string,
+x : int,
+y : int,
+size : float,
+color : Color
+) : Unit {
+    font.draw(
+    text,
+    vector2(numericCast[float](x), numericCast[float](y)),
+    size,
+    codeFontSpacing,
+    color
+    )
+}
+
+def drawStudio(
+path : string,
+buffer : EditorBuffer,
+firstLine : usize,
+visibleText : TextBuilder,
+statusLine : TextBuilder,
+status : TextBuilder,
+toolOutput : TextBuilder,
+uiFont : Font,
+codeFont : Font,
+glyphAdvance : float,
+lineAdvance : float,
+maximumLines : usize
+) : Unit {
+    visibleText.clear()
+    buffer.appendVisibleText(visibleText, firstLine, maximumLines)
+    buildStatusLine(statusLine, path, buffer)
+
+    val background : Color = rgb(18, 24, 33)
+    val sidebar : Color = rgb(25, 34, 46)
+    val header : Color = rgb(31, 43, 57)
+    val panel : Color = rgb(13, 18, 25)
+    val accent : Color = rgb(82, 183, 136)
+    val muted : Color = rgb(151, 166, 181)
+
+    beginDrawing()
+    clearBackground(background)
+    drawRectangle(0, 0, screenWidth(), editorTop, header)
+    drawRectangle(0, editorTop, editorLeft - 12, screenHeight() - editorTop, sidebar)
+    drawRectangle(editorLeft - 12, editorBottom, screenWidth() - editorLeft + 12, screenHeight() - editorBottom, panel)
+
+    drawUiText(uiFont, "JANUS STUDIO", 18, 13, 23.0f, accent)
+    drawUiText(uiFont, statusLine.view(), editorLeft, 16, 17.0f, muted)
+
+    drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
+    drawUiText(uiFont, path, 18, 104, 17.0f, White)
+    drawUiText(uiFont, "RACCOURCIS", 18, 164, 16.0f, muted)
+    drawUiText(uiFont, "Ctrl+S  enregistrer", 18, 196, 16.0f, White)
+    drawUiText(uiFont, "Ctrl+O  recharger", 18, 222, 16.0f, White)
+    drawUiText(uiFont, "F5      vérifier", 18, 248, 16.0f, White)
+    drawUiText(uiFont, "Esc     quitter", 18, 274, 16.0f, White)
+    drawUiText(uiFont, "MVP ASCII", 18, 330, 16.0f, accent)
+    drawUiText(uiFont, "Client LSP à venir", 18, 358, 15.0f, muted)
+    drawUiText(uiFont, "ÉTAT", 18, 414, 16.0f, muted)
+    drawUiText(uiFont, status.view(), 18, 442, 15.0f, White)
+
+    drawCodeText(codeFont, visibleText.view(), editorLeft, editorTop + 12, codeFontSize, White)
+    val cursorColumn : float = numericCast[float](truncatingCast[int](buffer.column()))
+    val cursorLine : float = numericCast[float](
+    truncatingCast[int](buffer.line() - firstLine)
+    )
+    val cursorX : int = editorLeft + truncatingCast[int](cursorColumn * glyphAdvance)
+    val cursorY : int = editorTop + 12 +
+    truncatingCast[int](cursorLine * lineAdvance)
+    drawRectangle(cursorX, cursorY, 2, 23, accent)
+
+    drawUiText(uiFont, "SORTIE JANUS", editorLeft, 606, 15.0f, accent)
+    drawCodeText(codeFont, toolOutput.view(), editorLeft, 632, 15.0f, muted)
+    endDrawing()
+}
+
+def main() : int {
+    val path : string = selectedPath()
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+    val visibleText : TextBuilder = new TextBuilder()
+    defer delete visibleText
+    val statusLine : TextBuilder = new TextBuilder()
+    defer delete statusLine
+    val toolOutput : TextBuilder = new TextBuilder()
+    defer delete toolOutput
+
+    loadFile(path, buffer, status)
+    toolOutput.append("F5 lance `janus check` sur le fichier actif.")
+
+    if !initWindow(1200, 760, "Janus Studio") {
+        println("Impossible d'ouvrir la fenêtre Janus Studio.")
+        return 1
+    }
+    defer closeWindow()
+
+    val fontCharacters : string =
+    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~•€ÀÂÇÉÈÊËÎÏÔÙÛÜŸàâçéèêëîïôùûüÿŒœ"
+    val uiFont : Font = loadFontUtf8(
+    "assets/fonts/DejaVuSans.ttf",
+    32,
+    fontCharacters
+    )
+    defer delete uiFont
+    val codeFont : Font = loadFontUtf8(
+    codeFontPath(),
+    32,
+    fontCharacters
+    )
+    defer delete codeFont
+    if !uiFont.isValid() || !codeFont.isValid() {
+        println("Impossible de charger les polices de Janus Studio.")
+        return 1
+    }
+    val oneGlyph : Vector2 = codeFont.measure(
+    "M",
+    codeFontSize,
+    codeFontSpacing
+    )
+    val glyphAdvance : float = codeFont.measure(
+    "MM",
+    codeFontSize,
+    codeFontSpacing
+    ).x - oneGlyph.x
+    val lineAdvance : float = codeFont.measure(
+    "M\nM",
+    codeFontSize,
+    codeFontSpacing
+    ).y - oneGlyph.y
+    val maximumLines : usize = numericCast[usize](truncatingCast[int](
+    numericCast[float](editorBottom - editorTop - 12) / lineAdvance
+    ))
+    setTargetFps(60)
+
+    var firstLine : usize = usize(0)
+    while !windowShouldClose() && !isKeyPressed(Key.Escape) {
+        val control : bool = controlDown()
+        if control && isKeyPressed(Key.S) {
+            saveFile(path, buffer, status)
+        }
+        if control && isKeyPressed(Key.O) {
+            loadFile(path, buffer, status)
+        }
+        if isKeyPressed(Key.F5) {
+            if saveFile(path, buffer, status) {
+                checkFile(path, toolOutput)
+            }
+        }
+
+        handleEditingKeys(buffer)
+        handlePrintableKeys(buffer)
+        firstLine = keepCursorVisible(buffer, firstLine, maximumLines)
+        drawStudio(
+        path,
+        buffer,
+        firstLine,
+        visibleText,
+        statusLine,
+        status,
+        toolOutput,
+        uiFont,
+        codeFont,
+        glyphAdvance,
+        lineAdvance,
+        maximumLines
+        )
+    }
+
+    return 0
+}

@@ -1,0 +1,217 @@
+/// Buffer de texte éditable utilisé par Janus Studio.
+///
+/// Cette première version stocke des caractères Unicode mais charge les fichiers
+/// octet par octet. L'édition interactive est donc volontairement limitée à
+/// l'ASCII tant que la façade graphique Janus n'expose pas les caractères saisis.
+module editor.buffer
+
+import std.array
+import std.text
+
+class EditorBuffer(private val characters : Array[char]) {
+    private var cursorPosition : usize = usize(0)
+    private var modified : bool = false
+
+    def size() : usize {
+        return characters.size()
+    }
+
+    def cursor() : usize {
+        return cursorPosition
+    }
+
+    def isModified() : bool {
+        return modified
+    }
+
+    def markSaved() : Unit {
+        modified = false
+    }
+
+    def clear() : Unit {
+        characters.clear()
+        cursorPosition = usize(0)
+        modified = false
+    }
+
+    def load(text : string) : Unit {
+        characters.clear()
+        val data : Ptr[byte] = stringData(text)
+        var index : usize = usize(0)
+        while index < stringLength(text) {
+            characters.push(char(data.load(index)))
+            index = index + usize(1)
+        }
+        cursorPosition = characters.size()
+        modified = false
+    }
+
+    def insert(value : char) : Unit {
+        characters.push('\0')
+        var index : usize = characters.size() - usize(1)
+        while index > cursorPosition {
+            characters.set(index, characters.get(index - usize(1)))
+            index = index - usize(1)
+        }
+        characters.set(cursorPosition, value)
+        cursorPosition = cursorPosition + usize(1)
+        modified = true
+    }
+
+    def insertSpaces(count : usize) : Unit {
+        var index : usize = usize(0)
+        while index < count {
+            this.insert(' ')
+            index = index + usize(1)
+        }
+    }
+
+    def backspace() : Unit {
+        if cursorPosition == usize(0) {
+            return
+        }
+        val _removed : char = characters.remove(cursorPosition - usize(1))
+        cursorPosition = cursorPosition - usize(1)
+        modified = true
+    }
+
+    def deleteForward() : Unit {
+        if cursorPosition >= characters.size() {
+            return
+        }
+        val _removed : char = characters.remove(cursorPosition)
+        modified = true
+    }
+
+    def moveLeft() : Unit {
+        if cursorPosition > usize(0) {
+            cursorPosition = cursorPosition - usize(1)
+        }
+    }
+
+    def moveRight() : Unit {
+        if cursorPosition < characters.size() {
+            cursorPosition = cursorPosition + usize(1)
+        }
+    }
+
+    def moveHome() : Unit {
+        while cursorPosition > usize(0) &&
+        characters.get(cursorPosition - usize(1)) != '\n' {
+            cursorPosition = cursorPosition - usize(1)
+        }
+    }
+
+    def moveEnd() : Unit {
+        while cursorPosition < characters.size() &&
+        characters.get(cursorPosition) != '\n' {
+            cursorPosition = cursorPosition + usize(1)
+        }
+    }
+
+    def line() : usize {
+        var result : usize = usize(0)
+        var index : usize = usize(0)
+        while index < cursorPosition {
+            if characters.get(index) == '\n' {
+                result = result + usize(1)
+            }
+            index = index + usize(1)
+        }
+        return result
+    }
+
+    def column() : usize {
+        var result : usize = usize(0)
+        var index : usize = cursorPosition
+        while index > usize(0) && characters.get(index - usize(1)) != '\n' {
+            result = result + usize(1)
+            index = index - usize(1)
+        }
+        return result
+    }
+
+    private def lineStart(position : usize) : usize {
+        var result : usize = position
+        while result > usize(0) && characters.get(result - usize(1)) != '\n' {
+            result = result - usize(1)
+        }
+        return result
+    }
+
+    private def lineEnd(start : usize) : usize {
+        var result : usize = start
+        while result < characters.size() && characters.get(result) != '\n' {
+            result = result + usize(1)
+        }
+        return result
+    }
+
+    def moveUp() : Unit {
+        val currentStart : usize = this.lineStart(cursorPosition)
+        if currentStart == usize(0) {
+            return
+        }
+        val requestedColumn : usize = cursorPosition - currentStart
+        val previousEnd : usize = currentStart - usize(1)
+        val previousStart : usize = this.lineStart(previousEnd)
+        val previousLength : usize = previousEnd - previousStart
+        cursorPosition = previousStart +
+        if requestedColumn < previousLength { requestedColumn } else { previousLength }
+    }
+
+    def moveDown() : Unit {
+        val currentStart : usize = this.lineStart(cursorPosition)
+        val currentEnd : usize = this.lineEnd(currentStart)
+        if currentEnd >= characters.size() {
+            return
+        }
+        val requestedColumn : usize = cursorPosition - currentStart
+        val nextStart : usize = currentEnd + usize(1)
+        val nextEnd : usize = this.lineEnd(nextStart)
+        val nextLength : usize = nextEnd - nextStart
+        cursorPosition = nextStart +
+        if requestedColumn < nextLength { requestedColumn } else { nextLength }
+    }
+
+    def appendText(output : TextBuilder) : Unit {
+        var index : usize = usize(0)
+        while index < characters.size() {
+            output.appendChar(characters.get(index))
+            index = index + usize(1)
+        }
+    }
+
+    def appendVisibleText(
+    output : TextBuilder,
+    firstLine : usize,
+    maximumLines : usize
+    ) : Unit {
+        var index : usize = usize(0)
+        var lineIndex : usize = usize(0)
+        while index < characters.size() && lineIndex < firstLine {
+            if characters.get(index) == '\n' {
+                lineIndex = lineIndex + usize(1)
+            }
+            index = index + usize(1)
+        }
+
+        var emittedLines : usize = usize(0)
+        while index < characters.size() && emittedLines < maximumLines {
+            val value : char = characters.get(index)
+            output.appendChar(value)
+            if value == '\n' {
+                emittedLines = emittedLines + usize(1)
+            }
+            index = index + usize(1)
+        }
+    }
+
+    destructor {
+        delete characters
+    }
+}
+
+def emptyBuffer() : EditorBuffer {
+    return new EditorBuffer(new Array[char](usize(256)))
+}

@@ -1,0 +1,77 @@
+import editor.buffer
+import std.testing
+import std.text
+
+/// @test
+def insertsAndDeletesAtCursor() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("ac")
+    buffer.moveLeft()
+    buffer.insert('b')
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "abc")
+
+    buffer.backspace()
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "ac")
+}
+
+/// @test
+def insertsUnicodeCharacters() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.insert(char(233))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "é")
+    assertEqual[usize](buffer.column(), usize(1))
+}
+
+/// @test
+def movesAcrossLines() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("alpha\nbeta\ngamma")
+
+    buffer.moveUp()
+    assertEqual[usize](buffer.line(), usize(1))
+    assertEqual[usize](buffer.column(), usize(4))
+
+    buffer.moveUp()
+    assertEqual[usize](buffer.line(), usize(0))
+    assertEqual[usize](buffer.column(), usize(4))
+
+    buffer.moveDown()
+    assertEqual[usize](buffer.line(), usize(1))
+    assertEqual[usize](buffer.column(), usize(4))
+}
+
+/// @test
+def movesRightOnlyAfterLineEnd() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("abcd\nxy")
+    buffer.moveHome()
+    buffer.moveUp()
+
+    buffer.moveRight()
+    buffer.moveRight()
+    buffer.moveRight()
+    assertEqual[usize](buffer.line(), usize(0))
+    assertEqual[usize](buffer.column(), usize(3))
+
+    buffer.moveRight()
+    assertEqual[usize](buffer.line(), usize(0))
+    assertEqual[usize](buffer.column(), usize(4))
+
+    buffer.moveRight()
+    assertEqual[usize](buffer.line(), usize(1))
+    assertEqual[usize](buffer.column(), usize(0))
+}

@@ -1,0 +1,52 @@
+/// Intégration minimale de la toolchain Janus.
+module tooling.compiler
+
+import std.array
+import std.process
+import std.result
+import std.system
+import std.text
+
+private def collectProcessResult(
+process : ProcessResult,
+output : TextBuilder
+) : bool {
+    val succeeded : bool = process.exitCode() == 0
+    if process.stdoutSize() > usize(0) {
+        output.append(stringView(process.stdoutData(), process.stdoutSize()))
+    }
+    if process.stderrSize() > usize(0) {
+        if output.size() > usize(0) {
+            output.append("\n")
+        }
+        output.append(stringView(process.stderrData(), process.stderrSize()))
+    }
+    if output.size() == usize(0) {
+        output.append(if succeeded { "Aucun diagnostic." } else { "La commande a échoué sans diagnostic." })
+    }
+    delete process
+    return succeeded
+}
+
+private def reportStartFailure(output : TextBuilder) : bool {
+    output.append("Impossible de lancer `janus`. Vérifiez que le binaire est dans PATH.")
+    return false
+}
+
+/// Exécute `janus check` sur le fichier actif et copie ses diagnostics.
+def checkFile(path : string, output : TextBuilder) : bool {
+    output.clear()
+    val arguments : Array[string] = new Array[string](usize(4))
+    defer delete arguments
+    arguments.push("check")
+    arguments.push(path)
+    arguments.push("--diagnostic-format")
+    arguments.push("human")
+
+    val result : Result[ProcessResult, SystemError] =
+    runProcess("janus", arguments, "", true, true)
+    return match move result {
+        Ok(process) => collectProcessResult(move process, output),
+        Error(error) => reportStartFailure(output)
+    }
+}
