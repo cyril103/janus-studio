@@ -1,0 +1,59 @@
+import editor.buffer
+import editor.syntax
+import std.array
+import std.testing
+
+def highlightedSource(
+text : string,
+characters : Array[char],
+spans : Array[SyntaxSpan]
+) : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load(text)
+    buffer.moveFileStart()
+    buffer.appendVisibleCharacters(characters, usize(0), usize(100))
+    highlight(characters, spans)
+}
+
+/// @test
+def highlightsJanusTokens() : Unit {
+    val characters : Array[char] = new Array[char](usize(64))
+    defer delete characters
+    val spans : Array[SyntaxSpan] = new Array[SyntaxSpan](usize(32))
+    defer delete spans
+    highlightedSource("val answer : int = 42 // note\n\"text\"", characters, spans)
+
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(0)), SyntaxKind.Keyword)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(4)), SyntaxKind.Plain)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(13)), SyntaxKind.Type)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(17)), SyntaxKind.Operator)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(19)), SyntaxKind.Number)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(25)), SyntaxKind.Comment)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(31)), SyntaxKind.String)
+}
+
+/// @test
+def keepsCommentMarkersInsideStrings() : Unit {
+    val characters : Array[char] = new Array[char](usize(64))
+    defer delete characters
+    val spans : Array[SyntaxSpan] = new Array[SyntaxSpan](usize(16))
+    defer delete spans
+    highlightedSource("\"// texte\" // commentaire", characters, spans)
+
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(1)), SyntaxKind.String)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(12)), SyntaxKind.Comment)
+}
+
+/// @test
+def highlightsCharacterAndGenericTypes() : Unit {
+    val characters : Array[char] = new Array[char](usize(32))
+    defer delete characters
+    val spans : Array[SyntaxSpan] = new Array[SyntaxSpan](usize(16))
+    defer delete spans
+    highlightedSource("'x' Array[char]", characters, spans)
+
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(0)), SyntaxKind.Character)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(4)), SyntaxKind.Type)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(10)), SyntaxKind.Type)
+}

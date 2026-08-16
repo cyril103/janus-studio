@@ -1,6 +1,8 @@
 import editor.buffer
+import editor.syntax
 import editor.vim
 import tooling.compiler
+import std.array
 import std.fs
 import std.graphics
 import std.option
@@ -286,11 +288,86 @@ color : Color
     )
 }
 
+def syntaxColor(kind : SyntaxKind) : Color {
+    if kind == SyntaxKind.Keyword {
+        return rgb(198, 120, 221)
+    }
+    if kind == SyntaxKind.Type {
+        return rgb(97, 175, 239)
+    }
+    if kind == SyntaxKind.String {
+        return rgb(152, 195, 121)
+    }
+    if kind == SyntaxKind.Character {
+        return rgb(86, 182, 194)
+    }
+    if kind == SyntaxKind.Number {
+        return rgb(209, 154, 102)
+    }
+    if kind == SyntaxKind.Comment {
+        return rgb(92, 110, 124)
+    }
+    if kind == SyntaxKind.Operator {
+        return rgb(229, 192, 123)
+    }
+    return rgb(220, 223, 228)
+}
+
+def drawHighlightedCode(
+font : Font,
+characters : Array[char],
+spans : Array[SyntaxSpan],
+glyph : TextBuilder,
+x : int,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    var line : usize = usize(0)
+    var column : usize = usize(0)
+    var spanIndex : usize = usize(0)
+    while spanIndex < spans.size() {
+        val span : SyntaxSpan = spans.get(spanIndex)
+        val color : Color = syntaxColor(span.kind)
+        var index : usize = span.start
+        val end : usize = span.start + span.length
+        while index < end {
+            val value : char = characters.get(index)
+            if value == '\n' {
+                line = line + usize(1)
+                column = usize(0)
+            } else {
+                if value != ' ' && value != '\t' && value != '\r' {
+                    glyph.clear()
+                    glyph.appendChar(value)
+                    drawCodeText(
+                    font,
+                    glyph.view(),
+                    x + truncatingCast[int](
+                    numericCast[float](truncatingCast[int](column)) * glyphAdvance
+                    ),
+                    y + truncatingCast[int](
+                    numericCast[float](truncatingCast[int](line)) * lineAdvance
+                    ),
+                    codeFontSize,
+                    color
+                    )
+                }
+                column = column + usize(1)
+            }
+            index = index + usize(1)
+        }
+        spanIndex = spanIndex + usize(1)
+    }
+}
+
 def drawStudio(
 path : string,
 buffer : EditorBuffer,
 firstLine : usize,
-visibleText : TextBuilder,
+visibleCharacters : Array[char],
+syntaxSpans : Array[SyntaxSpan],
+glyph : TextBuilder,
 statusLine : TextBuilder,
 status : TextBuilder,
 toolOutput : TextBuilder,
@@ -302,8 +379,8 @@ glyphAdvance : float,
 lineAdvance : float,
 maximumLines : usize
 ) : Unit {
-    visibleText.clear()
-    buffer.appendVisibleText(visibleText, firstLine, maximumLines)
+    buffer.appendVisibleCharacters(visibleCharacters, firstLine, maximumLines)
+    highlight(visibleCharacters, syntaxSpans)
     buildStatusLine(statusLine, path, buffer)
 
     val background : Color = rgb(18, 24, 33)
@@ -334,7 +411,16 @@ maximumLines : usize
     drawUiText(uiFont, "ÉTAT", 18, 414, 16.0f, muted)
     drawUiText(uiFont, status.view(), 18, 442, 15.0f, White)
 
-    drawCodeText(codeFont, visibleText.view(), editorLeft, editorTop + 12, codeFontSize, White)
+    drawHighlightedCode(
+    codeFont,
+    visibleCharacters,
+    syntaxSpans,
+    glyph,
+    editorLeft,
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
+    )
     val cursorColumn : float = numericCast[float](truncatingCast[int](buffer.column()))
     val cursorLine : float = numericCast[float](
     truncatingCast[int](buffer.line() - firstLine)
@@ -357,8 +443,12 @@ def main() : int {
     defer delete buffer
     val status : TextBuilder = new TextBuilder()
     defer delete status
-    val visibleText : TextBuilder = new TextBuilder()
-    defer delete visibleText
+    val visibleCharacters : Array[char] = new Array[char](usize(2048))
+    defer delete visibleCharacters
+    val syntaxSpans : Array[SyntaxSpan] = new Array[SyntaxSpan](usize(512))
+    defer delete syntaxSpans
+    val glyph : TextBuilder = new TextBuilder()
+    defer delete glyph
     val statusLine : TextBuilder = new TextBuilder()
     defer delete statusLine
     val toolOutput : TextBuilder = new TextBuilder()
@@ -446,7 +536,9 @@ def main() : int {
         path,
         buffer,
         firstLine,
-        visibleText,
+        visibleCharacters,
+        syntaxSpans,
+        glyph,
         statusLine,
         status,
         toolOutput,

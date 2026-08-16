@@ -1,0 +1,219 @@
+/// Coloration syntaxique légère pour le code Janus.
+module editor.syntax
+
+import std.array
+import std.text
+
+enum SyntaxKind derives Copy, Equality, Debug {
+    Plain,
+    Keyword,
+    Type,
+    String,
+    Character,
+    Number,
+    Comment,
+    Operator
+}
+
+struct SyntaxSpan(
+val start : usize,
+val length : usize,
+val kind : SyntaxKind
+) derives Copy {}
+
+def isIdentifierStart(value : char) : bool {
+    return value == '_' ||
+    (value >= 'a' && value <= 'z') ||
+    (value >= 'A' && value <= 'Z')
+}
+
+def isIdentifierPart(value : char) : bool {
+    return isIdentifierStart(value) || (value >= '0' && value <= '9')
+}
+
+def isOperator(value : char) : bool {
+    return value == '+' || value == '-' || value == '*' || value == '/' ||
+    value == '%' || value == '=' || value == '!' || value == '<' ||
+    value == '>' || value == '&' || value == '|' || value == '^' ||
+    value == '~' || value == '?' || value == ':' || value == '.'
+}
+
+def identifierEquals(
+source : Array[char],
+start : usize,
+end : usize,
+expected : string
+) : bool {
+    if end - start != stringLength(expected) {
+        return false
+    }
+    val bytes : Ptr[byte] = stringData(expected)
+    var index : usize = usize(0)
+    while index < stringLength(expected) {
+        if source.get(start + index) != char(bytes.load(index)) {
+            return false
+        }
+        index = index + usize(1)
+    }
+    return true
+}
+
+def isKeyword(source : Array[char], start : usize, end : usize) : bool {
+    return identifierEquals(source, start, end, "module") ||
+    identifierEquals(source, start, end, "import") ||
+    identifierEquals(source, start, end, "as") ||
+    identifierEquals(source, start, end, "extern") ||
+    identifierEquals(source, start, end, "def") ||
+    identifierEquals(source, start, end, "trait") ||
+    identifierEquals(source, start, end, "extends") ||
+    identifierEquals(source, start, end, "enum") ||
+    identifierEquals(source, start, end, "class") ||
+    identifierEquals(source, start, end, "struct") ||
+    identifierEquals(source, start, end, "derives") ||
+    identifierEquals(source, start, end, "new") ||
+    identifierEquals(source, start, end, "move") ||
+    identifierEquals(source, start, end, "consume") ||
+    identifierEquals(source, start, end, "borrow") ||
+    identifierEquals(source, start, end, "defer") ||
+    identifierEquals(source, start, end, "delete") ||
+    identifierEquals(source, start, end, "destructor") ||
+    identifierEquals(source, start, end, "private") ||
+    identifierEquals(source, start, end, "internal") ||
+    identifierEquals(source, start, end, "if") ||
+    identifierEquals(source, start, end, "else") ||
+    identifierEquals(source, start, end, "match") ||
+    identifierEquals(source, start, end, "for") ||
+    identifierEquals(source, start, end, "in") ||
+    identifierEquals(source, start, end, "while") ||
+    identifierEquals(source, start, end, "break") ||
+    identifierEquals(source, start, end, "continue") ||
+    identifierEquals(source, start, end, "return") ||
+    identifierEquals(source, start, end, "const") ||
+    identifierEquals(source, start, end, "staticAssert") ||
+    identifierEquals(source, start, end, "val") ||
+    identifierEquals(source, start, end, "var") ||
+    identifierEquals(source, start, end, "true") ||
+    identifierEquals(source, start, end, "false")
+}
+
+def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
+    return identifierEquals(source, start, end, "Unit") ||
+    identifierEquals(source, start, end, "bool") ||
+    identifierEquals(source, start, end, "byte") ||
+    identifierEquals(source, start, end, "ubyte") ||
+    identifierEquals(source, start, end, "char") ||
+    identifierEquals(source, start, end, "short") ||
+    identifierEquals(source, start, end, "ushort") ||
+    identifierEquals(source, start, end, "int") ||
+    identifierEquals(source, start, end, "uint") ||
+    identifierEquals(source, start, end, "long") ||
+    identifierEquals(source, start, end, "ulong") ||
+    identifierEquals(source, start, end, "usize") ||
+    identifierEquals(source, start, end, "float") ||
+    identifierEquals(source, start, end, "double") ||
+    identifierEquals(source, start, end, "string") ||
+    identifierEquals(source, start, end, "Ptr") ||
+    identifierEquals(source, start, end, "Array")
+}
+
+def identifierKind(
+source : Array[char],
+start : usize,
+end : usize
+) : SyntaxKind {
+    if isKeyword(source, start, end) {
+        return SyntaxKind.Keyword
+    }
+    if isBuiltinType(source, start, end) ||
+    (source.get(start) >= 'A' && source.get(start) <= 'Z') {
+        return SyntaxKind.Type
+    }
+    return SyntaxKind.Plain
+}
+
+def appendSpan(
+output : Array[SyntaxSpan],
+start : usize,
+end : usize,
+kind : SyntaxKind
+) : Unit {
+    if end > start {
+        output.push(new SyntaxSpan(start, end - start, kind))
+    }
+}
+
+/// Classe chaque portion du texte visible sans modifier son contenu.
+def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
+    output.clear()
+    var index : usize = usize(0)
+    while index < source.size() {
+        val start : usize = index
+        val value : char = source.get(index)
+
+        if value == '/' && index + usize(1) < source.size() &&
+        source.get(index + usize(1)) == '/' {
+            index = index + usize(2)
+            while index < source.size() && source.get(index) != '\n' {
+                index = index + usize(1)
+            }
+            appendSpan(output, start, index, SyntaxKind.Comment)
+        } else if value == '"' || value == '\'' {
+            val delimiter : char = value
+            var escaped : bool = false
+            index = index + usize(1)
+            while index < source.size() && source.get(index) != '\n' {
+                val current : char = source.get(index)
+                index = index + usize(1)
+                if !escaped && current == delimiter {
+                    break
+                }
+                if !escaped && current == '\\' {
+                    escaped = true
+                } else {
+                    escaped = false
+                }
+            }
+            appendSpan(
+            output,
+            start,
+            index,
+            if delimiter == '"' { SyntaxKind.String } else { SyntaxKind.Character }
+            )
+        } else if value >= '0' && value <= '9' {
+            index = index + usize(1)
+            while index < source.size() &&
+            (isIdentifierPart(source.get(index)) || source.get(index) == '.') {
+                index = index + usize(1)
+            }
+            appendSpan(output, start, index, SyntaxKind.Number)
+        } else if isIdentifierStart(value) {
+            index = index + usize(1)
+            while index < source.size() && isIdentifierPart(source.get(index)) {
+                index = index + usize(1)
+            }
+            appendSpan(output, start, index, identifierKind(source, start, index))
+        } else if isOperator(value) {
+            index = index + usize(1)
+            while index < source.size() && isOperator(source.get(index)) {
+                index = index + usize(1)
+            }
+            appendSpan(output, start, index, SyntaxKind.Operator)
+        } else {
+            index = index + usize(1)
+            appendSpan(output, start, index, SyntaxKind.Plain)
+        }
+    }
+}
+
+/// Retourne le style d'un caractère, principalement utile aux tests et au rendu.
+def syntaxKindAt(spans : Array[SyntaxSpan], index : usize) : SyntaxKind {
+    var spanIndex : usize = usize(0)
+    while spanIndex < spans.size() {
+        val span : SyntaxSpan = spans.get(spanIndex)
+        if index >= span.start && index < span.start + span.length {
+            return span.kind
+        }
+        spanIndex = spanIndex + usize(1)
+    }
+    return SyntaxKind.Plain
+}

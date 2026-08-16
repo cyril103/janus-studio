@@ -477,6 +477,32 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
+    def appendVisibleCharacters(
+    output : Array[char],
+    firstLine : usize,
+    maximumLines : usize
+    ) : Unit {
+        output.clear()
+        var index : usize = usize(0)
+        var lineIndex : usize = usize(0)
+        while index < characters.size() && lineIndex < firstLine {
+            if characters.get(index) == '\n' {
+                lineIndex = lineIndex + usize(1)
+            }
+            index = index + usize(1)
+        }
+
+        var emittedLines : usize = usize(0)
+        while index < characters.size() && emittedLines < maximumLines {
+            val value : char = characters.get(index)
+            output.push(value)
+            if value == '\n' {
+                emittedLines = emittedLines + usize(1)
+            }
+            index = index + usize(1)
+        }
+    }
+
     destructor {
         delete characters
         delete undoStates

@@ -11,6 +11,8 @@ Cette première version fournit :
 - l'exécution de `janus check` avec `F5` ;
 - un panneau affichant les diagnostics du compilateur ;
 - une édition modale inspirée de Vim avec modes NORMAL, INSERT et COMMAND ;
+- une coloration syntaxique Janus pour les mots-clés, types, chaînes, nombres,
+  commentaires et opérateurs ;
 - un historique local de 100 états avec annulation et rétablissement ;
 - la saisie Unicode respectant la disposition active du clavier, notamment AZERTY ;
 - DejaVu Sans pour l'interface et Consolas pour le code lorsque la police est
@@ -91,6 +93,6 @@ prochaines étapes prévues sont :
 
 1. décoder le contenu UTF-8 des fichiers en caractères Unicode ;
 2. ajouter des processus persistants avec pipes pour parler à `janus-lsp` ;
-3. implémenter la coloration syntaxique et la sélection de texte ;
+3. implémenter la sélection de texte ;
 4. ajouter l'arbre complet du projet, plusieurs onglets et la recherche ;
 5. consommer les diagnostics JSON structurés plutôt que leur rendu humain.
