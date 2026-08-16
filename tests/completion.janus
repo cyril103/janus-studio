@@ -1,0 +1,41 @@
+import editor.buffer
+import editor.completion
+import tooling.lsp
+import std.testing
+import std.text
+
+/// @test
+def extractsCompletionLabels() : Unit {
+    val labels : TextBuilder = new TextBuilder()
+    defer delete labels
+    extractCompletionLabels(
+    "{\"items\":[{\"detail\":\"def get\",\"label\":\"get\"},{\"detail\":\"def size\",\"label\":\"size\"},{\"detail\":\"get overload\",\"label\":\"get\"}]}",
+    labels
+    )
+    assertEqual[string](labels.view(), "get\nsize\n")
+}
+
+/// @test
+def navigatesAndAcceptsCompletion() : Unit {
+    val completion : CompletionModel = completionModel()
+    defer delete completion
+    completion.load("get\nsize\npush\n")
+    assertTrue(completion.isVisible())
+    assertEqual[usize](completion.size(), usize(3))
+
+    completion.selectNext()
+    val selected : TextBuilder = new TextBuilder()
+    defer delete selected
+    completion.appendItem(completion.selected(), selected)
+    assertEqual[string](selected.view(), "size")
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("xs.")
+    assertTrue(completion.accept(buffer))
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "xs.size")
+    assertTrue(!completion.isVisible())
+}

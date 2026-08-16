@@ -175,6 +175,21 @@ private val redoStates : Array[BufferSnapshot]
         modified = true
     }
 
+    def insertText(text : string) : Unit {
+        if stringLength(text) == usize(0) {
+            return
+        }
+        this.rememberChange()
+        val data : Ptr[byte] = stringData(text)
+        var index : usize = usize(0)
+        while index < stringLength(text) {
+            this.insertAt(cursorPosition, char(data.load(index)))
+            cursorPosition = cursorPosition + usize(1)
+            index = index + usize(1)
+        }
+        modified = true
+    }
+
     def insertSpaces(count : usize) : Unit {
         if count == usize(0) {
             return

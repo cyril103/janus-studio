@@ -1,0 +1,177 @@
+/// Requêtes ponctuelles vers janus-lsp pour l'IntelliSense.
+module tooling.lsp
+
+import editor.buffer
+import std.array
+import std.fs
+import std.process
+import std.result
+import std.system
+import std.text
+
+const completionSnapshotPath : string =
+"target/janus-studio-completion.janus"
+
+def hasLabelMarker(
+source : string,
+size : usize,
+index : usize
+) : bool {
+    val data : Ptr[byte] = stringData(source)
+    return index + usize(9) <= size &&
+    data.load(index) == byte(34) &&
+    data.load(index + usize(1)) == byte(108) &&
+    data.load(index + usize(2)) == byte(97) &&
+    data.load(index + usize(3)) == byte(98) &&
+    data.load(index + usize(4)) == byte(101) &&
+    data.load(index + usize(5)) == byte(108) &&
+    data.load(index + usize(6)) == byte(34) &&
+    data.load(index + usize(7)) == byte(58) &&
+    data.load(index + usize(8)) == byte(34)
+}
+
+def containsLabel(
+labels : string,
+source : string,
+start : usize,
+end : usize
+) : bool {
+    val labelData : Ptr[byte] = stringData(labels)
+    val sourceData : Ptr[byte] = stringData(source)
+    val requestedLength : usize = end - start
+    var lineStart : usize = usize(0)
+    var index : usize = usize(0)
+    while index <= stringLength(labels) {
+        if index == stringLength(labels) || labelData.load(index) == byte(10) {
+            if index - lineStart == requestedLength {
+                var offset : usize = usize(0)
+                var matches : bool = true
+                while offset < requestedLength {
+                    if labelData.load(lineStart + offset) !=
+                    sourceData.load(start + offset) {
+                        matches = false
+                    }
+                    offset = offset + usize(1)
+                }
+                if matches {
+                    return true
+                }
+            }
+            lineStart = index + usize(1)
+        }
+        index = index + usize(1)
+    }
+    return false
+}
+
+def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
+    output.clear()
+    val data : Ptr[byte] = stringData(json)
+    val size : usize = stringLength(json)
+    var index : usize = usize(0)
+    while index < size {
+        if hasLabelMarker(json, size, index) {
+            index = index + usize(9)
+            val start : usize = index
+            while index < size && data.load(index) != byte(34) {
+                index = index + usize(1)
+            }
+            if !containsLabel(output.view(), json, start, index) {
+                var labelIndex : usize = start
+                while labelIndex < index {
+                    output.appendChar(char(data.load(labelIndex)))
+                    labelIndex = labelIndex + usize(1)
+                }
+                output.append("\n")
+            }
+        } else {
+            index = index + usize(1)
+        }
+    }
+}
+
+def snapshotSucceeded(
+result : Result[bool, SystemError]
+) : bool {
+    return match result {
+        Ok(written) => written,
+        Error(error) => false
+    }
+}
+
+def removeCompletionSnapshot() : bool {
+    return match removeFile(completionSnapshotPath) {
+        Ok(removed) => removed,
+        Error(error) => false
+    }
+}
+
+def collectCompletionProcess(
+process : ProcessResult,
+labels : TextBuilder,
+error : TextBuilder
+) : bool {
+    val succeeded : bool = process.exitCode() == 0
+    if succeeded && process.stdoutSize() > usize(0) {
+        extractCompletionLabels(
+        stringView(process.stdoutData(), process.stdoutSize()),
+        labels
+        )
+    }
+    if !succeeded && process.stderrSize() > usize(0) {
+        error.clear()
+        error.append(stringView(process.stderrData(), process.stderrSize()))
+    }
+    delete process
+    return succeeded && labels.size() > usize(0)
+}
+
+def reportCompletionStartFailure(error : TextBuilder) : bool {
+    error.append("Impossible de lancer `janus-lsp`.")
+    return false
+}
+
+/// Demande les propositions correspondant à la position courante du buffer.
+def requestCompletion(
+path : string,
+buffer : EditorBuffer,
+line : usize,
+column : usize,
+labels : TextBuilder,
+error : TextBuilder
+) : bool {
+    labels.clear()
+    error.clear()
+    val snapshot : TextBuilder = new TextBuilder()
+    defer delete snapshot
+    buffer.appendText(snapshot)
+    if !snapshotSucceeded(
+    writeTextFileAtomic(completionSnapshotPath, snapshot.view())
+    ) {
+        error.append("Impossible de préparer la requête de complétion.")
+        return false
+    }
+
+    val lineText : TextBuilder = new TextBuilder()
+    defer delete lineText
+    lineText.appendUSize(line)
+    val columnText : TextBuilder = new TextBuilder()
+    defer delete columnText
+    columnText.appendUSize(column)
+    val arguments : Array[string] = new Array[string](usize(6))
+    defer delete arguments
+    arguments.push("--completion")
+    arguments.push("-")
+    arguments.push(path)
+    arguments.push(completionSnapshotPath)
+    arguments.push(lineText.view())
+    arguments.push(columnText.view())
+
+    val result : Result[ProcessResult, SystemError] =
+    runProcess("janus-lsp", arguments, "", true, true)
+    val _snapshotRemoved : bool = removeCompletionSnapshot()
+    return match move result {
+        Ok(process) => collectCompletionProcess(move process, labels, error),
+        Error(systemError) => reportCompletionStartFailure(error)
+    }
+}

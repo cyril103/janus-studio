@@ -1,7 +1,9 @@
 import editor.buffer
+import editor.completion
 import editor.syntax
 import editor.vim
 import tooling.compiler
+import tooling.lsp
 import std.array
 import std.fs
 import std.graphics
@@ -188,6 +190,11 @@ buffer : EditorBuffer
             val value : char = char(codepoint)
             if controller.mode() == EditorMode.Insert {
                 controller.handleInsert(value, buffer)
+                action = if value == '.' {
+                    EditorAction.Complete
+                } else {
+                    EditorAction.DismissCompletion
+                }
             } else if controller.mode() == EditorMode.Command {
                 controller.handleCommand(value)
             } else {
@@ -197,6 +204,65 @@ buffer : EditorBuffer
         codepoint = characterPressed()
     }
     return action
+}
+
+def handleCompletionKeys(
+completion : CompletionModel,
+buffer : EditorBuffer
+) : bool {
+    if !completion.isVisible() {
+        return false
+    }
+    if isKeyPressed(Key.Escape) {
+        completion.dismiss()
+        return true
+    }
+    if isKeyPressed(Key.Down) {
+        completion.selectNext()
+        return true
+    }
+    if isKeyPressed(Key.Up) {
+        completion.selectPrevious()
+        return true
+    }
+    if isKeyPressed(Key.Enter) || isKeyPressed(Key.Tab) {
+        completion.accept(buffer)
+        return true
+    }
+    return false
+}
+
+def refreshCompletion(
+path : string,
+buffer : EditorBuffer,
+completion : CompletionModel,
+labels : TextBuilder,
+error : TextBuilder,
+status : TextBuilder
+) : Unit {
+    if requestCompletion(
+    path,
+    buffer,
+    buffer.line(),
+    buffer.column(),
+    labels,
+    error
+    ) {
+        completion.load(labels.view())
+        status.clear()
+        status.appendUSize(completion.size())
+        status.append(" propositions — flèches puis Entrée")
+    } else {
+        completion.dismiss()
+        setStatus(
+        status,
+        if error.size() > usize(0) {
+            error.view()
+        } else {
+            "Aucune proposition à cette position."
+        }
+        )
+    }
 }
 
 def applyEditorAction(
@@ -368,6 +434,8 @@ firstLine : usize,
 visibleCharacters : Array[char],
 syntaxSpans : Array[SyntaxSpan],
 glyph : TextBuilder,
+completion : CompletionModel,
+completionText : TextBuilder,
 statusLine : TextBuilder,
 status : TextBuilder,
 toolOutput : TextBuilder,
@@ -432,6 +500,36 @@ maximumLines : usize
     if mode == EditorMode.Insert { 2 } else { truncatingCast[int](glyphAdvance) }
     drawRectangle(cursorX, cursorY, cursorWidth, 23, accent)
 
+    if completion.isVisible() {
+        val shown : usize = if completion.size() < usize(8) {
+            completion.size()
+        } else {
+            usize(8)
+        }
+        val popupHeight : int = truncatingCast[int](shown) * 24 + 10
+        val requestedX : int = cursorX
+        val popupX : int = if requestedX + 330 < screenWidth() {
+            requestedX
+        } else {
+            screenWidth() - 330
+        }
+        val popupY : int = if cursorY + 27 + popupHeight < editorBottom {
+            cursorY + 27
+        } else {
+            cursorY - popupHeight
+        }
+        drawRectangle(popupX, popupY, 320, popupHeight, rgb(31, 43, 57))
+        completion.appendVisible(completionText, usize(8))
+        drawCodeText(
+        codeFont,
+        completionText.view(),
+        popupX + 8,
+        popupY + 5,
+        17.0f,
+        rgb(220, 223, 228)
+        )
+    }
+
     drawUiText(uiFont, "SORTIE JANUS", editorLeft, 606, 15.0f, accent)
     drawCodeText(codeFont, toolOutput.view(), editorLeft, 632, 15.0f, muted)
     endDrawing()
@@ -449,6 +547,14 @@ def main() : int {
     defer delete syntaxSpans
     val glyph : TextBuilder = new TextBuilder()
     defer delete glyph
+    val completion : CompletionModel = completionModel()
+    defer delete completion
+    val completionLabels : TextBuilder = new TextBuilder()
+    defer delete completionLabels
+    val completionError : TextBuilder = new TextBuilder()
+    defer delete completionError
+    val completionText : TextBuilder = new TextBuilder()
+    defer delete completionText
     val statusLine : TextBuilder = new TextBuilder()
     defer delete statusLine
     val toolOutput : TextBuilder = new TextBuilder()
@@ -522,8 +628,35 @@ def main() : int {
             }
         }
 
-        val keyAction : EditorAction = handleModeKeys(controller, buffer)
-        val characterAction : EditorAction = handlePrintableKeys(controller, buffer)
+        val completionConsumed : bool = handleCompletionKeys(completion, buffer)
+        var keyAction : EditorAction = EditorAction.None
+        var characterAction : EditorAction = EditorAction.None
+        if !completionConsumed {
+            keyAction = handleModeKeys(controller, buffer)
+            characterAction = handlePrintableKeys(controller, buffer)
+        }
+        val manualCompletion : bool =
+        controller.mode() == EditorMode.Insert && control &&
+        isKeyPressed(Key.Space)
+        if characterAction == EditorAction.Complete || manualCompletion {
+            refreshCompletion(
+            path,
+            buffer,
+            completion,
+            completionLabels,
+            completionError,
+            status
+            )
+            characterAction = EditorAction.None
+        } else if characterAction == EditorAction.DismissCompletion {
+            completion.dismiss()
+            characterAction = EditorAction.None
+        } else if !completionConsumed && completion.isVisible() &&
+        (isKeyPressed(Key.Left) || isKeyPressed(Key.Right) ||
+        isKeyPressed(Key.Home) || isKeyPressed(Key.End) ||
+        isKeyPressed(Key.Backspace) || isKeyPressed(Key.Delete)) {
+            completion.dismiss()
+        }
         quitRequested = applyEditorAction(
         if keyAction != EditorAction.None { keyAction } else { characterAction },
         path,
@@ -539,6 +672,8 @@ def main() : int {
         visibleCharacters,
         syntaxSpans,
         glyph,
+        completion,
+        completionText,
         statusLine,
         status,
         toolOutput,

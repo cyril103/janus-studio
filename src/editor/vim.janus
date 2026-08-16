@@ -13,6 +13,8 @@ enum EditorMode derives Copy, Equality, Debug {
 
 enum EditorAction derives Copy, Equality, Debug {
     None,
+    Complete,
+    DismissCompletion,
     Save,
     Quit,
     ForceQuit,

@@ -13,6 +13,8 @@ Cette première version fournit :
 - une édition modale inspirée de Vim avec modes NORMAL, INSERT et COMMAND ;
 - une coloration syntaxique Janus pour les mots-clés, types, chaînes, nombres,
   commentaires et opérateurs ;
+- une autocomplétion typée fournie par `janus-lsp`, notamment pour les membres
+  de `Array` et des classes du fichier courant ;
 - un historique local de 100 états avec annulation et rétablissement ;
 - la saisie Unicode respectant la disposition active du clavier, notamment AZERTY ;
 - DejaVu Sans pour l'interface et Consolas pour le code lorsque la police est
@@ -24,6 +26,8 @@ Cette première version fournit :
 
 - la version de développement de Janus contenant `characterPressed` (présente
   dans le dépôt frère `../janus`) ;
+- la version de développement de `janus-lsp` contenant la complétion typée des
+  membres ;
 - raylib 6 disponible pour l'exécution de l'interface graphique.
 
 Le compilateur peut construire l'application sans raylib. Le backend graphique
@@ -84,6 +88,10 @@ Janus Studio démarre en mode **NORMAL**. `Esc` revient toujours dans ce mode.
 | `Ctrl+O` | recharger depuis le disque |
 | `F5` | enregistrer puis lancer `janus check` |
 | `Backspace`, `Delete`, `Tab` | éditer en mode INSERT |
+| `.` ou `Ctrl+Espace` | ouvrir les propositions d'autocomplétion |
+| `↑`, `↓` | sélectionner une proposition |
+| `Entrée`, `Tab` | insérer la proposition sélectionnée |
+| `Esc` | fermer les propositions |
 
 ## Limites connues du MVP
 
@@ -92,7 +100,8 @@ interactive suit en revanche la disposition du clavier et accepte Unicode. Les
 prochaines étapes prévues sont :
 
 1. décoder le contenu UTF-8 des fichiers en caractères Unicode ;
-2. ajouter des processus persistants avec pipes pour parler à `janus-lsp` ;
+2. rendre la connexion à `janus-lsp` persistante pour indexer le workspace sans
+   relancer le serveur à chaque requête ;
 3. implémenter la sélection de texte ;
 4. ajouter l'arbre complet du projet, plusieurs onglets et la recherche ;
 5. consommer les diagnostics JSON structurés plutôt que leur rendu humain.
