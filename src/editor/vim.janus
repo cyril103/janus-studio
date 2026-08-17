@@ -37,9 +37,9 @@ private val lineRegister : Array[char]
     def appendStatus(output : TextBuilder) : Unit {
         output.clear()
         output.append(match currentMode {
-            Normal => "-- NORMAL --",
-            Insert => "-- INSERT --",
-            Command => "-- COMMAND --"
+            Normal => "NORMAL",
+            Insert => "INSERT",
+            Command => "COMMAND"
         })
         if pendingG {
             output.append("  g")
@@ -50,8 +50,12 @@ private val lineRegister : Array[char]
         if pendingY {
             output.append("  y")
         }
+    }
+
+    def appendCommandLine(output : TextBuilder) : Unit {
+        output.clear()
         if currentMode == EditorMode.Command {
-            output.append("  :")
+            output.append(":")
             output.append(command.view())
         }
     }

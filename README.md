@@ -58,7 +58,9 @@ Le chemin par défaut est `samples/welcome.janus`.
 
 ## Raccourcis
 
-Janus Studio démarre en mode **NORMAL**. `Esc` revient toujours dans ce mode.
+Janus Studio démarre en mode **NORMAL**. Le mode courant et la position du
+curseur restent visibles dans la barre d'état en bas de la fenêtre. `Esc`
+revient toujours dans ce mode.
 
 ### Mode NORMAL
 
@@ -96,6 +98,9 @@ Janus Studio démarre en mode **NORMAL**. `Esc` revient toujours dans ce mode.
 | `↑`, `↓` | sélectionner une proposition |
 | `Entrée`, `Tab` | insérer la proposition sélectionnée |
 | `Esc` | fermer les propositions |
+
+En mode NORMAL, `:` ouvre la ligne de commande en bas de la fenêtre, comme
+dans Vim. Les commandes `:w`, `:q`, `:q!`, `:wq` et `:x` y sont disponibles.
 
 Les commandes de fichier ouvrent une fenêtre de saisie de chemin intégrée.
 `Entrée` valide le chemin et `Esc` annule l'opération. Les chemins relatifs sont

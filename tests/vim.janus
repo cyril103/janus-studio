@@ -98,11 +98,23 @@ def parsesColonCommands() : Unit {
 
     controller.handleNormal(':', buffer)
     assertEqual[EditorMode](controller.mode(), EditorMode.Command)
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+    val commandLine : TextBuilder = new TextBuilder()
+    defer delete commandLine
+    controller.appendStatus(status)
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](status.view(), "COMMAND")
+    assertEqual[string](commandLine.view(), ":")
     controller.handleCommand('w')
     controller.handleCommand('q')
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), ":wq")
     assertEqual[EditorAction](
     controller.executeCommand(),
     EditorAction.SaveAndQuit
     )
     assertEqual[EditorMode](controller.mode(), EditorMode.Normal)
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), "")
 }

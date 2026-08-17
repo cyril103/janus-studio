@@ -19,6 +19,8 @@ const editorTop : int = 54
 const editorBottom : int = 590
 const codeFontSize : float = 20.0f
 const codeFontSpacing : float = 1.0f
+const statusBarHeight : int = 28
+const commandLineHeight : int = 28
 
 def isFile(path : string) : bool {
     return match metadata(path) {
@@ -461,6 +463,16 @@ def syntaxColor(kind : SyntaxKind) : Color {
     return rgb(220, 223, 228)
 }
 
+def modeColor(mode : EditorMode) : Color {
+    if mode == EditorMode.Insert {
+        return rgb(82, 183, 136)
+    }
+    if mode == EditorMode.Command {
+        return rgb(229, 192, 123)
+    }
+    return rgb(97, 175, 239)
+}
+
 def drawHighlightedCode(
 font : Font,
 characters : Array[char],
@@ -523,6 +535,7 @@ statusLine : TextBuilder,
 status : TextBuilder,
 toolOutput : TextBuilder,
 modeLine : TextBuilder,
+commandLine : TextBuilder,
 mode : EditorMode,
 uiFont : Font,
 codeFont : Font,
@@ -540,6 +553,8 @@ maximumLines : usize
     val panel : Color = rgb(13, 18, 25)
     val accent : Color = rgb(82, 183, 136)
     val muted : Color = rgb(151, 166, 181)
+    val bottomStatusY : int = screenHeight() - statusBarHeight - commandLineHeight
+    val commandLineY : int = screenHeight() - commandLineHeight
 
     beginDrawing()
     clearBackground(background)
@@ -548,7 +563,6 @@ maximumLines : usize
     drawRectangle(editorLeft - 12, editorBottom, screenWidth() - editorLeft + 12, screenHeight() - editorBottom, panel)
 
     drawUiText(uiFont, "JANUS STUDIO", 18, 13, 23.0f, accent)
-    drawUiText(uiFont, statusLine.view(), editorLeft, 16, 17.0f, muted)
 
     drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
     drawUiText(uiFont, path, 18, 104, 17.0f, White)
@@ -556,10 +570,6 @@ maximumLines : usize
     drawUiText(uiFont, "Ctrl+O  ouvrir", 18, 196, 16.0f, White)
     drawUiText(uiFont, "Ctrl+N  nouveau", 18, 222, 16.0f, White)
     drawUiText(uiFont, "Ctrl+Maj+S enregistrer sous", 18, 248, 14.0f, White)
-    drawUiText(uiFont, "MODE", 18, 304, 16.0f, muted)
-    drawUiText(uiFont, modeLine.view(), 18, 332, 16.0f, accent)
-    drawUiText(uiFont, "ÉTAT", 18, 388, 16.0f, muted)
-    drawUiText(uiFont, status.view(), 18, 416, 15.0f, White)
 
     drawHighlightedCode(
     codeFont,
@@ -652,6 +662,44 @@ maximumLines : usize
 
     drawUiText(uiFont, "SORTIE JANUS", editorLeft, 606, 15.0f, accent)
     drawCodeText(codeFont, toolOutput.view(), editorLeft, 632, 15.0f, muted)
+
+    drawRectangle(0, bottomStatusY, screenWidth(), statusBarHeight, header)
+    drawRectangle(
+    0,
+    bottomStatusY,
+    editorLeft - 12,
+    statusBarHeight,
+    modeColor(mode)
+    )
+    drawUiText(uiFont, modeLine.view(), 14, bottomStatusY + 5, 15.0f, background)
+    drawUiText(
+    uiFont,
+    statusLine.view(),
+    editorLeft,
+    bottomStatusY + 5,
+    15.0f,
+    White
+    )
+    drawRectangle(0, commandLineY, screenWidth(), commandLineHeight, panel)
+    if mode == EditorMode.Command {
+        drawCodeText(
+        codeFont,
+        commandLine.view(),
+        12,
+        commandLineY + 3,
+        17.0f,
+        White
+        )
+    } else {
+        drawUiText(
+        uiFont,
+        status.view(),
+        12,
+        commandLineY + 5,
+        15.0f,
+        muted
+        )
+    }
     endDrawing()
 }
 
@@ -687,6 +735,8 @@ def main() : int {
     defer delete toolOutput
     val modeLine : TextBuilder = new TextBuilder()
     defer delete modeLine
+    val commandLine : TextBuilder = new TextBuilder()
+    defer delete commandLine
     val controller : VimController = vimController()
     defer delete controller
 
@@ -822,6 +872,7 @@ def main() : int {
         )
         firstLine = keepCursorVisible(buffer, firstLine, maximumLines)
         controller.appendStatus(modeLine)
+        controller.appendCommandLine(commandLine)
         drawStudio(
         activePath.view(),
         buffer,
@@ -836,6 +887,7 @@ def main() : int {
         status,
         toolOutput,
         modeLine,
+        commandLine,
         controller.mode(),
         uiFont,
         codeFont,
