@@ -131,6 +131,30 @@ private val paths : Array[char]
 ) {
     private var selectedIndex : usize = usize(0)
 
+    private def addRoot(root : string) : Unit {
+        val nameStart : usize = names.size()
+        var nameLength : usize = appendUtf8Range(
+        root,
+        baseNameStart(root),
+        names
+        )
+        if nameLength == usize(0) {
+            nameLength = appendUtf8Range(root, usize(0), names)
+        }
+        val pathStart : usize = paths.size()
+        val pathLength : usize = appendUtf8Range(root, usize(0), paths)
+        entries.push(new ExplorerEntry(
+        nameStart,
+        nameLength,
+        pathStart,
+        pathLength,
+        usize(0),
+        ExplorerEntryKind.Directory,
+        false
+        ))
+        selectedIndex = usize(0)
+    }
+
     private def appendCharacters(
     source : Array[char],
     start : usize,
@@ -339,6 +363,24 @@ private val paths : Array[char]
         return entries.size()
     }
 
+    def open(root : string) : bool {
+        if explorerKindResult(metadata(root)) != int(ExplorerEntryKind.Directory) {
+            return false
+        }
+        entries.clear()
+        names.clear()
+        paths.clear()
+        this.addRoot(root)
+        return this.toggle(usize(0))
+    }
+
+    def close() : Unit {
+        entries.clear()
+        names.clear()
+        paths.clear()
+        selectedIndex = usize(-1)
+    }
+
     def selected() : usize {
         return selectedIndex
     }
@@ -425,31 +467,11 @@ def projectExplorer(root : string) : ProjectExplorer {
     val entries : Array[ExplorerEntry] = new Array[ExplorerEntry](usize(64))
     val names : Array[char] = new Array[char](usize(256))
     val paths : Array[char] = new Array[char](usize(1024))
-    val nameStart : usize = names.size()
-    var nameLength : usize = appendUtf8Range(
-    root,
-    baseNameStart(root),
-    names
-    )
-    if nameLength == usize(0) {
-        nameLength = appendUtf8Range(root, usize(0), names)
-    }
-    val pathStart : usize = paths.size()
-    val pathLength : usize = appendUtf8Range(root, usize(0), paths)
-    entries.push(new ExplorerEntry(
-    nameStart,
-    nameLength,
-    pathStart,
-    pathLength,
-    usize(0),
-    ExplorerEntryKind.Directory,
-    false
-    ))
     val explorer : ProjectExplorer = new ProjectExplorer(
     move entries,
     move names,
     move paths
     )
-    explorer.toggle(usize(0))
+    explorer.open(root)
     return explorer
 }

@@ -12,6 +12,8 @@ Cette première version fournit :
 - l'exécution de `janus check` avec `F5` ;
 - un panneau affichant les diagnostics du compilateur ;
 - une arborescence de projet chargée à la demande, navigable à la souris ;
+- un menu Fichier permettant d'ouvrir ou de fermer le dossier affiché dans
+  l'explorateur ;
 - une édition modale inspirée de Vim avec modes NORMAL, INSERT et COMMAND ;
 - une coloration syntaxique Janus pour les mots-clés, types, chaînes, nombres,
   commentaires et opérateurs ;
@@ -65,6 +67,8 @@ revient toujours dans ce mode.
 
 ### Explorateur de projet
 
+- le menu `Fichier` permet d'ouvrir un dossier par son chemin ou de fermer le
+  dossier courant ;
 - un clic sur un dossier le déplie ou le replie ;
 - un clic sur un fichier le sélectionne ;
 - un double-clic sur un fichier l'ouvre dans l'éditeur ;
@@ -118,6 +122,11 @@ Les commandes de fichier ouvrent une fenêtre de saisie de chemin intégrée.
 résolus depuis le répertoire dans lequel Janus Studio a été lancé. Pour éviter
 une perte de travail, `Ctrl+O` et `Ctrl+N` demandent d'abord d'enregistrer les
 modifications éventuelles.
+Le curseur du champ de chemin se déplace avec les flèches, `Home` et `End` ;
+`Retour arrière` et `Suppr` modifient le texte autour de sa position.
+`Tab` complète le nom de fichier ou de dossier comme dans un shell : un dossier
+unique reçoit automatiquement un `/`, et plusieurs résultats avancent jusqu'à
+leur préfixe commun.
 
 ## Limites connues du MVP
 

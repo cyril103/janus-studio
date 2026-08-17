@@ -27,6 +27,11 @@ const explorerTreeTop : int = 104
 const explorerRowHeight : int = 22
 const explorerIndentWidth : int = 14
 const doubleClickDelayMilliseconds : usize = usize(500)
+const fileMenuX : int = 188
+const fileMenuWidth : int = 250
+const fileMenuButtonWidth : int = 86
+const fileMenuTop : int = 46
+const fileMenuRowHeight : int = 36
 
 def isFile(path : string) : bool {
     return match metadata(path) {
@@ -170,10 +175,36 @@ def shiftDown() : bool {
 def pathPromptTitle(action : PathPromptAction) : string {
     return match action {
         Open => "OUVRIR UN FICHIER",
+        OpenFolder => "OUVRIR UN DOSSIER",
         Create => "NOUVEAU FICHIER",
         SaveAs => "ENREGISTRER SOUS",
         None => "FICHIER"
     }
+}
+
+def pointInArea(x : int, y : int, width : int, height : int) : bool {
+    return mouseX() >= x && mouseX() < x + width &&
+    mouseY() >= y && mouseY() < y + height
+}
+
+def openProjectFolder(
+path : string,
+projectRoot : TextBuilder,
+explorer : ProjectExplorer,
+status : TextBuilder
+) : bool {
+    if path == "" {
+        setStatus(status, "Saisissez un chemin de dossier.")
+        return false
+    }
+    if !explorer.open(path) {
+        setStatus(status, "Impossible d'ouvrir ce dossier.")
+        return false
+    }
+    projectRoot.clear()
+    projectRoot.append(path)
+    setStatus(status, "Dossier ouvert.")
+    return true
 }
 
 def handlePathPromptKeys(prompt : PathPrompt) : bool {
@@ -183,6 +214,24 @@ def handlePathPromptKeys(prompt : PathPrompt) : bool {
     }
     if isKeyPressed(Key.Backspace) {
         prompt.backspace()
+    }
+    if isKeyPressed(Key.Delete) {
+        prompt.deleteForward()
+    }
+    if isKeyPressed(Key.Left) {
+        prompt.moveLeft()
+    }
+    if isKeyPressed(Key.Right) {
+        prompt.moveRight()
+    }
+    if isKeyPressed(Key.Home) {
+        prompt.moveHome()
+    }
+    if isKeyPressed(Key.End) {
+        prompt.moveEnd()
+    }
+    if isKeyPressed(Key.Tab) {
+        prompt.completePath()
     }
     if isKeyPressed(Key.Enter) {
         return true
@@ -695,6 +744,7 @@ explorer : ProjectExplorer,
 firstExplorerEntry : usize,
 visibleExplorerRows : usize,
 explorerLabel : TextBuilder,
+fileMenuOpen : bool,
 mode : EditorMode,
 uiFont : Font,
 codeFont : Font,
@@ -722,6 +772,10 @@ maximumLines : usize
     drawRectangle(editorLeft - 12, editorBottom, screenWidth() - editorLeft + 12, screenHeight() - editorBottom, panel)
 
     drawUiText(uiFont, "JANUS STUDIO", 18, 13, 23.0f, accent)
+    if fileMenuOpen {
+        drawRectangle(fileMenuX, 0, fileMenuButtonWidth, editorTop, rgb(46, 59, 75))
+    }
+    drawUiText(uiFont, "FICHIER", fileMenuX + 10, 18, 14.0f, White)
 
     drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
     drawExplorer(
@@ -784,6 +838,55 @@ maximumLines : usize
         )
     }
 
+    if fileMenuOpen {
+        drawRectangle(
+        fileMenuX,
+        fileMenuTop,
+        fileMenuWidth,
+        fileMenuRowHeight * 2 + 8,
+        rgb(31, 43, 57)
+        )
+        if pointInArea(fileMenuX, fileMenuTop, fileMenuWidth, fileMenuRowHeight) {
+            drawRectangle(
+            fileMenuX,
+            fileMenuTop,
+            fileMenuWidth,
+            fileMenuRowHeight,
+            rgb(46, 59, 75)
+            )
+        }
+        if pointInArea(
+        fileMenuX,
+        fileMenuTop + fileMenuRowHeight,
+        fileMenuWidth,
+        fileMenuRowHeight
+        ) {
+            drawRectangle(
+            fileMenuX,
+            fileMenuTop + fileMenuRowHeight,
+            fileMenuWidth,
+            fileMenuRowHeight,
+            rgb(46, 59, 75)
+            )
+        }
+        drawUiText(
+        uiFont,
+        "Ouvrir un dossier...",
+        fileMenuX + 14,
+        fileMenuTop + 9,
+        15.0f,
+        White
+        )
+        drawUiText(
+        uiFont,
+        "Fermer le dossier",
+        fileMenuX + 14,
+        fileMenuTop + fileMenuRowHeight + 9,
+        15.0f,
+        if explorer.size() > usize(0) { White } else { muted }
+        )
+    }
+
     if pathPrompt.isVisible() {
         val dialogX : int = editorLeft + 70
         val dialogY : int = 230
@@ -812,9 +915,29 @@ maximumLines : usize
         17.0f,
         White
         )
+        val promptGlyph : Vector2 = codeFont.measure(
+        "M",
+        17.0f,
+        codeFontSpacing
+        )
+        val promptAdvance : float = codeFont.measure(
+        "MM",
+        17.0f,
+        codeFontSpacing
+        ).x - promptGlyph.x
+        drawRectangle(
+        dialogX + 30 + truncatingCast[int](
+        numericCast[float](truncatingCast[int](pathPrompt.cursor())) *
+        promptAdvance
+        ),
+        dialogY + 63,
+        2,
+        22,
+        accent
+        )
         drawUiText(
         uiFont,
-        "Entrée : valider    Esc : annuler",
+        "Tab : compléter    Entrée : valider    Esc : annuler",
         dialogX + 20,
         dialogY + 116,
         15.0f,
@@ -966,6 +1089,7 @@ def main() : int {
     var lastExplorerClick : usize = usize(-1)
     var lastExplorerClickAt : usize = usize(0)
     var quitRequested : bool = false
+    var fileMenuOpen : bool = false
     while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
         val shift : bool = shiftDown()
@@ -976,7 +1100,34 @@ def main() : int {
         firstExplorerEntry,
         visibleExplorerRows
         )
-        if !filePrompt.isVisible() &&
+        if !filePrompt.isVisible() && isMouseButtonPressed(MouseButton.Left) &&
+        pointInArea(fileMenuX, 0, fileMenuButtonWidth, editorTop) {
+            fileMenuOpen = !fileMenuOpen
+            fileInputConsumed = true
+        } else if !filePrompt.isVisible() && fileMenuOpen &&
+        isMouseButtonPressed(MouseButton.Left) {
+            if pointInArea(
+            fileMenuX,
+            fileMenuTop,
+            fileMenuWidth,
+            fileMenuRowHeight
+            ) {
+                filePrompt.begin(PathPromptAction.OpenFolder, projectRoot.view())
+                completion.dismiss()
+            } else if pointInArea(
+            fileMenuX,
+            fileMenuTop + fileMenuRowHeight,
+            fileMenuWidth,
+            fileMenuRowHeight
+            ) && explorer.size() > usize(0) {
+                explorer.close()
+                projectRoot.clear()
+                firstExplorerEntry = usize(0)
+                setStatus(status, "Dossier fermé.")
+            }
+            fileMenuOpen = false
+            fileInputConsumed = true
+        } else if !filePrompt.isVisible() &&
         isMouseButtonPressed(MouseButton.Left) {
             val clicked : usize = explorerEntryAtMouse(
             explorer,
@@ -1023,10 +1174,28 @@ def main() : int {
                 fileInputConsumed = true
             }
         }
+        if fileMenuOpen {
+            if isKeyPressed(Key.Escape) {
+                fileMenuOpen = false
+            }
+            fileInputConsumed = true
+        }
         if filePrompt.isVisible() {
             if handlePathPromptKeys(filePrompt) {
-                applyPathPrompt(filePrompt, activePath, buffer, status)
-                firstLine = usize(0)
+                if filePrompt.action() == PathPromptAction.OpenFolder {
+                    if openProjectFolder(
+                    filePrompt.value(),
+                    projectRoot,
+                    explorer,
+                    status
+                    ) {
+                        filePrompt.dismiss()
+                        firstExplorerEntry = usize(0)
+                    }
+                } else {
+                    applyPathPrompt(filePrompt, activePath, buffer, status)
+                    firstLine = usize(0)
+                }
             }
             fileInputConsumed = true
         } else if !fileInputConsumed && control && shift &&
@@ -1122,6 +1291,7 @@ def main() : int {
         firstExplorerEntry,
         visibleExplorerRows,
         explorerLabel,
+        fileMenuOpen,
         controller.mode(),
         uiFont,
         codeFont,

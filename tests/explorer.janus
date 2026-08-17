@@ -49,3 +49,21 @@ def loadsAndTogglesProjectDirectories() : Unit {
     usize(-1)
     )
 }
+
+/// @test
+def opensAndClosesProjectDirectories() : Unit {
+    val explorer : ProjectExplorer = projectExplorer(".")
+    defer delete explorer
+    val scratch : TextBuilder = new TextBuilder()
+    defer delete scratch
+
+    assertTrue(explorer.open("src"))
+    explorer.appendLabel(usize(0), scratch)
+    assertEqual[string](scratch.view(), "src")
+    assertTrue(findExplorerEntry(explorer, "main.janus", scratch) != usize(-1))
+
+    explorer.close()
+    assertEqual[usize](explorer.size(), usize(0))
+    assertFalse(explorer.open("un-dossier-qui-n-existe-pas"))
+    assertEqual[usize](explorer.size(), usize(0))
+}

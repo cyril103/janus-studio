@@ -30,3 +30,62 @@ def removesOneUnicodeCharacterFromPathPrompt() : Unit {
     prompt.backspace()
     assertEqual[string](prompt.value(), "src/é")
 }
+
+/// @test
+def movesCursorAndEditsPathInPlace() : Unit {
+    val prompt : PathPrompt = pathPrompt()
+    defer delete prompt
+
+    prompt.begin(PathPromptAction.OpenFolder, "src/min.janus")
+    prompt.moveHome()
+    prompt.moveRight()
+    prompt.moveRight()
+    prompt.moveRight()
+    prompt.append('s')
+    assertEqual[string](prompt.value(), "srcs/min.janus")
+
+    prompt.deleteForward()
+    assertEqual[string](prompt.value(), "srcsmin.janus")
+    prompt.backspace()
+    assertEqual[string](prompt.value(), "srcmin.janus")
+
+    prompt.moveEnd()
+    assertEqual[usize](prompt.cursor(), usize(12))
+}
+
+/// @test
+def movesAcrossUnicodeCharacters() : Unit {
+    val prompt : PathPrompt = pathPrompt()
+    defer delete prompt
+
+    prompt.begin(PathPromptAction.OpenFolder, "été")
+    assertEqual[usize](prompt.cursor(), usize(3))
+    prompt.moveLeft()
+    prompt.backspace()
+    prompt.append('a')
+    assertEqual[string](prompt.value(), "éaé")
+}
+
+/// @test
+def completesUniqueDirectoriesAndFiles() : Unit {
+    val prompt : PathPrompt = pathPrompt()
+    defer delete prompt
+
+    prompt.begin(PathPromptAction.OpenFolder, "sa")
+    assertEqual[usize](prompt.completePath(), usize(1))
+    assertEqual[string](prompt.value(), "samples/")
+
+    prompt.begin(PathPromptAction.Open, "src/editor/co")
+    assertEqual[usize](prompt.completePath(), usize(1))
+    assertEqual[string](prompt.value(), "src/editor/completion.janus")
+}
+
+/// @test
+def completesOnlyToSharedPathPrefix() : Unit {
+    val prompt : PathPrompt = pathPrompt()
+    defer delete prompt
+
+    prompt.begin(PathPromptAction.Open, "assets/fonts/Dej")
+    assertEqual[usize](prompt.completePath(), usize(2))
+    assertEqual[string](prompt.value(), "assets/fonts/DejaVuSans")
+}

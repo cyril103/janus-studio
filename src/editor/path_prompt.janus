@@ -1,19 +1,220 @@
 /// Saisie modale d'un chemin pour les opérations de fichier de Janus Studio.
 module editor.path_prompt
 
+import std.array
+import std.fs
+import std.option
+import std.path
+import std.result
+import std.system
 import std.text
 
 enum PathPromptAction derives Copy, Equality, Debug {
     None,
     Open,
+    OpenFolder,
     Create,
     SaveAs
 }
 
+private def unsignedByte(value : byte) : int {
+    val numeric : int = int(value)
+    return if numeric < 0 { numeric + 256 } else { numeric }
+}
+
+private def isContinuationByte(value : int) : bool {
+    return value >= 128 && value <= 191
+}
+
+private def appendUtf8Characters(value : string, output : Array[char]) : Unit {
+    val data : Ptr[byte] = stringData(value)
+    val length : usize = stringLength(value)
+    var index : usize = usize(0)
+    while index < length {
+        val first : int = unsignedByte(data.load(index))
+        var codepoint : int = 65533
+        var width : usize = usize(1)
+        if first <= 127 {
+            codepoint = first
+        } else if first >= 194 && first <= 223 &&
+        index + usize(1) < length {
+            val second : int = unsignedByte(data.load(index + usize(1)))
+            if isContinuationByte(second) {
+                codepoint = (first - 192) * 64 + second - 128
+                width = usize(2)
+            }
+        } else if first >= 224 && first <= 239 &&
+        index + usize(2) < length {
+            val second : int = unsignedByte(data.load(index + usize(1)))
+            val third : int = unsignedByte(data.load(index + usize(2)))
+            if isContinuationByte(second) && isContinuationByte(third) {
+                val candidate : int = (first - 224) * 4096 +
+                (second - 128) * 64 + third - 128
+                if candidate >= 2048 &&
+                !(candidate >= 55296 && candidate <= 57343) {
+                    codepoint = candidate
+                    width = usize(3)
+                }
+            }
+        } else if first >= 240 && first <= 244 &&
+        index + usize(3) < length {
+            val second : int = unsignedByte(data.load(index + usize(1)))
+            val third : int = unsignedByte(data.load(index + usize(2)))
+            val fourth : int = unsignedByte(data.load(index + usize(3)))
+            if isContinuationByte(second) && isContinuationByte(third) &&
+            isContinuationByte(fourth) {
+                val candidate : int = (first - 240) * 262144 +
+                (second - 128) * 4096 + (third - 128) * 64 + fourth - 128
+                if candidate >= 65536 && candidate <= 1114111 {
+                    codepoint = candidate
+                    width = usize(4)
+                }
+            }
+        }
+        output.push(char(codepoint))
+        index = index + width
+    }
+}
+
+private def startsWithCharacters(
+value : Array[char],
+prefix : Array[char]
+) : bool {
+    if value.size() < prefix.size() {
+        return false
+    }
+    var index : usize = usize(0)
+    while index < prefix.size() {
+        if value.get(index) != prefix.get(index) {
+            return false
+        }
+        index = index + usize(1)
+    }
+    return true
+}
+
+private def keepCommonPrefix(
+common : Array[char],
+candidate : Array[char]
+) : Unit {
+    var shared : usize = usize(0)
+    while shared < common.size() && shared < candidate.size() &&
+    common.get(shared) == candidate.get(shared) {
+        shared = shared + usize(1)
+    }
+    while common.size() > shared {
+        val _removed : char = common.pop()
+    }
+}
+
+private def consumeDirectoryPath(path : Path) : bool {
+    val result : Result[FileMetadata, SystemError] = metadata(path.view())
+    delete path
+    return match result {
+        Ok(value) => value.kind == FileType.Directory,
+        Error(error) => false
+    }
+}
+
+private def joinedPathIsDirectory(
+result : Result[Path, SystemError]
+) : bool {
+    return match move result {
+        Ok(path) => consumeDirectoryPath(move path),
+        Error(error) => false
+    }
+}
+
+private class PathCompletionState(
+private val directory : string,
+private val partial : Array[char],
+private val common : Array[char],
+private val candidate : Array[char]
+) {
+    private var matches : usize = usize(0)
+    private var uniqueDirectory : bool = false
+
+    def consumeName(name : Path) : bool {
+        candidate.clear()
+        appendUtf8Characters(name.view(), candidate)
+        if startsWithCharacters(candidate, partial) {
+            if matches == usize(0) {
+                var index : usize = usize(0)
+                while index < candidate.size() {
+                    common.push(candidate.get(index))
+                    index = index + usize(1)
+                }
+                uniqueDirectory = joinedPathIsDirectory(joinPath(
+                directory,
+                name.view()
+                ))
+            } else {
+                keepCommonPrefix(common, candidate)
+                uniqueDirectory = false
+            }
+            matches = matches + usize(1)
+        }
+        delete name
+        return true
+    }
+
+    def count() : usize {
+        return matches
+    }
+
+    def commonSize() : usize {
+        return common.size()
+    }
+
+    def commonAt(index : usize) : char {
+        return common.get(index)
+    }
+
+    def isUniqueDirectory() : bool {
+        return uniqueDirectory
+    }
+
+    destructor {
+        delete partial
+        delete common
+        delete candidate
+    }
+}
+
+private def pathCompletionState(
+directory : string,
+partialText : string
+) : PathCompletionState {
+    val partial : Array[char] = new Array[char](usize(32))
+    appendUtf8Characters(partialText, partial)
+    return new PathCompletionState(
+    directory,
+    move partial,
+    new Array[char](usize(64)),
+    new Array[char](usize(64))
+    )
+}
+
 class PathPrompt(
 private var currentAction : PathPromptAction,
-private val text : TextBuilder
+private val text : TextBuilder,
+private val characters : Array[char]
 ) {
+    private var cursorIndex : usize = usize(0)
+
+    private def loadCharacters(value : string) : Unit {
+        appendUtf8Characters(value, characters)
+    }
+
+    private def rebuildText() : Unit {
+        text.clear()
+        var index : usize = usize(0)
+        while index < characters.size() {
+            text.appendChar(characters.get(index))
+            index = index + usize(1)
+        }
+    }
+
     def isVisible() : bool {
         return currentAction != PathPromptAction.None
     }
@@ -26,41 +227,170 @@ private val text : TextBuilder
         return text.view()
     }
 
+    def cursor() : usize {
+        return cursorIndex
+    }
+
     def begin(action : PathPromptAction, initialValue : string) : Unit {
         currentAction = action
-        text.clear()
-        text.append(initialValue)
+        characters.clear()
+        this.loadCharacters(initialValue)
+        cursorIndex = characters.size()
+        this.rebuildText()
     }
 
     def append(value : char) : Unit {
-        text.appendChar(value)
+        characters.push(value)
+        var index : usize = characters.size() - usize(1)
+        while index > cursorIndex {
+            characters.set(index, characters.get(index - usize(1)))
+            index = index - usize(1)
+        }
+        characters.set(cursorIndex, value)
+        cursorIndex = cursorIndex + usize(1)
+        this.rebuildText()
     }
 
     def backspace() : Unit {
-        if text.size() == usize(0) {
+        if cursorIndex == usize(0) {
             return
         }
-        val current : string = text.view()
-        val data : Ptr[byte] = stringData(current)
-        var keep : usize = stringLength(current) - usize(1)
-        while keep > usize(0) && data.load(keep) < byte(-64) {
-            keep = keep - usize(1)
+        val _removed : char = characters.remove(cursorIndex - usize(1))
+        cursorIndex = cursorIndex - usize(1)
+        this.rebuildText()
+    }
+
+    def deleteForward() : Unit {
+        if cursorIndex >= characters.size() {
+            return
         }
-        val shortened : TextBuilder = new TextBuilder()
-        defer delete shortened
-        shortened.append(stringView(data, keep))
-        text.clear()
-        text.append(shortened.view())
+        val _removed : char = characters.remove(cursorIndex)
+        this.rebuildText()
+    }
+
+    def moveLeft() : Unit {
+        if cursorIndex > usize(0) {
+            cursorIndex = cursorIndex - usize(1)
+        }
+    }
+
+    def moveRight() : Unit {
+        if cursorIndex < characters.size() {
+            cursorIndex = cursorIndex + usize(1)
+        }
+    }
+
+    def moveHome() : Unit {
+        cursorIndex = usize(0)
+    }
+
+    def moveEnd() : Unit {
+        cursorIndex = characters.size()
+    }
+
+    private def completeFromDirectory(
+    iterator : DirectoryIterator,
+    directory : string,
+    partialText : string,
+    segmentStart : usize
+    ) : usize {
+        val state : PathCompletionState = pathCompletionState(
+        directory,
+        partialText
+        )
+        defer delete state
+        var reading : bool = true
+        while reading {
+            val nextEntry : Result[Option[Path], SystemError] = iterator.next()
+            reading = match move nextEntry {
+                Ok(entry) => match move entry {
+                    Some(name) => state.consumeName(move name),
+                    None => false
+                },
+                Error(error) => false
+            }
+        }
+        val _closed : bool = match iterator.close() {
+            Ok(value) => value,
+            Error(error) => false
+        }
+        delete iterator
+        if state.count() == usize(0) {
+            return usize(0)
+        }
+        var removeCount : usize = cursorIndex - segmentStart
+        while removeCount > usize(0) {
+            val _removed : char = characters.remove(segmentStart)
+            removeCount = removeCount - usize(1)
+        }
+        cursorIndex = segmentStart
+        var commonIndex : usize = usize(0)
+        while commonIndex < state.commonSize() {
+            this.append(state.commonAt(commonIndex))
+            commonIndex = commonIndex + usize(1)
+        }
+        if state.count() == usize(1) && state.isUniqueDirectory() &&
+        cursorIndex == characters.size() {
+            this.append('/')
+        }
+        return state.count()
+    }
+
+    def completePath() : usize {
+        var segmentStart : usize = cursorIndex
+        while segmentStart > usize(0) &&
+        characters.get(segmentStart - usize(1)) != '/' &&
+        characters.get(segmentStart - usize(1)) != '\\' {
+            segmentStart = segmentStart - usize(1)
+        }
+        val directoryText : TextBuilder = new TextBuilder()
+        defer delete directoryText
+        if segmentStart == usize(0) {
+            directoryText.append(".")
+        } else {
+            var directoryIndex : usize = usize(0)
+            while directoryIndex < segmentStart {
+                directoryText.appendChar(characters.get(directoryIndex))
+                directoryIndex = directoryIndex + usize(1)
+            }
+        }
+        val partialText : TextBuilder = new TextBuilder()
+        defer delete partialText
+        var partialIndex : usize = segmentStart
+        while partialIndex < cursorIndex {
+            partialText.appendChar(characters.get(partialIndex))
+            partialIndex = partialIndex + usize(1)
+        }
+        val iteratorResult : Result[DirectoryIterator, SystemError] =
+        readDirectory(directoryText.view())
+        return match move iteratorResult {
+            Ok(iterator) => this.completeFromDirectory(
+            move iterator,
+            directoryText.view(),
+            partialText.view(),
+            segmentStart
+            ),
+            Error(error) => usize(0)
+        }
     }
 
     def dismiss() : Unit {
         currentAction = PathPromptAction.None
         text.clear()
+        characters.clear()
+        cursorIndex = usize(0)
     }
 
-    destructor { delete text }
+    destructor {
+        delete text
+        delete characters
+    }
 }
 
 def pathPrompt() : PathPrompt {
-    return new PathPrompt(PathPromptAction.None, new TextBuilder())
+    return new PathPrompt(
+    PathPromptAction.None,
+    new TextBuilder(),
+    new Array[char](usize(128))
+    )
 }
