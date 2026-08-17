@@ -314,6 +314,7 @@ buffer : EditorBuffer
 }
 
 def refreshCompletion(
+lsp : LspClient,
 path : string,
 buffer : EditorBuffer,
 completion : CompletionModel,
@@ -321,7 +322,7 @@ labels : TextBuilder,
 error : TextBuilder,
 status : TextBuilder
 ) : Unit {
-    if requestCompletion(
+    if lsp.requestCompletion(
     path,
     buffer,
     buffer.line(),
@@ -674,6 +675,8 @@ def main() : int {
     defer delete completionLabels
     val completionError : TextBuilder = new TextBuilder()
     defer delete completionError
+    val languageServer : LspClient = lspClient(completionError)
+    defer delete languageServer
     val completionText : TextBuilder = new TextBuilder()
     defer delete completionText
     val filePrompt : PathPrompt = pathPrompt()
@@ -793,6 +796,7 @@ def main() : int {
         isKeyPressed(Key.Space)
         if characterAction == EditorAction.Complete || manualCompletion {
             refreshCompletion(
+            languageServer,
             activePath.view(),
             buffer,
             completion,

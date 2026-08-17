@@ -1,22 +1,17 @@
-/// Requêtes ponctuelles vers janus-lsp pour l'IntelliSense.
+/// Session persistante avec janus-lsp pour l'IntelliSense.
 module tooling.lsp
 
 import editor.buffer
 import std.array
-import std.fs
+import std.io
+import std.option
+import std.path
 import std.process
 import std.result
 import std.system
 import std.text
 
-const completionSnapshotPath : string =
-"target/janus-studio-completion.janus"
-
-def hasLabelMarker(
-source : string,
-size : usize,
-index : usize
-) : bool {
+def hasLabelMarker(source : string, size : usize, index : usize) : bool {
     val data : Ptr[byte] = stringData(source)
     return index + usize(9) <= size &&
     data.load(index) == byte(34) &&
@@ -53,9 +48,7 @@ end : usize
                     }
                     offset = offset + usize(1)
                 }
-                if matches {
-                    return true
-                }
+                if matches { return true }
             }
             lineStart = index + usize(1)
         }
@@ -90,88 +83,527 @@ def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
     }
 }
 
-def snapshotSucceeded(
-result : Result[bool, SystemError]
-) : bool {
-    return match result {
-        Ok(written) => written,
-        Error(error) => false
-    }
+private def unsignedByte(value : byte) : int {
+    val numeric : int = int(value)
+    return if numeric < 0 { numeric + 256 } else { numeric }
 }
 
-def removeCompletionSnapshot() : bool {
-    return match removeFile(completionSnapshotPath) {
-        Ok(removed) => removed,
-        Error(error) => false
-    }
+private def appendHexDigit(value : int, output : ByteBuffer) : bool {
+    return output.appendByte(truncatingCast[byte](
+    if value < 10 { 48 + value } else { 55 + value }
+    ))
 }
 
-def collectCompletionProcess(
-process : ProcessResult,
-labels : TextBuilder,
-error : TextBuilder
-) : bool {
-    val succeeded : bool = process.exitCode() == 0
-    if succeeded && process.stdoutSize() > usize(0) {
-        extractCompletionLabels(
-        stringView(process.stdoutData(), process.stdoutSize()),
-        labels
-        )
+def appendJsonString(value : string, output : ByteBuffer) : bool {
+    if !output.appendByte(byte(34)) { return false }
+    val data : Ptr[byte] = stringData(value)
+    var index : usize = usize(0)
+    while index < stringLength(value) {
+        val current : int = unsignedByte(data.load(index))
+        if current == 34 {
+            if !output.appendText("\\\"") { return false }
+        } else if current == 92 {
+            if !output.appendText("\\\\") { return false }
+        } else if current == 8 {
+            if !output.appendText("\\b") { return false }
+        } else if current == 9 {
+            if !output.appendText("\\t") { return false }
+        } else if current == 10 {
+            if !output.appendText("\\n") { return false }
+        } else if current == 12 {
+            if !output.appendText("\\f") { return false }
+        } else if current == 13 {
+            if !output.appendText("\\r") { return false }
+        } else if current < 32 {
+            if !output.appendText("\\u00") ||
+            !appendHexDigit(current / 16, output) ||
+            !appendHexDigit(current % 16, output) { return false }
+        } else if !output.appendByte(data.load(index)) {
+            return false
+        }
+        index = index + usize(1)
     }
-    if !succeeded && process.stderrSize() > usize(0) {
-        error.clear()
-        error.append(stringView(process.stderrData(), process.stderrSize()))
-    }
-    delete process
-    return succeeded && labels.size() > usize(0)
+    return output.appendByte(byte(34))
 }
 
-def reportCompletionStartFailure(error : TextBuilder) : bool {
-    error.append("Impossible de lancer `janus-lsp`.")
+private def textMatchesAt(text : string, marker : string, start : usize) : bool {
+    if start + stringLength(marker) > stringLength(text) { return false }
+    val data : Ptr[byte] = stringData(text)
+    val markerData : Ptr[byte] = stringData(marker)
+    var index : usize = usize(0)
+    while index < stringLength(marker) {
+        if data.load(start + index) != markerData.load(index) { return false }
+        index = index + usize(1)
+    }
+    return true
+}
+
+def parseContentLength(header : string) : usize {
+    val marker : string = "Content-Length:"
+    val data : Ptr[byte] = stringData(header)
+    var start : usize = usize(0)
+    while start + stringLength(marker) <= stringLength(header) {
+        if textMatchesAt(header, marker, start) {
+            var index : usize = start + stringLength(marker)
+            while index < stringLength(header) &&
+            (data.load(index) == byte(32) || data.load(index) == byte(9)) {
+                index = index + usize(1)
+            }
+            var result : usize = usize(0)
+            var found : bool = false
+            while index < stringLength(header) &&
+            data.load(index) >= byte(48) && data.load(index) <= byte(57) {
+                val digit : usize = numericCast[usize](int(data.load(index)) - 48)
+                val next : usize = result * usize(10) + digit
+                if next < result { return usize(0) }
+                result = next
+                found = true
+                index = index + usize(1)
+            }
+            return if found { result } else { usize(0) }
+        }
+        start = start + usize(1)
+    }
+    return usize(0)
+}
+
+def messageHasId(json : string, requested : usize) : bool {
+    val marker : string = "\"id\":"
+    val data : Ptr[byte] = stringData(json)
+    var start : usize = usize(0)
+    while start + stringLength(marker) <= stringLength(json) {
+        if textMatchesAt(json, marker, start) {
+            var index : usize = start + stringLength(marker)
+            while index < stringLength(json) && data.load(index) == byte(32) {
+                index = index + usize(1)
+            }
+            var value : usize = usize(0)
+            var found : bool = false
+            while index < stringLength(json) &&
+            data.load(index) >= byte(48) && data.load(index) <= byte(57) {
+                value = value * usize(10) +
+                numericCast[usize](int(data.load(index)) - 48)
+                found = true
+                index = index + usize(1)
+            }
+            if found && value == requested && index < stringLength(json) &&
+            (data.load(index) == byte(44) || data.load(index) == byte(125)) {
+                return true
+            }
+        }
+        start = start + usize(1)
+    }
     return false
 }
 
-/// Demande les propositions correspondant à la position courante du buffer.
-def requestCompletion(
-path : string,
-buffer : EditorBuffer,
-line : usize,
-column : usize,
-labels : TextBuilder,
-error : TextBuilder
+private def appendFileUri(path : string, output : TextBuilder) : Unit {
+    output.clear()
+    output.append("file://")
+    val data : Ptr[byte] = stringData(path)
+    if stringLength(path) >= usize(2) && data.load(usize(1)) == byte(58) {
+        output.append("/")
+    }
+    val hex : string = "0123456789ABCDEF"
+    val hexData : Ptr[byte] = stringData(hex)
+    var index : usize = usize(0)
+    while index < stringLength(path) {
+        val current : int = unsignedByte(data.load(index))
+        val normalized : int = if current == 92 { 47 } else { current }
+        val unreserved : bool =
+        (normalized >= 65 && normalized <= 90) ||
+        (normalized >= 97 && normalized <= 122) ||
+        (normalized >= 48 && normalized <= 57) ||
+        normalized == 45 || normalized == 46 || normalized == 95 ||
+        normalized == 126 || normalized == 47 || normalized == 58
+        if unreserved {
+            output.appendChar(char(normalized))
+        } else {
+            output.append("%")
+            output.appendChar(char(hexData.load(numericCast[usize](normalized / 16))))
+            output.appendChar(char(hexData.load(numericCast[usize](normalized % 16))))
+        }
+        index = index + usize(1)
+    }
+}
+
+private def useWorkingDirectory(
+directory : WorkingDirectory,
+output : TextBuilder
 ) : bool {
-    labels.clear()
-    error.clear()
-    val snapshot : TextBuilder = new TextBuilder()
-    defer delete snapshot
-    buffer.appendText(snapshot)
-    if !snapshotSucceeded(
-    writeTextFileAtomic(completionSnapshotPath, snapshot.view())
-    ) {
-        error.append("Impossible de préparer la requête de complétion.")
+    output.append(directory.view())
+    delete directory
+    return true
+}
+
+private def captureWorkingDirectory(
+result : Result[WorkingDirectory, SystemError],
+output : TextBuilder
+) : bool {
+    return match move result {
+        Ok(directory) => useWorkingDirectory(move directory, output),
+        Error(error) => false
+    }
+}
+
+private def useDocumentPath(path : Path, output : TextBuilder) : bool {
+    appendFileUri(path.view(), output)
+    delete path
+    return true
+}
+
+private def documentUri(
+workspace : string,
+path : string,
+output : TextBuilder
+) : bool {
+    val joined : Result[Path, SystemError] = joinPath(workspace, path)
+    return match move joined {
+        Ok(value) => useDocumentPath(move value, output),
+        Error(error) => false
+    }
+}
+
+class LspClient(
+private var process : Option[ChildProcess],
+private val workspace : TextBuilder,
+private val body : ByteBuffer,
+private val response : ByteBuffer,
+private val header : TextBuilder,
+private val number : TextBuilder,
+private val activeUri : TextBuilder,
+private val requestedUri : TextBuilder,
+private val snapshot : TextBuilder,
+private val responseJson : TextBuilder
+) {
+    private var requestId : usize = usize(1)
+    private var documentVersion : usize = usize(0)
+
+    private def disable() : Unit {
+        delete process
+        process = Option.None[ChildProcess]()
+    }
+
+    private def takeProcess() : Option[ChildProcess] {
+        val previous : Option[ChildProcess] = move process
+        process = Option.None[ChildProcess]()
+        return move previous
+    }
+
+    private def reportTransportFailure(error : TextBuilder) : bool {
+        error.clear()
+        error.append("La connexion à `janus-lsp` a été interrompue.")
         return false
     }
 
-    val lineText : TextBuilder = new TextBuilder()
-    defer delete lineText
-    lineText.appendUSize(line)
-    val columnText : TextBuilder = new TextBuilder()
-    defer delete columnText
-    columnText.appendUSize(column)
-    val arguments : Array[string] = new Array[string](usize(6))
-    defer delete arguments
-    arguments.push("--completion")
-    arguments.push("-")
-    arguments.push(path)
-    arguments.push(completionSnapshotPath)
-    arguments.push(lineText.view())
-    arguments.push(columnText.view())
-
-    val result : Result[ProcessResult, SystemError] =
-    runProcess("janus-lsp", arguments, "", true, true)
-    val _snapshotRemoved : bool = removeCompletionSnapshot()
-    return match move result {
-        Ok(process) => collectCompletionProcess(move process, labels, error),
-        Error(systemError) => reportCompletionStartFailure(error)
+    private def reportUnavailable(error : TextBuilder) : bool {
+        error.clear()
+        error.append("Impossible de lancer `janus-lsp`.")
+        return false
     }
+
+    private def writeBytes(
+    data : Ptr[byte],
+    size : usize,
+    error : TextBuilder
+    ) : bool {
+        val previous : Option[ChildProcess] = this.takeProcess()
+        return match move previous {
+            Some(child) => this.writeChild(move child, data, size, error),
+            None => this.reportUnavailable(error)
+        }
+    }
+
+    private def writeChild(
+    child : ChildProcess,
+    data : Ptr[byte],
+    size : usize,
+    error : TextBuilder
+    ) : bool {
+        val result : bool = match child.write(data, size) {
+            Ok(count) => count == size,
+            Error(systemError) => this.reportTransportFailure(error)
+        }
+        delete process
+        process = Option.Some[ChildProcess](move child)
+        return result
+    }
+
+    private def reportReadFailure(error : TextBuilder) : isize {
+        this.reportTransportFailure(error)
+        return isize(-1)
+    }
+
+    private def reportReadUnavailable(error : TextBuilder) : isize {
+        this.reportUnavailable(error)
+        return isize(-1)
+    }
+
+    private def readChunk(
+    target : Ptr[byte],
+    capacity : usize,
+    error : TextBuilder
+    ) : isize {
+        val previous : Option[ChildProcess] = this.takeProcess()
+        return match move previous {
+            Some(child) => this.readChild(move child, target, capacity, error),
+            None => this.reportReadUnavailable(error)
+        }
+    }
+
+    private def readChild(
+    child : ChildProcess,
+    target : Ptr[byte],
+    capacity : usize,
+    error : TextBuilder
+    ) : isize {
+        val result : isize = match child.read(target, capacity) {
+            Ok(count) => truncatingCast[isize](count),
+            Error(systemError) => this.reportReadFailure(error)
+        }
+        delete process
+        process = Option.Some[ChildProcess](move child)
+        return result
+    }
+
+    private def sendBody(error : TextBuilder) : bool {
+        header.clear()
+        header.append("Content-Length: ")
+        header.appendUSize(body.size())
+        header.append("\r\n\r\n")
+        return this.writeBytes(
+        stringData(header.view()),
+        stringLength(header.view()),
+        error
+        ) && this.writeBytes(body.data(), body.size(), error)
+    }
+
+    private def readMessage(error : TextBuilder) : bool {
+        header.clear()
+        var boundary : int = 0
+        val single : Ptr[byte] = alloc[byte](usize(1))
+        defer free(single)
+        while boundary < 4 && header.size() < usize(8192) {
+            val count : isize = this.readChunk(single, usize(1), error)
+            if count != isize(1) { return false }
+            val value : int = unsignedByte(single.load(usize(0)))
+            header.appendChar(char(value))
+            if boundary == 0 && value == 13 {
+                boundary = 1
+            } else if boundary == 1 && value == 10 {
+                boundary = 2
+            } else if boundary == 2 && value == 13 {
+                boundary = 3
+            } else if boundary == 3 && value == 10 {
+                boundary = 4
+            } else if value == 13 {
+                boundary = 1
+            } else {
+                boundary = 0
+            }
+        }
+        val length : usize = parseContentLength(header.view())
+        if boundary != 4 || length == usize(0) {
+            error.clear()
+            error.append("Réponse LSP invalide.")
+            return false
+        }
+        response.clear()
+        val chunk : Ptr[byte] = alloc[byte](usize(4096))
+        defer free(chunk)
+        while response.size() < length {
+            val remaining : usize = length - response.size()
+            val requested : usize = if remaining < usize(4096) {
+                remaining
+            } else {
+                usize(4096)
+            }
+            val count : isize = this.readChunk(chunk, requested, error)
+            if count <= isize(0) ||
+            !response.append(chunk, numericCast[usize](count)) { return false }
+        }
+        return true
+    }
+
+    private def inspectResponse(
+    result : Result[string, TextDecodeError],
+    id : usize
+    ) : bool {
+        return match result {
+            Ok(json) => this.copyMatchingResponse(json, id),
+            Error(decodeError) => false
+        }
+    }
+
+    private def copyMatchingResponse(json : string, id : usize) : bool {
+        if !messageHasId(json, id) { return false }
+        responseJson.clear()
+        responseJson.append(json)
+        return true
+    }
+
+    private def readResponse(id : usize, error : TextBuilder) : bool {
+        var attempts : usize = usize(0)
+        while attempts < usize(64) {
+            if !this.readMessage(error) { return false }
+            if this.inspectResponse(response.asText(), id) { return true }
+            attempts = attempts + usize(1)
+        }
+        error.clear()
+        error.append("janus-lsp n'a pas répondu à la requête attendue.")
+        return false
+    }
+
+    private def appendNumber(value : usize) : bool {
+        number.clear()
+        number.appendUSize(value)
+        return body.appendText(number.view())
+    }
+
+    def initialize(error : TextBuilder) : bool {
+        body.clear()
+        if !body.appendText(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootPath\":"
+        ) || !appendJsonString(workspace.view(), body) ||
+        !body.appendText("}}") || !this.sendBody(error) ||
+        !this.readResponse(usize(1), error) {
+            this.disable()
+            return false
+        }
+        requestId = usize(2)
+        return true
+    }
+
+    private def sendClose(error : TextBuilder) : bool {
+        body.clear()
+        return body.appendText(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":"
+        ) && appendJsonString(activeUri.view(), body) &&
+        body.appendText("}}}") && this.sendBody(error)
+    }
+
+    private def sendOpen(buffer : EditorBuffer, error : TextBuilder) : bool {
+        snapshot.clear()
+        buffer.appendText(snapshot)
+        body.clear()
+        return body.appendText(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":"
+        ) && appendJsonString(activeUri.view(), body) &&
+        body.appendText(",\"languageId\":\"janus\",\"version\":1,\"text\":") &&
+        appendJsonString(snapshot.view(), body) &&
+        body.appendText("}}}") && this.sendBody(error)
+    }
+
+    private def sendChange(buffer : EditorBuffer, error : TextBuilder) : bool {
+        snapshot.clear()
+        buffer.appendText(snapshot)
+        body.clear()
+        if !body.appendText(
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":"
+        ) || !appendJsonString(activeUri.view(), body) ||
+        !body.appendText(",\"version\":") ||
+        !this.appendNumber(documentVersion) ||
+        !body.appendText("},\"contentChanges\":[{\"text\":") ||
+        !appendJsonString(snapshot.view(), body) ||
+        !body.appendText("}]}}") { return false }
+        return this.sendBody(error)
+    }
+
+    private def synchronizeDocument(
+    path : string,
+    buffer : EditorBuffer,
+    error : TextBuilder
+    ) : bool {
+        if !documentUri(workspace.view(), path, requestedUri) {
+            error.clear()
+            error.append("Impossible de construire l'URI du fichier actif.")
+            return false
+        }
+        if requestedUri.view() != activeUri.view() {
+            if activeUri.size() > usize(0) && !this.sendClose(error) {
+                return false
+            }
+            activeUri.clear()
+            activeUri.append(requestedUri.view())
+            documentVersion = usize(1)
+            return this.sendOpen(buffer, error)
+        }
+        documentVersion = documentVersion + usize(1)
+        return this.sendChange(buffer, error)
+    }
+
+    def requestCompletion(
+    path : string,
+    buffer : EditorBuffer,
+    line : usize,
+    column : usize,
+    labels : TextBuilder,
+    error : TextBuilder
+    ) : bool {
+        labels.clear()
+        error.clear()
+        if !this.synchronizeDocument(path, buffer, error) { return false }
+        val id : usize = requestId
+        requestId = requestId + usize(1)
+        body.clear()
+        if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
+        !this.appendNumber(id) || !body.appendText(
+        ",\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":"
+        ) || !appendJsonString(activeUri.view(), body) ||
+        !body.appendText("},\"position\":{\"line\":") ||
+        !this.appendNumber(line) || !body.appendText(",\"character\":") ||
+        !this.appendNumber(column) || !body.appendText("}}}") ||
+        !this.sendBody(error) || !this.readResponse(id, error) { return false }
+        extractCompletionLabels(responseJson.view(), labels)
+        return labels.size() > usize(0)
+    }
+
+    destructor {
+        delete process
+        delete workspace
+        delete body
+        delete response
+        delete header
+        delete number
+        delete activeUri
+        delete requestedUri
+        delete snapshot
+        delete responseJson
+    }
+}
+
+private def clientWithProcess(
+result : Result[ChildProcess, SystemError],
+workspace : TextBuilder
+) : LspClient {
+    val state : Option[ChildProcess] = match move result {
+        Ok(child) => Option.Some[ChildProcess](move child),
+        Error(error) => Option.None[ChildProcess]()
+    }
+    return new LspClient(
+    move state,
+    move workspace,
+    new ByteBuffer(usize(4096)),
+    new ByteBuffer(usize(4096)),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder()
+    )
+}
+
+def lspClient(error : TextBuilder) : LspClient {
+    val workspace : TextBuilder = new TextBuilder()
+    if !captureWorkingDirectory(currentWorkingDirectory(), workspace) {
+        workspace.append(".")
+    }
+    val arguments : Array[string] = new Array[string](usize(0))
+    defer delete arguments
+    val client : LspClient = clientWithProcess(
+    spawnProcess("janus-lsp", arguments, workspace.view()),
+    move workspace
+    )
+    client.initialize(error)
+    return move client
 }

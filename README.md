@@ -14,8 +14,9 @@ Cette première version fournit :
 - une édition modale inspirée de Vim avec modes NORMAL, INSERT et COMMAND ;
 - une coloration syntaxique Janus pour les mots-clés, types, chaînes, nombres,
   commentaires et opérateurs ;
-- une autocomplétion typée fournie par `janus-lsp`, notamment pour les membres
-  de `Array` et des classes du fichier courant ;
+- une autocomplétion typée fournie par une session `janus-lsp` persistante,
+  notamment pour le workspace, les membres de `Array` et les classes du fichier
+  courant ;
 - un historique local de 100 états avec annulation et rétablissement ;
 - la saisie Unicode respectant la disposition active du clavier, notamment AZERTY ;
 - DejaVu Sans pour l'interface et Consolas pour le code lorsque la police est
@@ -108,8 +109,6 @@ Le chargement des fichiers et la saisie interactive prennent en charge Unicode.
 Les séquences UTF-8 invalides sont remplacées par U+FFFD. Les prochaines étapes
 prévues sont :
 
-1. rendre la connexion à `janus-lsp` persistante pour indexer le workspace sans
-   relancer le serveur à chaque requête ;
-2. implémenter la sélection de texte ;
-3. ajouter l'arbre complet du projet, plusieurs onglets et la recherche ;
-4. consommer les diagnostics JSON structurés plutôt que leur rendu humain.
+1. implémenter la sélection de texte ;
+2. ajouter l'arbre complet du projet, plusieurs onglets et la recherche ;
+3. consommer les diagnostics JSON structurés plutôt que leur rendu humain.
