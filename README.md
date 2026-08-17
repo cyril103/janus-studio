@@ -11,6 +11,7 @@ Cette première version fournit :
 - une sauvegarde atomique avec `Ctrl+S` ;
 - l'exécution de `janus check` avec `F5` ;
 - un panneau affichant les diagnostics du compilateur ;
+- une arborescence de projet chargée à la demande, navigable à la souris ;
 - une édition modale inspirée de Vim avec modes NORMAL, INSERT et COMMAND ;
 - une coloration syntaxique Janus pour les mots-clés, types, chaînes, nombres,
   commentaires et opérateurs ;
@@ -61,6 +62,16 @@ Le chemin par défaut est `samples/welcome.janus`.
 Janus Studio démarre en mode **NORMAL**. Le mode courant et la position du
 curseur restent visibles dans la barre d'état en bas de la fenêtre. `Esc`
 revient toujours dans ce mode.
+
+### Explorateur de projet
+
+- un clic sur un dossier le déplie ou le replie ;
+- un clic sur un fichier le sélectionne ;
+- un double-clic sur un fichier l'ouvre dans l'éditeur ;
+- la molette fait défiler les entrées lorsque l'arborescence dépasse la fenêtre.
+
+L'ouverture est refusée tant que le fichier courant contient des modifications
+non enregistrées, afin d'éviter toute perte de travail.
 
 ### Mode NORMAL
 
@@ -115,5 +126,5 @@ Les séquences UTF-8 invalides sont remplacées par U+FFFD. Les prochaines étap
 prévues sont :
 
 1. implémenter la sélection de texte ;
-2. ajouter l'arbre complet du projet, plusieurs onglets et la recherche ;
+2. ajouter plusieurs onglets et la recherche dans le projet ;
 3. consommer les diagnostics JSON structurés plutôt que leur rendu humain.

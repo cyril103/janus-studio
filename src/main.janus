@@ -1,5 +1,6 @@
 import editor.buffer
 import editor.completion
+import editor.explorer
 import editor.path_prompt
 import editor.syntax
 import editor.vim
@@ -13,6 +14,7 @@ import std.process
 import std.result
 import std.system
 import std.text
+import std.wall_time
 
 const editorLeft : int = 236
 const editorTop : int = 54
@@ -21,6 +23,10 @@ const codeFontSize : float = 20.0f
 const codeFontSpacing : float = 1.0f
 const statusBarHeight : int = 28
 const commandLineHeight : int = 28
+const explorerTreeTop : int = 104
+const explorerRowHeight : int = 22
+const explorerIndentWidth : int = 14
+const doubleClickDelayMilliseconds : usize = usize(500)
 
 def isFile(path : string) : bool {
     return match metadata(path) {
@@ -45,6 +51,24 @@ def selectedPath() : string {
     return match programArgument(usize(1)) {
         Some(path) => path,
         None => "samples/welcome.janus"
+    }
+}
+
+def useWorkingDirectory(
+directory : WorkingDirectory,
+output : TextBuilder
+) : bool {
+    output.append(directory.view())
+    delete directory
+    return true
+}
+
+def captureProjectRoot(output : TextBuilder) : bool {
+    val directory : Result[WorkingDirectory, SystemError] =
+    currentWorkingDirectory()
+    return match move directory {
+        Ok(value) => useWorkingDirectory(move value, output),
+        Error(error) => false
     }
 }
 
@@ -390,6 +414,87 @@ maximumLines : usize
     return firstLine
 }
 
+def explorerVisibleRows() : usize {
+    val available : int = screenHeight() - statusBarHeight -
+    commandLineHeight - explorerTreeTop
+    if available <= 0 {
+        return usize(0)
+    }
+    return numericCast[usize](available / explorerRowHeight)
+}
+
+def maximumExplorerFirst(
+explorer : ProjectExplorer,
+visibleRows : usize
+) : usize {
+    return if explorer.size() > visibleRows {
+        explorer.size() - visibleRows
+    } else {
+        usize(0)
+    }
+}
+
+def scrollExplorer(
+explorer : ProjectExplorer,
+first : usize,
+visibleRows : usize
+) : usize {
+    if mouseX() >= editorLeft - 12 || mouseY() < explorerTreeTop ||
+    mouseY() >= explorerTreeTop +
+    truncatingCast[int](visibleRows) * explorerRowHeight {
+        return first
+    }
+    val movement : float = mouseWheelMove()
+    if movement > 0.0f {
+        return if first > usize(2) { first - usize(3) } else { usize(0) }
+    }
+    if movement < 0.0f {
+        val maximum : usize = maximumExplorerFirst(explorer, visibleRows)
+        val requested : usize = first + usize(3)
+        return if requested < maximum { requested } else { maximum }
+    }
+    return first
+}
+
+def explorerEntryAtMouse(
+explorer : ProjectExplorer,
+first : usize,
+visibleRows : usize
+) : usize {
+    if mouseX() < 0 || mouseX() >= editorLeft - 12 ||
+    mouseY() < explorerTreeTop ||
+    mouseY() >= explorerTreeTop +
+    truncatingCast[int](visibleRows) * explorerRowHeight {
+        return usize(-1)
+    }
+    val row : usize = numericCast[usize](
+    (mouseY() - explorerTreeTop) / explorerRowHeight
+    )
+    val index : usize = first + row
+    return if index < explorer.size() { index } else { usize(-1) }
+}
+
+def openExplorerFile(
+path : string,
+activePath : TextBuilder,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if buffer.isModified() {
+        setStatus(
+        status,
+        "Enregistrez les modifications avant d'ouvrir un autre fichier."
+        )
+        return false
+    }
+    if !openExistingFile(path, buffer, status) {
+        return false
+    }
+    activePath.clear()
+    activePath.append(path)
+    return true
+}
+
 def buildStatusLine(
 output : TextBuilder,
 path : string,
@@ -521,6 +626,56 @@ lineAdvance : float
     }
 }
 
+def drawExplorer(
+explorer : ProjectExplorer,
+firstEntry : usize,
+visibleRows : usize,
+label : TextBuilder,
+font : Font,
+muted : Color
+) : Unit {
+    var index : usize = firstEntry
+    var row : usize = usize(0)
+    while index < explorer.size() && row < visibleRows {
+        val y : int = explorerTreeTop +
+        truncatingCast[int](row) * explorerRowHeight
+        if explorer.selected() == index {
+            drawRectangle(
+            0,
+            y - 1,
+            editorLeft - 12,
+            explorerRowHeight,
+            rgb(46, 59, 75)
+            )
+        }
+        val x : int = 12 + truncatingCast[int](explorer.depth(index)) *
+        explorerIndentWidth
+        if explorer.isDirectory(index) {
+            drawUiText(
+            font,
+            if explorer.isExpanded(index) { "v" } else { ">" },
+            x,
+            y + 2,
+            14.0f,
+            White
+            )
+        } else {
+            drawUiText(font, "-", x, y + 2, 14.0f, muted)
+        }
+        explorer.appendLabel(index, label)
+        drawUiText(
+        font,
+        label.view(),
+        x + 16,
+        y + 2,
+        14.0f,
+        if explorer.isDirectory(index) { White } else { muted }
+        )
+        index = index + usize(1)
+        row = row + usize(1)
+    }
+}
+
 def drawStudio(
 path : string,
 buffer : EditorBuffer,
@@ -536,6 +691,10 @@ status : TextBuilder,
 toolOutput : TextBuilder,
 modeLine : TextBuilder,
 commandLine : TextBuilder,
+explorer : ProjectExplorer,
+firstExplorerEntry : usize,
+visibleExplorerRows : usize,
+explorerLabel : TextBuilder,
 mode : EditorMode,
 uiFont : Font,
 codeFont : Font,
@@ -565,11 +724,14 @@ maximumLines : usize
     drawUiText(uiFont, "JANUS STUDIO", 18, 13, 23.0f, accent)
 
     drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
-    drawUiText(uiFont, path, 18, 104, 17.0f, White)
-    drawUiText(uiFont, "FICHIERS", 18, 164, 16.0f, muted)
-    drawUiText(uiFont, "Ctrl+O  ouvrir", 18, 196, 16.0f, White)
-    drawUiText(uiFont, "Ctrl+N  nouveau", 18, 222, 16.0f, White)
-    drawUiText(uiFont, "Ctrl+Maj+S enregistrer sous", 18, 248, 14.0f, White)
+    drawExplorer(
+    explorer,
+    firstExplorerEntry,
+    visibleExplorerRows,
+    explorerLabel,
+    uiFont,
+    muted
+    )
 
     drawHighlightedCode(
     codeFont,
@@ -704,6 +866,17 @@ maximumLines : usize
 }
 
 def main() : int {
+    val projectRoot : TextBuilder = new TextBuilder()
+    defer delete projectRoot
+    if !captureProjectRoot(projectRoot) {
+        projectRoot.append(".")
+    }
+    val explorer : ProjectExplorer = projectExplorer(projectRoot.view())
+    defer delete explorer
+    val explorerLabel : TextBuilder = new TextBuilder()
+    defer delete explorerLabel
+    val explorerPath : TextBuilder = new TextBuilder()
+    defer delete explorerPath
     val activePath : TextBuilder = new TextBuilder()
     defer delete activePath
     activePath.append(selectedPath())
@@ -789,22 +962,79 @@ def main() : int {
     setTargetFps(60)
 
     var firstLine : usize = usize(0)
+    var firstExplorerEntry : usize = usize(0)
+    var lastExplorerClick : usize = usize(-1)
+    var lastExplorerClickAt : usize = usize(0)
     var quitRequested : bool = false
     while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
         val shift : bool = shiftDown()
         var fileInputConsumed : bool = false
+        val visibleExplorerRows : usize = explorerVisibleRows()
+        firstExplorerEntry = scrollExplorer(
+        explorer,
+        firstExplorerEntry,
+        visibleExplorerRows
+        )
+        if !filePrompt.isVisible() &&
+        isMouseButtonPressed(MouseButton.Left) {
+            val clicked : usize = explorerEntryAtMouse(
+            explorer,
+            firstExplorerEntry,
+            visibleExplorerRows
+            )
+            if clicked != usize(-1) {
+                explorer.select(clicked)
+                if explorer.isDirectory(clicked) {
+                    explorer.toggle(clicked)
+                    val maximum : usize = maximumExplorerFirst(
+                    explorer,
+                    visibleExplorerRows
+                    )
+                    if firstExplorerEntry > maximum {
+                        firstExplorerEntry = maximum
+                    }
+                    lastExplorerClick = usize(-1)
+                } else {
+                    val clickedAt : usize = wallNow().unixMilliseconds()
+                    val isDoubleClick : bool =
+                    clicked == lastExplorerClick &&
+                    clickedAt >= lastExplorerClickAt &&
+                    clickedAt - lastExplorerClickAt <=
+                    doubleClickDelayMilliseconds
+                    if isDoubleClick {
+                        explorer.appendPath(clicked, explorerPath)
+                        if openExplorerFile(
+                        explorerPath.view(),
+                        activePath,
+                        buffer,
+                        status
+                        ) {
+                            firstLine = usize(0)
+                            completion.dismiss()
+                            controller.escape()
+                        }
+                        lastExplorerClick = usize(-1)
+                    } else {
+                        lastExplorerClick = clicked
+                        lastExplorerClickAt = clickedAt
+                    }
+                }
+                fileInputConsumed = true
+            }
+        }
         if filePrompt.isVisible() {
             if handlePathPromptKeys(filePrompt) {
                 applyPathPrompt(filePrompt, activePath, buffer, status)
                 firstLine = usize(0)
             }
             fileInputConsumed = true
-        } else if control && shift && isKeyPressed(Key.S) {
+        } else if !fileInputConsumed && control && shift &&
+        isKeyPressed(Key.S) {
             filePrompt.begin(PathPromptAction.SaveAs, activePath.view())
             completion.dismiss()
             fileInputConsumed = true
-        } else if control && isKeyPressed(Key.O) {
+        } else if !fileInputConsumed && control && isKeyPressed(Key.O) {
             if buffer.isModified() {
                 setStatus(status, "Enregistrez les modifications avant d'ouvrir un fichier.")
             } else {
@@ -812,7 +1042,7 @@ def main() : int {
                 completion.dismiss()
             }
             fileInputConsumed = true
-        } else if control && isKeyPressed(Key.N) {
+        } else if !fileInputConsumed && control && isKeyPressed(Key.N) {
             if buffer.isModified() {
                 setStatus(status, "Enregistrez les modifications avant de créer un fichier.")
             } else {
@@ -888,6 +1118,10 @@ def main() : int {
         toolOutput,
         modeLine,
         commandLine,
+        explorer,
+        firstExplorerEntry,
+        visibleExplorerRows,
+        explorerLabel,
         controller.mode(),
         uiFont,
         codeFont,

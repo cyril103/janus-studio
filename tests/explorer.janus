@@ -1,0 +1,51 @@
+import editor.explorer
+import std.testing
+import std.text
+
+def findExplorerEntry(
+explorer : ProjectExplorer,
+label : string,
+scratch : TextBuilder
+) : usize {
+    var index : usize = usize(0)
+    while index < explorer.size() {
+        explorer.appendLabel(index, scratch)
+        if scratch.view() == label {
+            return index
+        }
+        index = index + usize(1)
+    }
+    return usize(-1)
+}
+
+/// @test
+def loadsAndTogglesProjectDirectories() : Unit {
+    val explorer : ProjectExplorer = projectExplorer(".")
+    defer delete explorer
+    val scratch : TextBuilder = new TextBuilder()
+    defer delete scratch
+
+    assertTrue(explorer.size() > usize(1))
+    val source : usize = findExplorerEntry(explorer, "src", scratch)
+    assertTrue(source != usize(-1))
+    assertTrue(explorer.isDirectory(source))
+    assertFalse(explorer.isExpanded(source))
+
+    explorer.select(source)
+    assertEqual[usize](explorer.selected(), source)
+    assertTrue(explorer.toggle(source))
+    assertTrue(explorer.isExpanded(source))
+
+    val mainFile : usize = findExplorerEntry(explorer, "main.janus", scratch)
+    assertTrue(mainFile != usize(-1))
+    assertFalse(explorer.isDirectory(mainFile))
+    explorer.appendPath(mainFile, scratch)
+    assertEqual[string](scratch.view(), "src/main.janus")
+
+    assertTrue(explorer.toggle(source))
+    assertFalse(explorer.isExpanded(source))
+    assertEqual[usize](
+    findExplorerEntry(explorer, "main.janus", scratch),
+    usize(-1)
+    )
+}
