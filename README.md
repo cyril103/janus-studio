@@ -5,6 +5,12 @@ Prototype d'IDE natif écrit en Janus pour développer des programmes Janus.
 Cette première version fournit :
 
 - un buffer éditable avec curseur et défilement vertical automatique ;
+- le défilement vertical indépendant de l'éditeur à la molette, avec une barre
+  indiquant la position dans le fichier ;
+- le placement du curseur à la souris dans l'éditeur, borné à la fin de la ligne
+  sélectionnée ;
+- le redimensionnement à la souris de l'explorateur et du panneau de sortie,
+  avec un pointeur adapté au survol de chaque séparateur ;
 - l'ouverture d'un fichier passé en argument ;
 - l'ouverture et la création de fichiers depuis l'interface, ainsi que
   l'enregistrement sous un nouveau chemin ;
@@ -29,8 +35,8 @@ Cette première version fournit :
 
 ## Prérequis
 
-- la version de développement de Janus contenant `characterPressed` (présente
-  dans le dépôt frère `../janus`) ;
+- la version de développement de Janus contenant `characterPressed` et
+  `setMouseCursor` (présente dans le dépôt frère `../janus`) ;
 - la version de développement de `janus-lsp` contenant la complétion typée des
   membres ;
 - raylib 6 disponible pour l'exécution de l'interface graphique.

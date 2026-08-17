@@ -321,10 +321,43 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
+    def moveTo(line : usize, column : usize) : Unit {
+        var currentLine : usize = usize(0)
+        var start : usize = usize(0)
+        while currentLine < line && start < characters.size() {
+            while start < characters.size() && characters.get(start) != '\n' {
+                start = start + usize(1)
+            }
+            if start < characters.size() {
+                start = start + usize(1)
+                currentLine = currentLine + usize(1)
+            }
+        }
+        if currentLine < line {
+            cursorPosition = characters.size()
+            return
+        }
+        val end : usize = this.lineEnd(start)
+        val requested : usize = start + column
+        cursorPosition = if requested < end { requested } else { end }
+    }
+
     def line() : usize {
         var result : usize = usize(0)
         var index : usize = usize(0)
         while index < cursorPosition {
+            if characters.get(index) == '\n' {
+                result = result + usize(1)
+            }
+            index = index + usize(1)
+        }
+        return result
+    }
+
+    def lineCount() : usize {
+        var result : usize = usize(1)
+        var index : usize = usize(0)
+        while index < characters.size() {
             if characters.get(index) == '\n' {
                 result = result + usize(1)
             }

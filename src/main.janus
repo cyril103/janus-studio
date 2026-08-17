@@ -16,9 +16,9 @@ import std.system
 import std.text
 import std.wall_time
 
-const editorLeft : int = 236
+var editorLeft : int = 236
 const editorTop : int = 54
-const editorBottom : int = 590
+var editorBottom : int = 590
 const codeFontSize : float = 20.0f
 const codeFontSpacing : float = 1.0f
 const statusBarHeight : int = 28
@@ -32,6 +32,17 @@ const fileMenuWidth : int = 250
 const fileMenuButtonWidth : int = 86
 const fileMenuTop : int = 46
 const fileMenuRowHeight : int = 36
+const separatorHitWidth : int = 5
+const minimumExplorerWidth : int = 150
+const minimumEditorWidth : int = 360
+const minimumEditorHeight : int = 180
+const minimumOutputHeight : int = 80
+
+enum PaneResize derives Copy, Equality, Debug {
+    None,
+    Explorer,
+    Output
+}
 
 def isFile(path : string) : bool {
     return match metadata(path) {
@@ -185,6 +196,46 @@ def pathPromptTitle(action : PathPromptAction) : string {
 def pointInArea(x : int, y : int, width : int, height : int) : bool {
     return mouseX() >= x && mouseX() < x + width &&
     mouseY() >= y && mouseY() < y + height
+}
+
+def distance(left : int, right : int) : int {
+    return if left >= right { left - right } else { right - left }
+}
+
+def explorerSeparatorHovered() : bool {
+    return distance(mouseX(), editorLeft - 12) <= separatorHitWidth &&
+    mouseY() >= editorTop &&
+    mouseY() < screenHeight() - statusBarHeight - commandLineHeight
+}
+
+def outputSeparatorHovered() : bool {
+    return distance(mouseY(), editorBottom) <= separatorHitWidth &&
+    mouseX() >= editorLeft - 12 && mouseX() < screenWidth()
+}
+
+def resizeExplorerToMouse() : Unit {
+    val requested : int = mouseX() + 12
+    val maximum : int = screenWidth() - minimumEditorWidth
+    if requested < minimumExplorerWidth + 12 {
+        editorLeft = minimumExplorerWidth + 12
+    } else if requested > maximum {
+        editorLeft = maximum
+    } else {
+        editorLeft = requested
+    }
+}
+
+def resizeOutputToMouse() : Unit {
+    val requested : int = mouseY()
+    val maximum : int = screenHeight() - statusBarHeight -
+    commandLineHeight - minimumOutputHeight
+    if requested < editorTop + minimumEditorHeight {
+        editorBottom = editorTop + minimumEditorHeight
+    } else if requested > maximum {
+        editorBottom = maximum
+    } else {
+        editorBottom = requested
+    }
 }
 
 def openProjectFolder(
@@ -461,6 +512,68 @@ maximumLines : usize
         return cursorLine - maximumLines + usize(1)
     }
     return firstLine
+}
+
+def maximumEditorFirst(
+buffer : EditorBuffer,
+maximumLines : usize
+) : usize {
+    return if buffer.lineCount() > maximumLines {
+        buffer.lineCount() - maximumLines
+    } else {
+        usize(0)
+    }
+}
+
+def scrollEditor(
+buffer : EditorBuffer,
+first : usize,
+maximumLines : usize
+) : usize {
+    if mouseX() < editorLeft - 12 || mouseX() >= screenWidth() ||
+    mouseY() < editorTop || mouseY() >= editorBottom {
+        return first
+    }
+    val movement : float = mouseWheelMove()
+    if movement > 0.0f {
+        return if first > usize(2) { first - usize(3) } else { usize(0) }
+    }
+    if movement < 0.0f {
+        val maximum : usize = maximumEditorFirst(buffer, maximumLines)
+        val requested : usize = first + usize(3)
+        return if requested < maximum { requested } else { maximum }
+    }
+    return first
+}
+
+def moveCursorToEditorMouse(
+buffer : EditorBuffer,
+firstLine : usize,
+glyphAdvance : float,
+lineAdvance : float,
+maximumLines : usize
+) : Unit {
+    val relativeY : int = mouseY() - editorTop - 12
+    var row : usize = if relativeY > 0 {
+        numericCast[usize](truncatingCast[int](
+        numericCast[float](relativeY) / lineAdvance
+        ))
+    } else {
+        usize(0)
+    }
+    if maximumLines > usize(0) && row >= maximumLines {
+        row = maximumLines - usize(1)
+    }
+    val relativeX : int = mouseX() - editorLeft
+    val column : usize = if relativeX > 0 {
+        numericCast[usize](truncatingCast[int](
+        (numericCast[float](relativeX) + glyphAdvance * 0.5f) /
+        glyphAdvance
+        ))
+    } else {
+        usize(0)
+    }
+    buffer.moveTo(firstLine + row, column)
 }
 
 def explorerVisibleRows() : usize {
@@ -770,6 +883,20 @@ maximumLines : usize
     drawRectangle(0, 0, screenWidth(), editorTop, header)
     drawRectangle(0, editorTop, editorLeft - 12, screenHeight() - editorTop, sidebar)
     drawRectangle(editorLeft - 12, editorBottom, screenWidth() - editorLeft + 12, screenHeight() - editorBottom, panel)
+    drawRectangle(
+    editorLeft - 14,
+    editorTop,
+    4,
+    screenHeight() - editorTop - statusBarHeight - commandLineHeight,
+    if explorerSeparatorHovered() { accent } else { header }
+    )
+    drawRectangle(
+    editorLeft - 12,
+    editorBottom - 2,
+    screenWidth() - editorLeft + 12,
+    4,
+    if outputSeparatorHovered() { accent } else { header }
+    )
 
     drawUiText(uiFont, "JANUS STUDIO", 18, 13, 23.0f, accent)
     if fileMenuOpen {
@@ -797,18 +924,47 @@ maximumLines : usize
     glyphAdvance,
     lineAdvance
     )
-    val cursorColumn : float = numericCast[float](truncatingCast[int](buffer.column()))
-    val cursorLine : float = numericCast[float](
-    truncatingCast[int](buffer.line() - firstLine)
-    )
-    val cursorX : int = editorLeft + truncatingCast[int](cursorColumn * glyphAdvance)
-    val cursorY : int = editorTop + 12 +
-    truncatingCast[int](cursorLine * lineAdvance)
-    val cursorWidth : int =
-    if mode == EditorMode.Insert { 2 } else { truncatingCast[int](glyphAdvance) }
-    drawRectangle(cursorX, cursorY, cursorWidth, 23, accent)
+    val cursorVisible : bool = buffer.line() >= firstLine &&
+    buffer.line() < firstLine + maximumLines
+    var cursorX : int = editorLeft
+    var cursorY : int = editorTop + 12
+    if cursorVisible {
+        val cursorColumn : float = numericCast[float](
+        truncatingCast[int](buffer.column())
+        )
+        val cursorLine : float = numericCast[float](
+        truncatingCast[int](buffer.line() - firstLine)
+        )
+        cursorX = editorLeft + truncatingCast[int](cursorColumn * glyphAdvance)
+        cursorY = editorTop + 12 +
+        truncatingCast[int](cursorLine * lineAdvance)
+        val cursorWidth : int = if mode == EditorMode.Insert {
+            2
+        } else {
+            truncatingCast[int](glyphAdvance)
+        }
+        drawRectangle(cursorX, cursorY, cursorWidth, 23, accent)
+    }
 
-    if completion.isVisible() {
+    if buffer.lineCount() > maximumLines {
+        val trackHeight : int = editorBottom - editorTop
+        val lineCount : int = truncatingCast[int](buffer.lineCount())
+        var thumbHeight : int = trackHeight *
+        truncatingCast[int](maximumLines) / lineCount
+        if thumbHeight < 28 {
+            thumbHeight = 28
+        }
+        val maximumFirst : int = truncatingCast[int](
+        maximumEditorFirst(buffer, maximumLines)
+        )
+        val thumbY : int = editorTop +
+        (trackHeight - thumbHeight) * truncatingCast[int](firstLine) /
+        maximumFirst
+        drawRectangle(screenWidth() - 8, editorTop, 8, trackHeight, panel)
+        drawRectangle(screenWidth() - 7, thumbY, 6, thumbHeight, muted)
+    }
+
+    if completion.isVisible() && cursorVisible {
         val shown : usize = if completion.size() < usize(8) {
             completion.size()
         } else {
@@ -888,7 +1044,7 @@ maximumLines : usize
     }
 
     if pathPrompt.isVisible() {
-        val dialogX : int = editorLeft + 70
+        val dialogX : int = (screenWidth() - 720) / 2
         val dialogY : int = 230
         val dialogWidth : int = 720
         drawRectangle(dialogX, dialogY, dialogWidth, 154, rgb(31, 43, 57))
@@ -945,8 +1101,22 @@ maximumLines : usize
         )
     }
 
-    drawUiText(uiFont, "SORTIE JANUS", editorLeft, 606, 15.0f, accent)
-    drawCodeText(codeFont, toolOutput.view(), editorLeft, 632, 15.0f, muted)
+    drawUiText(
+    uiFont,
+    "SORTIE JANUS",
+    editorLeft,
+    editorBottom + 16,
+    15.0f,
+    accent
+    )
+    drawCodeText(
+    codeFont,
+    toolOutput.view(),
+    editorLeft,
+    editorBottom + 42,
+    15.0f,
+    muted
+    )
 
     drawRectangle(0, bottomStatusY, screenWidth(), statusBarHeight, header)
     drawRectangle(
@@ -1079,7 +1249,7 @@ def main() : int {
     codeFontSize,
     codeFontSpacing
     ).y - oneGlyph.y
-    val maximumLines : usize = numericCast[usize](truncatingCast[int](
+    var maximumLines : usize = numericCast[usize](truncatingCast[int](
     numericCast[float](editorBottom - editorTop - 12) / lineAdvance
     ))
     setTargetFps(60)
@@ -1090,22 +1260,76 @@ def main() : int {
     var lastExplorerClickAt : usize = usize(0)
     var quitRequested : bool = false
     var fileMenuOpen : bool = false
+    var editorScrollDetached : bool = false
+    var paneResize : PaneResize = PaneResize.None
     while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
         val shift : bool = shiftDown()
+        val cursorLineBeforeInput : usize = buffer.line()
+        val cursorColumnBeforeInput : usize = buffer.column()
+        val leftMousePressed : bool = isMouseButtonPressed(MouseButton.Left)
         var fileInputConsumed : bool = false
+        var layoutMouseConsumed : bool = false
+        if paneResize == PaneResize.None && leftMousePressed {
+            if explorerSeparatorHovered() {
+                paneResize = PaneResize.Explorer
+            } else if outputSeparatorHovered() {
+                paneResize = PaneResize.Output
+            }
+        }
+        if paneResize != PaneResize.None {
+            if isMouseButtonDown(MouseButton.Left) {
+                if paneResize == PaneResize.Explorer {
+                    resizeExplorerToMouse()
+                } else {
+                    resizeOutputToMouse()
+                }
+                layoutMouseConsumed = true
+            } else {
+                paneResize = PaneResize.None
+            }
+        }
+        if paneResize == PaneResize.Explorer || explorerSeparatorHovered() {
+            setMouseCursor(MouseCursor.ResizeEastWest)
+        } else if paneResize == PaneResize.Output || outputSeparatorHovered() {
+            setMouseCursor(MouseCursor.ResizeNorthSouth)
+        } else {
+            setMouseCursor(MouseCursor.Default)
+        }
+        maximumLines = numericCast[usize](truncatingCast[int](
+        numericCast[float](editorBottom - editorTop - 12) / lineAdvance
+        ))
+        val maximumFirstAfterResize : usize = maximumEditorFirst(
+        buffer,
+        maximumLines
+        )
+        if firstLine > maximumFirstAfterResize {
+            firstLine = maximumFirstAfterResize
+        }
         val visibleExplorerRows : usize = explorerVisibleRows()
         firstExplorerEntry = scrollExplorer(
         explorer,
         firstExplorerEntry,
         visibleExplorerRows
         )
-        if !filePrompt.isVisible() && isMouseButtonPressed(MouseButton.Left) &&
+        if !filePrompt.isVisible() && !fileMenuOpen {
+            val scrolledEditorFirst : usize = scrollEditor(
+            buffer,
+            firstLine,
+            maximumLines
+            )
+            if scrolledEditorFirst != firstLine {
+                firstLine = scrolledEditorFirst
+                editorScrollDetached = true
+                completion.dismiss()
+            }
+        }
+        if !layoutMouseConsumed && !filePrompt.isVisible() && leftMousePressed &&
         pointInArea(fileMenuX, 0, fileMenuButtonWidth, editorTop) {
             fileMenuOpen = !fileMenuOpen
             fileInputConsumed = true
-        } else if !filePrompt.isVisible() && fileMenuOpen &&
-        isMouseButtonPressed(MouseButton.Left) {
+        } else if !layoutMouseConsumed && !filePrompt.isVisible() && fileMenuOpen &&
+        leftMousePressed {
             if pointInArea(
             fileMenuX,
             fileMenuTop,
@@ -1127,8 +1351,8 @@ def main() : int {
             }
             fileMenuOpen = false
             fileInputConsumed = true
-        } else if !filePrompt.isVisible() &&
-        isMouseButtonPressed(MouseButton.Left) {
+        } else if !layoutMouseConsumed && !filePrompt.isVisible() && leftMousePressed &&
+        mouseX() >= 0 && mouseX() < editorLeft - 12 {
             val clicked : usize = explorerEntryAtMouse(
             explorer,
             firstExplorerEntry,
@@ -1162,6 +1386,7 @@ def main() : int {
                         status
                         ) {
                             firstLine = usize(0)
+                            editorScrollDetached = false
                             completion.dismiss()
                             controller.escape()
                         }
@@ -1173,6 +1398,23 @@ def main() : int {
                 }
                 fileInputConsumed = true
             }
+        } else if !layoutMouseConsumed && !filePrompt.isVisible() && leftMousePressed &&
+        pointInArea(
+        editorLeft,
+        editorTop,
+        screenWidth() - editorLeft - 8,
+        editorBottom - editorTop
+        ) {
+            moveCursorToEditorMouse(
+            buffer,
+            firstLine,
+            glyphAdvance,
+            lineAdvance,
+            maximumLines
+            )
+            editorScrollDetached = false
+            completion.dismiss()
+            fileInputConsumed = true
         }
         if fileMenuOpen {
             if isKeyPressed(Key.Escape) {
@@ -1195,6 +1437,7 @@ def main() : int {
                 } else {
                     applyPathPrompt(filePrompt, activePath, buffer, status)
                     firstLine = usize(0)
+                    editorScrollDetached = false
                 }
             }
             fileInputConsumed = true
@@ -1269,7 +1512,14 @@ def main() : int {
         buffer,
         status
         )
-        firstLine = keepCursorVisible(buffer, firstLine, maximumLines)
+        if buffer.line() != cursorLineBeforeInput ||
+        buffer.column() != cursorColumnBeforeInput ||
+        isKeyPressed(Key.Delete) {
+            editorScrollDetached = false
+        }
+        if !editorScrollDetached {
+            firstLine = keepCursorVisible(buffer, firstLine, maximumLines)
+        }
         controller.appendStatus(modeLine)
         controller.appendCommandLine(commandLine)
         drawStudio(

@@ -22,6 +22,16 @@ def insertsAndDeletesAtCursor() : Unit {
 }
 
 /// @test
+def countsVisibleTextLines() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+
+    assertEqual[usize](buffer.lineCount(), usize(1))
+    buffer.load("première\ndeuxième\ntroisième")
+    assertEqual[usize](buffer.lineCount(), usize(3))
+}
+
+/// @test
 def insertsUnicodeCharacters() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
@@ -142,6 +152,25 @@ def navigatesWordsAndFileBounds() : Unit {
     buffer.moveFileEnd()
     assertEqual[usize](buffer.line(), usize(1))
     assertEqual[usize](buffer.column(), usize(6))
+}
+
+/// @test
+def movesToClickedLineAndClampsColumn() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("court\nune ligne longue\nfin")
+
+    buffer.moveTo(usize(1), usize(4))
+    assertEqual[usize](buffer.line(), usize(1))
+    assertEqual[usize](buffer.column(), usize(4))
+
+    buffer.moveTo(usize(0), usize(100))
+    assertEqual[usize](buffer.line(), usize(0))
+    assertEqual[usize](buffer.column(), usize(5))
+
+    buffer.moveTo(usize(100), usize(0))
+    assertEqual[usize](buffer.line(), usize(2))
+    assertEqual[usize](buffer.column(), usize(3))
 }
 
 /// @test
