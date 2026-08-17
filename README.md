@@ -104,13 +104,12 @@ modifications éventuelles.
 
 ## Limites connues du MVP
 
-Le chargement des fichiers reste actuellement effectué octet par octet. La saisie
-interactive suit en revanche la disposition du clavier et accepte Unicode. Les
-prochaines étapes prévues sont :
+Le chargement des fichiers et la saisie interactive prennent en charge Unicode.
+Les séquences UTF-8 invalides sont remplacées par U+FFFD. Les prochaines étapes
+prévues sont :
 
-1. décoder le contenu UTF-8 des fichiers en caractères Unicode ;
-2. rendre la connexion à `janus-lsp` persistante pour indexer le workspace sans
+1. rendre la connexion à `janus-lsp` persistante pour indexer le workspace sans
    relancer le serveur à chaque requête ;
-3. implémenter la sélection de texte ;
-4. ajouter l'arbre complet du projet, plusieurs onglets et la recherche ;
-5. consommer les diagnostics JSON structurés plutôt que leur rendu humain.
+2. implémenter la sélection de texte ;
+3. ajouter l'arbre complet du projet, plusieurs onglets et la recherche ;
+4. consommer les diagnostics JSON structurés plutôt que leur rendu humain.

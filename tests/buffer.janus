@@ -35,6 +35,57 @@ def insertsUnicodeCharacters() : Unit {
 }
 
 /// @test
+def loadsUtf8AsUnicodeCharacters() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("hé λ世😀")
+
+    assertEqual[usize](buffer.size(), usize(6))
+    assertEqual[usize](buffer.cursor(), usize(6))
+    assertEqual[usize](buffer.column(), usize(6))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "hé λ世😀")
+}
+
+/// @test
+def insertsUtf8TextAsUnicodeCharacters() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("ab")
+    buffer.moveLeft()
+    buffer.insertText("é世")
+
+    assertEqual[usize](buffer.size(), usize(4))
+    assertEqual[usize](buffer.cursor(), usize(3))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "aé世b")
+}
+
+/// @test
+def replacesInvalidUtf8Bytes() : Unit {
+    val bytes : Ptr[byte] = alloc[byte](usize(2))
+    defer free(bytes)
+    bytes.store(usize(0), byte(195))
+    bytes.store(usize(1), byte(40))
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load(stringView(bytes, usize(2)))
+    assertEqual[usize](buffer.size(), usize(2))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "�(")
+}
+
+/// @test
 def movesAcrossLines() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
