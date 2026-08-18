@@ -144,7 +144,10 @@ def creationRefusesExistingPathAndPreservesItsContent() : Unit {
     val document : FileDocument = fileDocument()
     defer delete document
 
-    assertTrue(!document.create(path.view(), buffer))
+    assertEqual[FileCreationOutcome](
+    document.create(path.view(), buffer),
+    FileCreationOutcome.Exists
+    )
     assertTrue(!document.canSave())
     assertTrue(!document.save(buffer))
     assertTrue(fileHasText(path.view(), "à garder"))
@@ -201,7 +204,10 @@ def newTargetIsRevalidatedImmediatelyBeforeWriting() : Unit {
     val document : FileDocument = fileDocument()
     defer delete document
 
-    assertTrue(document.create(path.view(), buffer))
+    assertEqual[FileCreationOutcome](
+    document.create(path.view(), buffer),
+    FileCreationOutcome.Created
+    )
     buffer.load("nouveau contenu")
     assertOk[bool, SystemError](writeTextFileAtomic(path.view(), "concurrent"))
 
