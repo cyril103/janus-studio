@@ -1,4 +1,5 @@
 import editor.buffer
+import editor.close_policy
 import editor.completion
 import editor.explorer
 import editor.file_document
@@ -487,14 +488,14 @@ status : TextBuilder
         return false
     }
     if action == EditorAction.Quit {
-        if buffer.isModified() {
+        if !closeAllowed(buffer.isModified(), false) {
             setStatus(status, "Modifications non enregistrées — utilisez :q!")
             return false
         }
         return true
     }
     if action == EditorAction.ForceQuit {
-        return true
+        return closeAllowed(buffer.isModified(), true)
     }
     if action == EditorAction.SaveAndQuit {
         return saveFile(document, buffer, status)
@@ -1262,7 +1263,8 @@ def main() : int {
     var fileMenuOpen : bool = false
     var editorScrollDetached : bool = false
     var paneResize : PaneResize = PaneResize.None
-    while !windowShouldClose() && !quitRequested {
+    while !quitRequested {
+        val nativeCloseRequested : bool = windowShouldClose()
         val control : bool = controlDown()
         val shift : bool = shiftDown()
         val cursorLineBeforeInput : usize = buffer.line()
@@ -1506,8 +1508,12 @@ def main() : int {
         isKeyPressed(Key.Backspace) || isKeyPressed(Key.Delete)) {
             completion.dismiss()
         }
-        quitRequested = applyEditorAction(
+        val requestedAction : EditorAction = resolveCloseAction(
         if keyAction != EditorAction.None { keyAction } else { characterAction },
+        nativeCloseRequested
+        )
+        quitRequested = applyEditorAction(
+        requestedAction,
         document,
         buffer,
         status

@@ -1,0 +1,20 @@
+/// Politique de fermeture de Janus Studio, indépendante du backend graphique.
+module editor.close_policy
+
+import editor.vim
+
+/// Indique si une demande de fermeture peut quitter l'application.
+def closeAllowed(modified : bool, force : bool) : bool {
+    return force || !modified
+}
+
+/// Convertit une fermeture native en commande Quit sans écraser une action explicite.
+def resolveCloseAction(
+action : EditorAction,
+nativeCloseRequested : bool
+) : EditorAction {
+    if action != EditorAction.None {
+        return action
+    }
+    return if nativeCloseRequested { EditorAction.Quit } else { EditorAction.None }
+}
