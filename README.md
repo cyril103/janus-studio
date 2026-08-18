@@ -128,6 +128,10 @@ Les commandes de fichier ouvrent une fenêtre de saisie de chemin intégrée.
 résolus depuis le répertoire dans lequel Janus Studio a été lancé. Pour éviter
 une perte de travail, `Ctrl+O` et `Ctrl+N` demandent d'abord d'enregistrer les
 modifications éventuelles.
+`Ctrl+N` refuse un chemin qui existe déjà. Une nouvelle cible est également
+revalidée immédiatement avant son premier enregistrement : si elle existe alors,
+Janus Studio refuse de la remplacer. Si un fichier ne peut pas être lu, il n'est
+pas retenu comme cible active de sauvegarde et un diagnostic explicite s'affiche.
 Le curseur du champ de chemin se déplace avec les flèches, `Home` et `End` ;
 `Retour arrière` et `Suppr` modifient le texte autour de sa position.
 `Tab` complète le nom de fichier ou de dossier comme dans un shell : un dossier

@@ -1,0 +1,173 @@
+/// État de liaison entre le buffer et son fichier, indépendant de l'interface.
+module editor.file_document
+
+import editor.buffer
+import std.fs
+import std.result
+import std.system
+import std.text
+
+enum FileOpenOutcome derives Copy, Equality, Debug {
+    Loaded,
+    New,
+    Failed
+}
+
+class FileDocument(private val activePath : TextBuilder) {
+    private var saveAllowed : bool = false
+    private var newTarget : bool = false
+
+    def path() : string {
+        return activePath.view()
+    }
+
+    def canSave() : bool {
+        return saveAllowed
+    }
+
+    private def bind(path : string, isNew : bool) : Unit {
+        activePath.clear()
+        activePath.append(path)
+        saveAllowed = true
+        newTarget = isNew
+    }
+
+    private def acceptFile(
+    path : string,
+    data : FileData,
+    buffer : EditorBuffer
+    ) : FileOpenOutcome {
+        buffer.load(data.view())
+        buffer.moveFileStart()
+        delete data
+        this.bind(path, false)
+        return FileOpenOutcome.Loaded
+    }
+
+    private def acceptMissing(
+    path : string,
+    buffer : EditorBuffer,
+    allowMissing : bool
+    ) : FileOpenOutcome {
+        if !allowMissing {
+            return FileOpenOutcome.Failed
+        }
+        buffer.clear()
+        this.bind(path, true)
+        return FileOpenOutcome.New
+    }
+
+    private def rejectOpen() : FileOpenOutcome {
+        return FileOpenOutcome.Failed
+    }
+
+    private def handleOpenError(
+    path : string,
+    buffer : EditorBuffer,
+    allowMissing : bool,
+    error : SystemError
+    ) : FileOpenOutcome {
+        return if error.category == SystemErrorCategory.NotFound {
+            this.acceptMissing(path, buffer, allowMissing)
+        } else {
+            this.rejectOpen()
+        }
+    }
+
+    def open(
+    path : string,
+    buffer : EditorBuffer,
+    allowMissing : bool
+    ) : FileOpenOutcome {
+        val result : Result[FileData, SystemError] = readFile(path)
+        return match move result {
+            Ok(data) => this.acceptFile(path, move data, buffer),
+            Error(error) => this.handleOpenError(path, buffer, allowMissing, error)
+        }
+    }
+
+    private def acceptCreation(path : string, buffer : EditorBuffer) : bool {
+        buffer.clear()
+        this.bind(path, true)
+        return true
+    }
+
+    private def creationAfterMetadataError(
+    path : string,
+    buffer : EditorBuffer,
+    error : SystemError
+    ) : bool {
+        return if error.category == SystemErrorCategory.NotFound {
+            this.acceptCreation(path, buffer)
+        } else {
+            false
+        }
+    }
+
+    def create(path : string, buffer : EditorBuffer) : bool {
+        val result : Result[FileMetadata, SystemError] = metadata(path)
+        return match result {
+            Ok(value) => false,
+            Error(error) => this.creationAfterMetadataError(path, buffer, error)
+        }
+    }
+
+    private def targetStillMissing(path : string) : bool {
+        val result : Result[FileMetadata, SystemError] = metadata(path)
+        return match result {
+            Ok(value) => false,
+            Error(error) => error.category == SystemErrorCategory.NotFound
+        }
+    }
+
+    private def write(
+    path : string,
+    buffer : EditorBuffer,
+    requireMissing : bool
+    ) : bool {
+        val content : TextBuilder = new TextBuilder()
+        defer delete content
+        buffer.appendText(content)
+        if requireMissing && !this.targetStillMissing(path) {
+            return false
+        }
+        return match writeTextFileAtomic(path, content.view()) {
+            Ok(written) => this.finishWrite(written, buffer),
+            Error(error) => false
+        }
+    }
+
+    private def finishWrite(written : bool, buffer : EditorBuffer) : bool {
+        if written {
+            buffer.markSaved()
+        }
+        return written
+    }
+
+    def save(buffer : EditorBuffer) : bool {
+        if !saveAllowed {
+            return false
+        }
+        if !this.write(activePath.view(), buffer, newTarget) {
+            return false
+        }
+        newTarget = false
+        return true
+    }
+
+    def saveAs(path : string, buffer : EditorBuffer) : bool {
+        if !this.write(path, buffer, false) {
+            return false
+        }
+        this.bind(path, false)
+        return true
+    }
+
+    destructor {
+        delete activePath
+    }
+}
+
+def fileDocument() : FileDocument {
+    return new FileDocument(new TextBuilder())
+}

@@ -1,6 +1,7 @@
 import editor.buffer
 import editor.completion
 import editor.explorer
+import editor.file_document
 import editor.path_prompt
 import editor.syntax
 import editor.vim
@@ -93,54 +94,40 @@ def setStatus(status : TextBuilder, message : string) : Unit {
     status.append(message)
 }
 
-def acceptFile(
-data : FileData,
-buffer : EditorBuffer,
-status : TextBuilder
-) : bool {
-    buffer.load(data.view())
-    buffer.moveFileStart()
-    delete data
-    setStatus(status, "Fichier chargé.")
-    return true
-}
-
-def startEmptyFile(
-buffer : EditorBuffer,
-status : TextBuilder
-) : bool {
-    buffer.clear()
-    setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
-    return false
-}
-
 def loadFile(
+document : FileDocument,
 path : string,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
-    val result : Result[FileData, SystemError] = readFile(path)
-    return match move result {
-        Ok(data) => acceptFile(move data, buffer, status),
-        Error(error) => startEmptyFile(buffer, status)
+    val outcome : FileOpenOutcome = document.open(path, buffer, true)
+    if outcome == FileOpenOutcome.Loaded {
+        setStatus(status, "Fichier chargé.")
+        return true
     }
-}
-
-def openFailed(status : TextBuilder) : bool {
-    setStatus(status, "Impossible d'ouvrir ce fichier.")
+    if outcome == FileOpenOutcome.New {
+        setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+        return false
+    }
+    setStatus(
+    status,
+    "Impossible de lire ce fichier ; aucune sauvegarde ne peut l'écraser."
+    )
     return false
 }
 
 def openExistingFile(
+document : FileDocument,
 path : string,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
-    val result : Result[FileData, SystemError] = readFile(path)
-    return match move result {
-        Ok(data) => acceptFile(move data, buffer, status),
-        Error(error) => openFailed(status)
+    if document.open(path, buffer, false) == FileOpenOutcome.Loaded {
+        setStatus(status, "Fichier chargé.")
+        return true
     }
+    setStatus(status, "Impossible d'ouvrir ce fichier.")
+    return false
 }
 
 def saveSucceeded(
@@ -158,20 +145,27 @@ def saveFailed(status : TextBuilder) : bool {
 }
 
 def saveFile(
+document : FileDocument,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    return if document.save(buffer) {
+        saveSucceeded(buffer, status)
+    } else {
+        saveFailed(status)
+    }
+}
+
+def saveFileAs(
+document : FileDocument,
 path : string,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
-    val content : TextBuilder = new TextBuilder()
-    defer delete content
-    buffer.appendText(content)
-    return match writeTextFileAtomic(path, content.view()) {
-        Ok(written) => if written {
-            saveSucceeded(buffer, status)
-        } else {
-            saveFailed(status)
-        },
-        Error(error) => saveFailed(status)
+    return if document.saveAs(path, buffer) {
+        saveSucceeded(buffer, status)
+    } else {
+        saveFailed(status)
     }
 }
 
@@ -299,7 +293,7 @@ def handlePathPromptKeys(prompt : PathPrompt) : bool {
 
 def applyPathPrompt(
 prompt : PathPrompt,
-activePath : TextBuilder,
+document : FileDocument,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
@@ -309,19 +303,20 @@ status : TextBuilder
     }
     val action : PathPromptAction = prompt.action()
     if action == PathPromptAction.Open &&
-    !openExistingFile(prompt.value(), buffer, status) {
+    !openExistingFile(document, prompt.value(), buffer, status) {
         return false
     }
     if action == PathPromptAction.SaveAs &&
-    !saveFile(prompt.value(), buffer, status) {
+    !saveFileAs(document, prompt.value(), buffer, status) {
         return false
     }
     if action == PathPromptAction.Create {
-        buffer.clear()
+        if !document.create(prompt.value(), buffer) {
+            setStatus(status, "Ce chemin existe déjà ; création refusée.")
+            return false
+        }
         setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
     }
-    activePath.clear()
-    activePath.append(prompt.value())
     prompt.dismiss()
     return true
 }
@@ -475,12 +470,12 @@ status : TextBuilder
 
 def applyEditorAction(
 action : EditorAction,
-path : string,
+document : FileDocument,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
     if action == EditorAction.Save {
-        saveFile(path, buffer, status)
+        saveFile(document, buffer, status)
         return false
     }
     if action == EditorAction.Quit {
@@ -494,7 +489,7 @@ status : TextBuilder
         return true
     }
     if action == EditorAction.SaveAndQuit {
-        return saveFile(path, buffer, status)
+        return saveFile(document, buffer, status)
     }
     return false
 }
@@ -638,7 +633,7 @@ visibleRows : usize
 
 def openExplorerFile(
 path : string,
-activePath : TextBuilder,
+document : FileDocument,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
@@ -649,11 +644,9 @@ status : TextBuilder
         )
         return false
     }
-    if !openExistingFile(path, buffer, status) {
+    if !openExistingFile(document, path, buffer, status) {
         return false
     }
-    activePath.clear()
-    activePath.append(path)
     return true
 }
 
@@ -1170,9 +1163,8 @@ def main() : int {
     defer delete explorerLabel
     val explorerPath : TextBuilder = new TextBuilder()
     defer delete explorerPath
-    val activePath : TextBuilder = new TextBuilder()
-    defer delete activePath
-    activePath.append(selectedPath())
+    val document : FileDocument = fileDocument()
+    defer delete document
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
     val status : TextBuilder = new TextBuilder()
@@ -1206,7 +1198,7 @@ def main() : int {
     val controller : VimController = vimController()
     defer delete controller
 
-    loadFile(activePath.view(), buffer, status)
+    loadFile(document, selectedPath(), buffer, status)
     toolOutput.append("F5 lance `janus check` sur le fichier actif.")
 
     if !initWindow(1200, 760, "Janus Studio") {
@@ -1381,7 +1373,7 @@ def main() : int {
                         explorer.appendPath(clicked, explorerPath)
                         if openExplorerFile(
                         explorerPath.view(),
-                        activePath,
+                        document,
                         buffer,
                         status
                         ) {
@@ -1435,7 +1427,7 @@ def main() : int {
                         firstExplorerEntry = usize(0)
                     }
                 } else {
-                    applyPathPrompt(filePrompt, activePath, buffer, status)
+                    applyPathPrompt(filePrompt, document, buffer, status)
                     firstLine = usize(0)
                     editorScrollDetached = false
                 }
@@ -1443,7 +1435,7 @@ def main() : int {
             fileInputConsumed = true
         } else if !fileInputConsumed && control && shift &&
         isKeyPressed(Key.S) {
-            filePrompt.begin(PathPromptAction.SaveAs, activePath.view())
+            filePrompt.begin(PathPromptAction.SaveAs, document.path())
             completion.dismiss()
             fileInputConsumed = true
         } else if !fileInputConsumed && control && isKeyPressed(Key.O) {
@@ -1465,12 +1457,12 @@ def main() : int {
         }
 
         if !fileInputConsumed && control && isKeyPressed(Key.S) {
-            saveFile(activePath.view(), buffer, status)
+            saveFile(document, buffer, status)
             fileInputConsumed = true
         }
         if !fileInputConsumed && isKeyPressed(Key.F5) {
-            if saveFile(activePath.view(), buffer, status) {
-                checkFile(activePath.view(), toolOutput)
+            if saveFile(document, buffer, status) {
+                checkFile(document.path(), toolOutput)
             }
             fileInputConsumed = true
         }
@@ -1489,7 +1481,7 @@ def main() : int {
         if characterAction == EditorAction.Complete || manualCompletion {
             refreshCompletion(
             languageServer,
-            activePath.view(),
+            document.path(),
             buffer,
             completion,
             completionLabels,
@@ -1508,7 +1500,7 @@ def main() : int {
         }
         quitRequested = applyEditorAction(
         if keyAction != EditorAction.None { keyAction } else { characterAction },
-        activePath.view(),
+        document,
         buffer,
         status
         )
@@ -1523,7 +1515,7 @@ def main() : int {
         controller.appendStatus(modeLine)
         controller.appendCommandLine(commandLine)
         drawStudio(
-        activePath.view(),
+        document.path(),
         buffer,
         firstLine,
         visibleCharacters,
