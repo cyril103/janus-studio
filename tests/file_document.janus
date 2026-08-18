@@ -1,0 +1,210 @@
+import editor.buffer
+import editor.file_document
+import std.array
+import std.fs
+import std.path
+import std.process
+import std.result
+import std.system
+import std.testing
+import std.text
+
+def consumePath(result : Result[Path, SystemError]) : Path {
+    return match move result {
+        Ok(path) => move path,
+        Error(error) => pathFailure(error)
+    }
+}
+
+def pathFailure(error : SystemError) : Path {
+    panic("impossible de construire le chemin temporaire\n")
+}
+
+def consumeTemporary(
+result : Result[TestTemporaryDirectory, SystemError]
+) : TestTemporaryDirectory {
+    return match move result {
+        Ok(directory) => move directory,
+        Error(error) => temporaryFailure(error)
+    }
+}
+
+def temporaryFailure(error : SystemError) : TestTemporaryDirectory {
+    panic("impossible de créer le dossier temporaire\n")
+}
+
+def setReadable(path : string, readable : bool) : bool {
+    val arguments : Array[string] = new Array[string](usize(2))
+    defer delete arguments
+    arguments.push(if readable { "600" } else { "000" })
+    arguments.push(path)
+    val result : Result[ProcessResult, SystemError] =
+    runProcess("chmod", arguments, "", true, true)
+    return match move result {
+        Ok(process) => processSucceeded(move process),
+        Error(error) => false
+    }
+}
+
+def processSucceeded(process : ProcessResult) : bool {
+    val succeeded : bool = process.exitCode() == 0
+    delete process
+    return succeeded
+}
+
+def fileHasText(path : string, expected : string) : bool {
+    val result : Result[FileData, SystemError] = readFile(path)
+    return match move result {
+        Ok(data) => dataHasText(move data, expected),
+        Error(error) => false
+    }
+}
+
+def dataHasText(data : FileData, expected : string) : bool {
+    val matches : bool = data.view() == expected
+    delete data
+    return matches
+}
+
+/// @test
+/// @serial
+def unreadableExistingFileNeverBecomesSaveTarget() : Unit {
+    val directory : TestTemporaryDirectory = consumeTemporary(
+    testTemporaryDirectory(false)
+    )
+    defer delete directory
+    val path : Path = consumePath(joinPath(directory.path(), "secret.janus"))
+    defer delete path
+    assertOk[bool, SystemError](
+    writeTextFileAtomic(path.view(), "contenu original")
+    )
+    assertTrue(setReadable(path.view(), false))
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("travail en cours")
+    val document : FileDocument = fileDocument()
+    defer delete document
+
+    assertEqual[FileOpenOutcome](
+    document.open(path.view(), buffer, true),
+    FileOpenOutcome.Failed
+    )
+    assertTrue(!document.canSave())
+    assertTrue(!document.save(buffer))
+
+    val text : TextBuilder = new TextBuilder()
+    defer delete text
+    buffer.appendText(text)
+    assertEqual[string](text.view(), "travail en cours")
+
+    assertTrue(setReadable(path.view(), true))
+    assertTrue(fileHasText(path.view(), "contenu original"))
+}
+
+/// @test
+def missingStartupFileBecomesASaveableNewDocument() : Unit {
+    val directory : TestTemporaryDirectory = consumeTemporary(
+    testTemporaryDirectory(false)
+    )
+    defer delete directory
+    val path : Path = consumePath(joinPath(directory.path(), "new.janus"))
+    defer delete path
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("ancien buffer")
+    val document : FileDocument = fileDocument()
+    defer delete document
+
+    assertEqual[FileOpenOutcome](
+    document.open(path.view(), buffer, true),
+    FileOpenOutcome.New
+    )
+    assertTrue(document.canSave())
+    assertEqual[string](document.path(), path.view())
+    buffer.load("nouveau contenu")
+    assertTrue(document.save(buffer))
+    assertTrue(fileHasText(path.view(), "nouveau contenu"))
+}
+
+/// @test
+def creationRefusesExistingPathAndPreservesItsContent() : Unit {
+    val directory : TestTemporaryDirectory = consumeTemporary(
+    testTemporaryDirectory(false)
+    )
+    defer delete directory
+    val path : Path = consumePath(joinPath(directory.path(), "existing.janus"))
+    defer delete path
+    assertOk[bool, SystemError](writeTextFileAtomic(path.view(), "à garder"))
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("buffer à garder")
+    val document : FileDocument = fileDocument()
+    defer delete document
+
+    assertTrue(!document.create(path.view(), buffer))
+    assertTrue(!document.canSave())
+    assertTrue(!document.save(buffer))
+    assertTrue(fileHasText(path.view(), "à garder"))
+
+    val text : TextBuilder = new TextBuilder()
+    defer delete text
+    buffer.appendText(text)
+    assertEqual[string](text.view(), "buffer à garder")
+}
+
+/// @test
+def failedOpenKeepsTheCurrentDocumentBound() : Unit {
+    val directory : TestTemporaryDirectory = consumeTemporary(
+    testTemporaryDirectory(false)
+    )
+    defer delete directory
+    val current : Path = consumePath(joinPath(directory.path(), "current.janus"))
+    defer delete current
+    val missing : Path = consumePath(joinPath(directory.path(), "missing.janus"))
+    defer delete missing
+    assertOk[bool, SystemError](writeTextFileAtomic(current.view(), "courant"))
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val document : FileDocument = fileDocument()
+    defer delete document
+
+    assertEqual[FileOpenOutcome](
+    document.open(current.view(), buffer, false),
+    FileOpenOutcome.Loaded
+    )
+    assertEqual[FileOpenOutcome](
+    document.open(missing.view(), buffer, false),
+    FileOpenOutcome.Failed
+    )
+    assertTrue(document.canSave())
+    assertEqual[string](document.path(), current.view())
+    assertTrue(document.save(buffer))
+    assertTrue(fileHasText(current.view(), "courant"))
+}
+
+/// @test
+def newTargetIsRevalidatedImmediatelyBeforeWriting() : Unit {
+    val directory : TestTemporaryDirectory = consumeTemporary(
+    testTemporaryDirectory(false)
+    )
+    defer delete directory
+    val path : Path = consumePath(joinPath(directory.path(), "raced.janus"))
+    defer delete path
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("nouveau contenu")
+    val document : FileDocument = fileDocument()
+    defer delete document
+
+    assertTrue(document.create(path.view(), buffer))
+    buffer.load("nouveau contenu")
+    assertOk[bool, SystemError](writeTextFileAtomic(path.view(), "concurrent"))
+
+    assertTrue(!document.save(buffer))
+    assertTrue(fileHasText(path.view(), "concurrent"))
+}
