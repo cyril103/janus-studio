@@ -13,6 +13,12 @@ enum FileOpenOutcome derives Copy, Equality, Debug {
     Failed
 }
 
+enum FileCreationOutcome derives Copy, Equality, Debug {
+    Created,
+    Exists,
+    Failed
+}
+
 class FileDocument(private val activePath : TextBuilder) {
     private var saveAllowed : bool = false
     private var newTarget : bool = false
@@ -86,28 +92,31 @@ class FileDocument(private val activePath : TextBuilder) {
         }
     }
 
-    private def acceptCreation(path : string, buffer : EditorBuffer) : bool {
+    private def acceptCreation(
+    path : string,
+    buffer : EditorBuffer
+    ) : FileCreationOutcome {
         buffer.clear()
         this.bind(path, true)
-        return true
+        return FileCreationOutcome.Created
     }
 
     private def creationAfterMetadataError(
     path : string,
     buffer : EditorBuffer,
     error : SystemError
-    ) : bool {
+    ) : FileCreationOutcome {
         return if error.category == SystemErrorCategory.NotFound {
             this.acceptCreation(path, buffer)
         } else {
-            false
+            FileCreationOutcome.Failed
         }
     }
 
-    def create(path : string, buffer : EditorBuffer) : bool {
+    def create(path : string, buffer : EditorBuffer) : FileCreationOutcome {
         val result : Result[FileMetadata, SystemError] = metadata(path)
         return match result {
-            Ok(value) => false,
+            Ok(value) => FileCreationOutcome.Exists,
             Error(error) => this.creationAfterMetadataError(path, buffer, error)
         }
     }

@@ -311,8 +311,16 @@ status : TextBuilder
         return false
     }
     if action == PathPromptAction.Create {
-        if !document.create(prompt.value(), buffer) {
+        val creation : FileCreationOutcome = document.create(
+        prompt.value(),
+        buffer
+        )
+        if creation == FileCreationOutcome.Exists {
             setStatus(status, "Ce chemin existe déjà ; création refusée.")
+            return false
+        }
+        if creation == FileCreationOutcome.Failed {
+            setStatus(status, "Impossible de valider ce chemin de création.")
             return false
         }
         setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
