@@ -196,3 +196,85 @@ def deletesLinesAndRestoresHistory() : Unit {
     buffer.appendText(output)
     assertEqual[string](output.view(), "second\nthird")
 }
+
+/// @test
+def tracksSavedRevisionAcrossUndoAndRedo() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+
+    buffer.insert('a')
+    buffer.markSaved()
+    assertFalse(buffer.isModified())
+
+    buffer.insert('b')
+    assertTrue(buffer.isModified())
+
+    assertTrue(buffer.undo())
+    assertFalse(buffer.isModified())
+
+    assertTrue(buffer.undo())
+    assertTrue(buffer.isModified())
+
+    assertTrue(buffer.redo())
+    assertFalse(buffer.isModified())
+
+    assertTrue(buffer.redo())
+    assertTrue(buffer.isModified())
+}
+
+/// @test
+def keepsRecreatedContentDistinctFromSavedRevision() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+
+    buffer.insert('a')
+    buffer.markSaved()
+    assertTrue(buffer.undo())
+
+    buffer.insert('a')
+    assertTrue(buffer.isModified())
+}
+
+/// @test
+def movesSavepointAfterMultipleSaves() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+
+    buffer.insert('a')
+    buffer.markSaved()
+    buffer.insert('b')
+    buffer.markSaved()
+    assertFalse(buffer.isModified())
+
+    assertTrue(buffer.undo())
+    assertTrue(buffer.isModified())
+    assertTrue(buffer.redo())
+    assertFalse(buffer.isModified())
+
+    buffer.insert('c')
+    assertTrue(buffer.isModified())
+    buffer.markSaved()
+    assertFalse(buffer.isModified())
+
+    assertTrue(buffer.undo())
+    assertTrue(buffer.isModified())
+    assertTrue(buffer.redo())
+    assertFalse(buffer.isModified())
+}
+
+/// @test
+def savesAnUndoneRevisionWithoutRebasingHistory() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+
+    buffer.insert('a')
+    buffer.insert('b')
+    assertTrue(buffer.undo())
+    buffer.markSaved()
+    assertFalse(buffer.isModified())
+
+    assertTrue(buffer.redo())
+    assertTrue(buffer.isModified())
+    assertTrue(buffer.undo())
+    assertFalse(buffer.isModified())
+}
