@@ -72,7 +72,7 @@ private def decodeUtf8(text : string, output : Array[char]) : Unit {
 class BufferSnapshot(
 private val characters : Array[char],
 private val cursorPosition : usize,
-private val modified : bool
+private val revisionIdentity : usize
 ) {
     def size() : usize {
         return characters.size()
@@ -86,8 +86,8 @@ private val modified : bool
         return cursorPosition
     }
 
-    def wasModified() : bool {
-        return modified
+    def revision() : usize {
+        return revisionIdentity
     }
 
     destructor {
@@ -101,7 +101,9 @@ private val undoStates : Array[BufferSnapshot],
 private val redoStates : Array[BufferSnapshot]
 ) {
     private var cursorPosition : usize = usize(0)
-    private var modified : bool = false
+    private var currentRevision : usize = usize(0)
+    private var savedRevision : usize = usize(0)
+    private var nextRevision : usize = usize(1)
 
     private def snapshot() : BufferSnapshot {
         val copied : Array[char] = new Array[char](characters.size())
@@ -110,7 +112,7 @@ private val redoStates : Array[BufferSnapshot]
             copied.push(characters.get(index))
             index = index + usize(1)
         }
-        return new BufferSnapshot(move copied, cursorPosition, modified)
+        return new BufferSnapshot(move copied, cursorPosition, currentRevision)
     }
 
     private def restore(state : BufferSnapshot) : Unit {
@@ -121,7 +123,7 @@ private val redoStates : Array[BufferSnapshot]
             index = index + usize(1)
         }
         cursorPosition = state.cursor()
-        modified = state.wasModified()
+        currentRevision = state.revision()
         delete state
     }
 
@@ -133,6 +135,8 @@ private val redoStates : Array[BufferSnapshot]
             delete oldest
         }
         redoStates.clear()
+        currentRevision = nextRevision
+        nextRevision = nextRevision + usize(1)
     }
 
     private def eraseRange(start : usize, end : usize) : Unit {
@@ -142,7 +146,6 @@ private val redoStates : Array[BufferSnapshot]
             remaining = remaining - usize(1)
         }
         cursorPosition = start
-        modified = true
     }
 
     private def insertAt(position : usize, value : char) : Unit {
@@ -173,11 +176,11 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     def isModified() : bool {
-        return modified
+        return currentRevision != savedRevision
     }
 
     def markSaved() : Unit {
-        modified = false
+        savedRevision = currentRevision
     }
 
     def undo() : bool {
@@ -211,7 +214,9 @@ private val redoStates : Array[BufferSnapshot]
         undoStates.clear()
         redoStates.clear()
         cursorPosition = usize(0)
-        modified = false
+        currentRevision = nextRevision
+        savedRevision = currentRevision
+        nextRevision = nextRevision + usize(1)
     }
 
     def load(text : string) : Unit {
@@ -220,14 +225,15 @@ private val redoStates : Array[BufferSnapshot]
         undoStates.clear()
         redoStates.clear()
         cursorPosition = characters.size()
-        modified = false
+        currentRevision = nextRevision
+        savedRevision = currentRevision
+        nextRevision = nextRevision + usize(1)
     }
 
     def insert(value : char) : Unit {
         this.rememberChange()
         this.insertAt(cursorPosition, value)
         cursorPosition = cursorPosition + usize(1)
-        modified = true
     }
 
     def insertText(text : string) : Unit {
@@ -244,7 +250,6 @@ private val redoStates : Array[BufferSnapshot]
             cursorPosition = cursorPosition + usize(1)
             index = index + usize(1)
         }
-        modified = true
     }
 
     def insertSpaces(count : usize) : Unit {
@@ -258,7 +263,6 @@ private val redoStates : Array[BufferSnapshot]
             cursorPosition = cursorPosition + usize(1)
             index = index + usize(1)
         }
-        modified = true
     }
 
     def backspace() : Unit {
@@ -268,7 +272,6 @@ private val redoStates : Array[BufferSnapshot]
         this.rememberChange()
         val _removed : char = characters.remove(cursorPosition - usize(1))
         cursorPosition = cursorPosition - usize(1)
-        modified = true
     }
 
     def deleteForward() : Unit {
@@ -277,7 +280,6 @@ private val redoStates : Array[BufferSnapshot]
         }
         this.rememberChange()
         val _removed : char = characters.remove(cursorPosition)
-        modified = true
     }
 
     def moveLeft() : Unit {
@@ -480,7 +482,6 @@ private val redoStates : Array[BufferSnapshot]
             this.insertLineAt(usize(0), line)
             val _newline : char = characters.remove(characters.size() - usize(1))
             cursorPosition = usize(0)
-            modified = true
             return
         }
         val start : usize = this.lineStart(cursorPosition)
@@ -500,7 +501,6 @@ private val redoStates : Array[BufferSnapshot]
             }
             cursorPosition = insertion
         }
-        modified = true
     }
 
     def pasteLineAbove(line : Array[char]) : Unit {
@@ -508,7 +508,6 @@ private val redoStates : Array[BufferSnapshot]
         this.rememberChange()
         this.insertLineAt(insertion, line)
         cursorPosition = insertion
-        modified = true
     }
 
     def openLineBelow() : Unit {
