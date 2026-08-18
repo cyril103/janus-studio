@@ -16,7 +16,7 @@ import std.process
 import std.result
 import std.system
 import std.text
-import std.wall_time
+import std.time
 
 var editorLeft : int = 236
 const editorTop : int = 54
@@ -460,10 +460,8 @@ status : TextBuilder
     labels,
     error
     ) {
-        completion.load(labels.view())
-        status.clear()
-        status.appendUSize(completion.size())
-        status.append(" propositions — flèches puis Entrée")
+        completion.dismiss()
+        setStatus(status, "Complétion LSP en cours…")
     } else {
         completion.dismiss()
         setStatus(
@@ -1263,7 +1261,23 @@ def main() : int {
     var fileMenuOpen : bool = false
     var editorScrollDetached : bool = false
     var paneResize : PaneResize = PaneResize.None
+    val interactionClockOrigin : Instant = monotonicNow()
     while !quitRequested {
+        languageServer.poll(completionError)
+        if languageServer.takeCompletion(completionLabels) {
+            if completionLabels.size() > usize(0) {
+                completion.load(completionLabels.view())
+                status.clear()
+                status.appendUSize(completion.size())
+                status.append(" propositions — flèches puis Entrée")
+            } else {
+                completion.dismiss()
+                setStatus(status, "Aucune proposition à cette position.")
+            }
+        } else if completionError.size() > usize(0) {
+            setStatus(status, completionError.view())
+            completionError.clear()
+        }
         val nativeCloseRequested : bool = windowShouldClose()
         val control : bool = controlDown()
         val shift : bool = shiftDown()
@@ -1373,7 +1387,9 @@ def main() : int {
                     }
                     lastExplorerClick = usize(-1)
                 } else {
-                    val clickedAt : usize = wallNow().unixMilliseconds()
+                    val clickedAt : usize = monotonicNow().durationSince(
+                    interactionClockOrigin
+                    ).milliseconds()
                     val isDoubleClick : bool =
                     clicked == lastExplorerClick &&
                     clickedAt >= lastExplorerClickAt &&
@@ -1488,7 +1504,9 @@ def main() : int {
         val manualCompletion : bool =
         controller.mode() == EditorMode.Insert && control &&
         isKeyPressed(Key.Space)
-        if characterAction == EditorAction.Complete || manualCompletion {
+        val completionRequested : bool =
+        characterAction == EditorAction.Complete || manualCompletion
+        if completionRequested {
             refreshCompletion(
             languageServer,
             document.path(),
@@ -1501,12 +1519,20 @@ def main() : int {
             characterAction = EditorAction.None
         } else if characterAction == EditorAction.DismissCompletion {
             completion.dismiss()
+            languageServer.invalidateCompletion()
             characterAction = EditorAction.None
         } else if !completionConsumed && completion.isVisible() &&
         (isKeyPressed(Key.Left) || isKeyPressed(Key.Right) ||
         isKeyPressed(Key.Home) || isKeyPressed(Key.End) ||
         isKeyPressed(Key.Backspace) || isKeyPressed(Key.Delete)) {
             completion.dismiss()
+            languageServer.invalidateCompletion()
+        }
+        val cursorChanged : bool = buffer.line() != cursorLineBeforeInput ||
+        buffer.column() != cursorColumnBeforeInput
+        if fileInputConsumed || isKeyPressed(Key.Escape) ||
+        keyAction != EditorAction.None || (cursorChanged && !completionRequested) {
+            languageServer.invalidateCompletion()
         }
         val requestedAction : EditorAction = resolveCloseAction(
         if keyAction != EditorAction.None { keyAction } else { characterAction },
