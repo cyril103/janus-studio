@@ -10,6 +10,7 @@ import std.process
 import std.result
 import std.system
 import std.text
+import std.time
 
 def hasLabelMarker(source : string, size : usize, index : usize) : bool {
     val data : Ptr[byte] = stringData(source)
@@ -25,42 +26,52 @@ def hasLabelMarker(source : string, size : usize, index : usize) : bool {
     data.load(index + usize(8)) == byte(34)
 }
 
-def containsLabel(
-labels : string,
-source : string,
-start : usize,
-end : usize
-) : bool {
-    val labelData : Ptr[byte] = stringData(labels)
-    val sourceData : Ptr[byte] = stringData(source)
-    val requestedLength : usize = end - start
-    var lineStart : usize = usize(0)
-    var index : usize = usize(0)
-    while index <= stringLength(labels) {
-        if index == stringLength(labels) || labelData.load(index) == byte(10) {
-            if index - lineStart == requestedLength {
-                var offset : usize = usize(0)
-                var matches : bool = true
-                while offset < requestedLength {
-                    if labelData.load(lineStart + offset) !=
-                    sourceData.load(start + offset) {
-                        matches = false
-                    }
-                    offset = offset + usize(1)
-                }
-                if matches { return true }
-            }
-            lineStart = index + usize(1)
-        }
+const lspMaximumCompletionLabels : usize = usize(4096)
+const lspMaximumCompletionLabelBytes : usize = usize(1024)
+const lspMaximumCompletionOutputBytes : usize = usize(1048576)
+const lspCompletionLabelTableSlots : usize = usize(8192)
+
+private def completionLabelHash(source : string, start : usize, end : usize) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var hash : usize = usize(5381)
+    var index : usize = start
+    while index < end {
+        hash = hash * usize(33) ^ numericCast[usize](unsignedByte(data.load(index)))
         index = index + usize(1)
     }
-    return false
+    return hash
+}
+
+private def sameCompletionLabel(
+source : string,
+leftStart : usize,
+rightStart : usize,
+length : usize
+) : bool {
+    val data : Ptr[byte] = stringData(source)
+    var offset : usize = usize(0)
+    while offset < length {
+        if data.load(leftStart + offset) != data.load(rightStart + offset) { return false }
+        offset = offset + usize(1)
+    }
+    return true
 }
 
 def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
     output.clear()
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
+    val starts : Ptr[usize] = alloc[usize](lspCompletionLabelTableSlots)
+    defer free(starts)
+    val lengths : Ptr[usize] = alloc[usize](lspCompletionLabelTableSlots)
+    defer free(lengths)
+    if starts == null[usize]() || lengths == null[usize]() { return }
+    var slot : usize = usize(0)
+    while slot < lspCompletionLabelTableSlots {
+        starts.store(slot, usize(0))
+        slot = slot + usize(1)
+    }
+    var labelCount : usize = usize(0)
     var index : usize = usize(0)
     while index < size {
         if hasLabelMarker(json, size, index) {
@@ -69,13 +80,36 @@ def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
             while index < size && data.load(index) != byte(34) {
                 index = index + usize(1)
             }
-            if !containsLabel(output.view(), json, start, index) {
-                var labelIndex : usize = start
-                while labelIndex < index {
-                    output.appendChar(char(data.load(labelIndex)))
-                    labelIndex = labelIndex + usize(1)
+            val length : usize = index - start
+            if length <= lspMaximumCompletionLabelBytes &&
+            labelCount < lspMaximumCompletionLabels &&
+            output.size() + length + usize(1) <= lspMaximumCompletionOutputBytes {
+                var candidate : usize = completionLabelHash(json, start, index) %
+                lspCompletionLabelTableSlots
+                var probes : usize = usize(0)
+                var duplicate : bool = false
+                while probes < usize(32) &&
+                starts.load(candidate) != usize(0) {
+                    val previous : usize = starts.load(candidate) - usize(1)
+                    if lengths.load(candidate) == length &&
+                    sameCompletionLabel(json, previous, start, length) {
+                        duplicate = true
+                        break
+                    }
+                    candidate = (candidate + usize(1)) % lspCompletionLabelTableSlots
+                    probes = probes + usize(1)
                 }
-                output.append("\n")
+                if !duplicate && probes < usize(32) {
+                    starts.store(candidate, start + usize(1))
+                    lengths.store(candidate, length)
+                    labelCount = labelCount + usize(1)
+                    var labelIndex : usize = start
+                    while labelIndex < index {
+                        output.appendChar(char(data.load(labelIndex)))
+                        labelIndex = labelIndex + usize(1)
+                    }
+                    output.append("\n")
+                }
             }
         } else {
             index = index + usize(1)
@@ -138,62 +172,516 @@ private def textMatchesAt(text : string, marker : string, start : usize) : bool 
     return true
 }
 
+const lspMaximumHeaderBytes : usize = usize(8192)
+const lspMaximumBodyBytes : usize = usize(4194304)
+const lspMaximumOutgoingBytes : usize = usize(8388608)
+const lspFrameIoBudget : usize = usize(65536)
+const lspFrameOperationBudget : usize = usize(32)
+const lspInitializeTimeoutMilliseconds : usize = usize(5000)
+const lspCompletionTimeoutMilliseconds : usize = usize(2000)
+const lspRestartBackoffMilliseconds : usize = usize(250)
+
+private def deadlineAfter(now : usize, duration : usize) : usize {
+    return if now > usize(-1) - duration { usize(-1) } else { now + duration }
+}
+
 def parseContentLength(header : string) : usize {
-    val marker : string = "Content-Length:"
+    if stringLength(header) > lspMaximumHeaderBytes { return usize(0) }
+    val marker : string = "Content-Length: "
     val data : Ptr[byte] = stringData(header)
     var start : usize = usize(0)
-    while start + stringLength(marker) <= stringLength(header) {
+    var result : usize = usize(0)
+    var occurrences : usize = usize(0)
+    while start < stringLength(header) {
+        var lineEnd : usize = start
+        while lineEnd + usize(1) < stringLength(header) &&
+        !(data.load(lineEnd) == byte(13) &&
+        data.load(lineEnd + usize(1)) == byte(10)) {
+            lineEnd = lineEnd + usize(1)
+        }
+        if lineEnd + usize(1) >= stringLength(header) { return usize(0) }
+        if lineEnd == start { break }
         if textMatchesAt(header, marker, start) {
+            occurrences = occurrences + usize(1)
             var index : usize = start + stringLength(marker)
-            while index < stringLength(header) &&
-            (data.load(index) == byte(32) || data.load(index) == byte(9)) {
-                index = index + usize(1)
-            }
-            var result : usize = usize(0)
             var found : bool = false
-            while index < stringLength(header) &&
-            data.load(index) >= byte(48) && data.load(index) <= byte(57) {
+            while index < lineEnd {
+                if data.load(index) < byte(48) || data.load(index) > byte(57) {
+                    return usize(0)
+                }
                 val digit : usize = numericCast[usize](int(data.load(index)) - 48)
-                val next : usize = result * usize(10) + digit
-                if next < result { return usize(0) }
-                result = next
+                if result > (lspMaximumBodyBytes - digit) / usize(10) {
+                    return usize(0)
+                }
+                result = result * usize(10) + digit
                 found = true
                 index = index + usize(1)
             }
-            return if found { result } else { usize(0) }
+            if !found || result == usize(0) || result > lspMaximumBodyBytes {
+                return usize(0)
+            }
         }
-        start = start + usize(1)
+        start = lineEnd + usize(2)
     }
-    return usize(0)
+    return if occurrences == usize(1) { result } else { usize(0) }
+}
+
+private def skipJsonSpace(json : string, start : usize) : usize {
+    val data : Ptr[byte] = stringData(json)
+    var index : usize = start
+    while index < stringLength(json) &&
+    (data.load(index) == byte(32) || data.load(index) == byte(9) ||
+    data.load(index) == byte(10) || data.load(index) == byte(13)) {
+        index = index + usize(1)
+    }
+    return index
+}
+
+/// Retourne l'octet suivant la string JSON, ou `size + 1` si elle est invalide.
+private def skipJsonString(json : string, start : usize) : usize {
+    val size : usize = stringLength(json)
+    val data : Ptr[byte] = stringData(json)
+    if start >= size || data.load(start) != byte(34) { return size + usize(1) }
+    var index : usize = start + usize(1)
+    while index < size {
+        val current : byte = data.load(index)
+        if current == byte(34) { return index + usize(1) }
+        if unsignedByte(current) < 32 { return size + usize(1) }
+        if current == byte(92) {
+            index = index + usize(1)
+            if index >= size { return size + usize(1) }
+            val escaped : byte = data.load(index)
+            if escaped == byte(117) {
+                var digits : usize = usize(0)
+                while digits < usize(4) {
+                    index = index + usize(1)
+                    if index >= size { return size + usize(1) }
+                    val digit : byte = data.load(index)
+                    if !((digit >= byte(48) && digit <= byte(57)) ||
+                    (digit >= byte(65) && digit <= byte(70)) ||
+                    (digit >= byte(97) && digit <= byte(102))) {
+                        return size + usize(1)
+                    }
+                    digits = digits + usize(1)
+                }
+            } else if !(escaped == byte(34) || escaped == byte(92) ||
+            escaped == byte(47) || escaped == byte(98) || escaped == byte(102) ||
+            escaped == byte(110) || escaped == byte(114) || escaped == byte(116)) {
+                return size + usize(1)
+            }
+        }
+        index = index + usize(1)
+    }
+    return size + usize(1)
+}
+
+private def jsonHexDigit(value : byte) : int {
+    if value >= byte(48) && value <= byte(57) { return int(value) - 48 }
+    if value >= byte(65) && value <= byte(70) { return int(value) - 55 }
+    return int(value) - 87
+}
+
+private def jsonKeyIsId(json : string, start : usize, end : usize) : bool {
+    val data : Ptr[byte] = stringData(json)
+    var index : usize = start + usize(1)
+    var decoded : usize = usize(0)
+    while index + usize(1) < end {
+        var codepoint : int = unsignedByte(data.load(index))
+        if codepoint == 92 {
+            index = index + usize(1)
+            if data.load(index) != byte(117) { return false }
+            codepoint = 0
+            var digit : usize = usize(0)
+            while digit < usize(4) {
+                index = index + usize(1)
+                codepoint = codepoint * 16 + jsonHexDigit(data.load(index))
+                digit = digit + usize(1)
+            }
+        }
+        if decoded >= usize(2) ||
+        (decoded == usize(0) && codepoint != 105) ||
+        (decoded == usize(1) && codepoint != 100) {
+            return false
+        }
+        decoded = decoded + usize(1)
+        index = index + usize(1)
+    }
+    return index + usize(1) == end && decoded == usize(2)
+}
+
+private def skipJsonValue(json : string, start : usize, depth : usize) : usize {
+    val size : usize = stringLength(json)
+    val data : Ptr[byte] = stringData(json)
+    var index : usize = skipJsonSpace(json, start)
+    if index >= size || depth > usize(128) { return size + usize(1) }
+    if data.load(index) == byte(34) { return skipJsonString(json, index) }
+    if data.load(index) == byte(123) || data.load(index) == byte(91) {
+        val object : bool = data.load(index) == byte(123)
+        val close : byte = if object { byte(125) } else { byte(93) }
+        index = skipJsonSpace(json, index + usize(1))
+        if index < size && data.load(index) == close { return index + usize(1) }
+        while index < size {
+            if object {
+                index = skipJsonString(json, index)
+                if index > size { return index }
+                index = skipJsonSpace(json, index)
+                if index >= size || data.load(index) != byte(58) { return size + usize(1) }
+                index = index + usize(1)
+            }
+            index = skipJsonValue(json, index, depth + usize(1))
+            if index > size { return index }
+            index = skipJsonSpace(json, index)
+            if index < size && data.load(index) == close { return index + usize(1) }
+            if index >= size || data.load(index) != byte(44) { return size + usize(1) }
+            index = skipJsonSpace(json, index + usize(1))
+        }
+        return size + usize(1)
+    }
+    if textMatchesAt(json, "true", index) { return index + usize(4) }
+    if textMatchesAt(json, "false", index) { return index + usize(5) }
+    if textMatchesAt(json, "null", index) { return index + usize(4) }
+    if data.load(index) == byte(45) { index = index + usize(1) }
+    if index >= size { return size + usize(1) }
+    if data.load(index) == byte(48) {
+        index = index + usize(1)
+        if index < size && data.load(index) >= byte(48) && data.load(index) <= byte(57) {
+            return size + usize(1)
+        }
+    } else if data.load(index) >= byte(49) && data.load(index) <= byte(57) {
+        while index < size && data.load(index) >= byte(48) &&
+        data.load(index) <= byte(57) { index = index + usize(1) }
+    } else { return size + usize(1) }
+    if index < size && data.load(index) == byte(46) {
+        index = index + usize(1)
+        if index >= size || data.load(index) < byte(48) || data.load(index) > byte(57) {
+            return size + usize(1)
+        }
+        while index < size && data.load(index) >= byte(48) &&
+        data.load(index) <= byte(57) { index = index + usize(1) }
+    }
+    if index < size && (data.load(index) == byte(101) || data.load(index) == byte(69)) {
+        index = index + usize(1)
+        if index < size && (data.load(index) == byte(43) || data.load(index) == byte(45)) {
+            index = index + usize(1)
+        }
+        if index >= size || data.load(index) < byte(48) || data.load(index) > byte(57) {
+            return size + usize(1)
+        }
+        while index < size && data.load(index) >= byte(48) &&
+        data.load(index) <= byte(57) { index = index + usize(1) }
+    }
+    return index
 }
 
 def messageHasId(json : string, requested : usize) : bool {
-    val marker : string = "\"id\":"
+    val size : usize = stringLength(json)
     val data : Ptr[byte] = stringData(json)
-    var start : usize = usize(0)
-    while start + stringLength(marker) <= stringLength(json) {
-        if textMatchesAt(json, marker, start) {
-            var index : usize = start + stringLength(marker)
-            while index < stringLength(json) && data.load(index) == byte(32) {
-                index = index + usize(1)
-            }
+    var index : usize = skipJsonSpace(json, usize(0))
+    if index >= size || data.load(index) != byte(123) { return false }
+    index = skipJsonSpace(json, index + usize(1))
+    var idCount : usize = usize(0)
+    var idMatches : bool = false
+    while index < size && data.load(index) != byte(125) {
+        val keyStart : usize = index
+        val keyEnd : usize = skipJsonString(json, keyStart)
+        if keyEnd > size { return false }
+        val isId : bool = jsonKeyIsId(json, keyStart, keyEnd)
+        index = skipJsonSpace(json, keyEnd)
+        if index >= size || data.load(index) != byte(58) { return false }
+        index = skipJsonSpace(json, index + usize(1))
+        if isId {
+            idCount = idCount + usize(1)
+            if idCount > usize(1) { return false }
             var value : usize = usize(0)
             var found : bool = false
-            while index < stringLength(json) &&
-            data.load(index) >= byte(48) && data.load(index) <= byte(57) {
-                value = value * usize(10) +
-                numericCast[usize](int(data.load(index)) - 48)
+            val valueStart : usize = index
+            while index < size && data.load(index) >= byte(48) &&
+            data.load(index) <= byte(57) {
+                val digit : usize = numericCast[usize](int(data.load(index)) - 48)
+                if value > (usize(-1) - digit) / usize(10) { return false }
+                value = value * usize(10) + digit
                 found = true
                 index = index + usize(1)
             }
-            if found && value == requested && index < stringLength(json) &&
-            (data.load(index) == byte(44) || data.load(index) == byte(125)) {
-                return true
-            }
+            if !found || (data.load(valueStart) == byte(48) &&
+            index > valueStart + usize(1)) { return false }
+            idMatches = value == requested
+        } else {
+            index = skipJsonValue(json, index, usize(0))
+            if index > size { return false }
         }
-        start = start + usize(1)
+        index = skipJsonSpace(json, index)
+        if index < size && data.load(index) == byte(44) {
+            index = skipJsonSpace(json, index + usize(1))
+            if index >= size || data.load(index) == byte(125) { return false }
+        } else if index >= size || data.load(index) != byte(125) { return false }
     }
-    return false
+    if index >= size || data.load(index) != byte(125) { return false }
+    index = skipJsonSpace(json, index + usize(1))
+    return index == size && idCount == usize(1) && idMatches
+}
+
+enum LspFrameResult derives Copy, Equality, Debug {
+    Pending,
+    Ready,
+    Invalid,
+    EndOfFile
+}
+
+class LspFrameParser(
+private val headerBytes : TextBuilder,
+private val bodyBytes : ByteBuffer
+) {
+    private var boundary : int = 0
+    private var expected : usize = usize(0)
+    private var readingBody : bool = false
+    private var failed : bool = false
+
+    def reset() : Unit {
+        headerBytes.clear()
+        bodyBytes.clear()
+        boundary = 0
+        expected = usize(0)
+        readingBody = false
+        failed = false
+    }
+
+    private def appendHeader(value : byte) : bool {
+        if headerBytes.size() >= lspMaximumHeaderBytes { return false }
+        headerBytes.appendChar(char(unsignedByte(value)))
+        val numeric : int = unsignedByte(value)
+        if boundary == 0 && numeric == 13 { boundary = 1 }
+        else if boundary == 1 && numeric == 10 { boundary = 2 }
+        else if boundary == 2 && numeric == 13 { boundary = 3 }
+        else if boundary == 3 && numeric == 10 { boundary = 4 }
+        else if numeric == 13 { boundary = 1 }
+        else { boundary = 0 }
+        if boundary == 4 {
+            expected = parseContentLength(headerBytes.view())
+            if expected == usize(0) { return false }
+            readingBody = true
+        }
+        return true
+    }
+
+    def feedBytes(data : Ptr[byte], size : usize, eof : bool) : LspFrameResult {
+        if failed { return LspFrameResult.Invalid }
+        var index : usize = usize(0)
+        while index < size {
+            if readingBody {
+                if bodyBytes.size() >= expected { failed = true; return LspFrameResult.Invalid }
+                if !bodyBytes.appendByte(data.load(index)) {
+                    failed = true
+                    return LspFrameResult.Invalid
+                }
+            } else if !this.appendHeader(data.load(index)) {
+                failed = true
+                return LspFrameResult.Invalid
+            }
+            index = index + usize(1)
+        }
+        if readingBody && bodyBytes.size() == expected { return LspFrameResult.Ready }
+        return if eof { LspFrameResult.EndOfFile } else { LspFrameResult.Pending }
+    }
+
+    def feed(bytes : string, eof : bool) : LspFrameResult {
+        return this.feedBytes(stringData(bytes), stringLength(bytes), eof)
+    }
+
+    def message() : Result[string, TextDecodeError] { return bodyBytes.asText() }
+
+    def readCapacity(budget : usize) : usize {
+        if !readingBody { return if budget > usize(0) { usize(1) } else { usize(0) } }
+        val remaining : usize = expected - bodyBytes.size()
+        return if remaining < budget { remaining } else { budget }
+    }
+
+    destructor { delete headerBytes; delete bodyBytes }
+}
+
+def lspFrameParser() : LspFrameParser {
+    return new LspFrameParser(new TextBuilder(), new ByteBuffer(usize(4096)))
+}
+
+enum LspMachineState derives Copy, Equality, Debug {
+    Stopped,
+    Initializing,
+    Ready,
+    Waiting,
+    BackingOff
+}
+
+enum LspPollEvent derives Copy, Equality, Debug {
+    None,
+    Initialized,
+    Completion,
+    Stale,
+    TimedOut,
+    Restarting,
+    Restart
+}
+
+class LspStateMachine() {
+    private var current : LspMachineState = LspMachineState.Stopped
+    private var deadline : usize = usize(0)
+    private var restartDeadline : usize = usize(0)
+    private var active : usize = usize(0)
+    private var replacement : usize = usize(0)
+    private var activeObsolete : bool = false
+
+    private def fail(now : usize) : LspPollEvent {
+        current = LspMachineState.BackingOff
+        active = usize(0)
+        replacement = usize(0)
+        activeObsolete = false
+        restartDeadline = deadlineAfter(now, lspRestartBackoffMilliseconds)
+        return LspPollEvent.TimedOut
+    }
+
+    def started(now : usize) : Unit {
+        current = LspMachineState.Initializing
+        deadline = deadlineAfter(now, lspInitializeTimeoutMilliseconds)
+        active = usize(1)
+        replacement = usize(0)
+        activeObsolete = false
+    }
+    def state() : LspMachineState { return current }
+    def activeRequest() : usize { return active }
+    def replacementRequest() : usize { return replacement }
+    def request(id : usize, now : usize) : Unit {
+        if current == LspMachineState.Ready {
+            active = id
+            deadline = deadlineAfter(now, lspCompletionTimeoutMilliseconds)
+            current = LspMachineState.Waiting
+            activeObsolete = false
+        } else if current == LspMachineState.Waiting ||
+        current == LspMachineState.Initializing { replacement = id }
+    }
+    def invalidate() : Unit {
+        replacement = usize(0)
+        if current == LspMachineState.Waiting { activeObsolete = true }
+    }
+    def response(id : usize, now : usize) : LspPollEvent {
+        if current == LspMachineState.Initializing && id == usize(1) {
+            if replacement > usize(0) {
+                active = replacement
+                replacement = usize(0)
+                current = LspMachineState.Waiting
+                deadline = deadlineAfter(now, lspCompletionTimeoutMilliseconds)
+                activeObsolete = false
+            } else {
+                active = usize(0)
+                current = LspMachineState.Ready
+            }
+            return LspPollEvent.Initialized
+        }
+        if current == LspMachineState.Waiting && id == active {
+            if replacement > usize(0) {
+                active = replacement
+                replacement = usize(0)
+                deadline = deadlineAfter(now, lspCompletionTimeoutMilliseconds)
+                activeObsolete = false
+                return LspPollEvent.Stale
+            }
+            active = usize(0); current = LspMachineState.Ready
+            val event : LspPollEvent = if activeObsolete {
+                LspPollEvent.Stale
+            } else { LspPollEvent.Completion }
+            activeObsolete = false
+            return event
+        }
+        return LspPollEvent.Stale
+    }
+    def advance(now : usize) : LspPollEvent {
+        if (current == LspMachineState.Initializing || current == LspMachineState.Waiting) && now >= deadline { return this.fail(now) }
+        if current == LspMachineState.BackingOff && now >= restartDeadline { return LspPollEvent.Restart }
+        return LspPollEvent.None
+    }
+    def endOfFile(now : usize) : LspPollEvent {
+        current = LspMachineState.BackingOff
+        active = usize(0); replacement = usize(0)
+        restartDeadline = deadlineAfter(now, lspRestartBackoffMilliseconds)
+        return LspPollEvent.Restarting
+    }
+    def restartFailed(now : usize) : Unit {
+        current = LspMachineState.BackingOff
+        restartDeadline = deadlineAfter(now, lspRestartBackoffMilliseconds)
+    }
+    def ensureBackoff(now : usize) : Unit {
+        if current != LspMachineState.BackingOff { this.endOfFile(now) }
+    }
+    def deadlineAt() : usize { return deadline }
+}
+
+def lspStateMachine() : LspStateMachine { return new LspStateMachine() }
+
+enum LspDocumentTransition derives Copy, Equality, Debug {
+    Open,
+    Change,
+    CloseThenOpen
+}
+
+/// Modèle pur des métadonnées documentaires d'une requête active et de son
+/// replacement latest-wins. Un nouvel écrasement repart toujours de l'état
+/// attendu après la requête active, jamais du replacement abandonné.
+class LspDocumentQueueState(
+private val active : TextBuilder,
+private val replacementState : TextBuilder
+) {
+    private var activeVersion : usize = usize(0)
+    private var replacementVersion : usize = usize(0)
+
+    def beginReplacement() : Unit {
+        replacementState.clear()
+        replacementState.append(active.view())
+        replacementVersion = activeVersion
+    }
+
+    def replace(uri : string) : LspDocumentTransition {
+        if replacementState.view() != uri {
+            val transition : LspDocumentTransition = if replacementState.size() == usize(0) {
+                LspDocumentTransition.Open
+            } else { LspDocumentTransition.CloseThenOpen }
+            replacementState.clear(); replacementState.append(uri)
+            replacementVersion = usize(1)
+            return transition
+        }
+        replacementVersion = replacementVersion + usize(1)
+        return LspDocumentTransition.Change
+    }
+
+    def commitReplacement() : Unit {
+        active.clear(); active.append(replacementState.view())
+        activeVersion = replacementVersion
+    }
+
+    def activeDocument() : string { return active.view() }
+    def replacementDocument() : string { return replacementState.view() }
+    def version() : usize { return activeVersion }
+    def pendingVersion() : usize { return replacementVersion }
+
+    destructor { delete active; delete replacementState }
+}
+
+def lspDocumentQueueState() : LspDocumentQueueState {
+    return new LspDocumentQueueState(new TextBuilder(), new TextBuilder())
+}
+
+def appendInitializedPrefix(
+replacement : ByteBuffer,
+outgoing : ByteBuffer
+) : bool {
+    val initialized : string =
+    "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}"
+    val header : TextBuilder = new TextBuilder()
+    defer delete header
+    header.append("Content-Length: ")
+    header.appendUSize(stringLength(initialized))
+    header.append("\r\n\r\n")
+    outgoing.clear()
+    return outgoing.appendText(header.view()) &&
+    outgoing.appendText(initialized) &&
+    outgoing.append(replacement.data(), replacement.size())
 }
 
 private def appendFileUri(path : string, output : TextBuilder) : Unit {
@@ -267,20 +755,51 @@ class LspClient(
 private var process : Option[ChildProcess],
 private val workspace : TextBuilder,
 private val body : ByteBuffer,
-private val response : ByteBuffer,
 private val header : TextBuilder,
 private val number : TextBuilder,
 private val activeUri : TextBuilder,
+private val replacementUri : TextBuilder,
 private val requestedUri : TextBuilder,
 private val snapshot : TextBuilder,
-private val responseJson : TextBuilder
+private var outgoing : ByteBuffer,
+private var replacementOutgoing : ByteBuffer,
+private var candidateOutgoing : ByteBuffer,
+private val incomingChunk : ByteBuffer,
+private val frameParser : LspFrameParser,
+private val machine : LspStateMachine,
+private val readyLabels : TextBuilder
 ) {
     private var requestId : usize = usize(1)
     private var documentVersion : usize = usize(0)
+    private var replacementDocumentVersion : usize = usize(0)
+    private var candidateDocumentVersion : usize = usize(0)
+    private var outgoingOffset : usize = usize(0)
+    private var completionReady : bool = false
+    private var buildingReplacement : bool = false
+    private val clockOrigin : Instant = monotonicNow()
+
+    private def nowMilliseconds() : usize {
+        return monotonicNow().durationSince(clockOrigin).milliseconds()
+    }
 
     private def disable() : Unit {
-        delete process
-        process = Option.None[ChildProcess]()
+        val previous : Option[ChildProcess] = this.takeProcess()
+        val stopped : bool = match move previous {
+            Some(child) => this.stopChild(move child),
+            None => false
+        }
+    }
+
+    /// Arrêt unique et borné : aucune attente bloquante sur le thread GUI.
+    private def stopChild(child : ChildProcess) : bool {
+        val terminated : bool = match child.terminate() {
+            Ok(stopped) => stopped,
+            Error(systemError) => false
+        }
+        // Le toolchain garantit que delete ne bloque pas après terminate réussi.
+        // Même en cas d'erreur système, le destructeur reste le dernier filet.
+        delete child
+        return terminated
     }
 
     private def takeProcess() : Option[ChildProcess] {
@@ -289,168 +808,40 @@ private val responseJson : TextBuilder
         return move previous
     }
 
-    private def reportTransportFailure(error : TextBuilder) : bool {
-        error.clear()
-        error.append("La connexion à `janus-lsp` a été interrompue.")
-        return false
-    }
-
-    private def reportUnavailable(error : TextBuilder) : bool {
-        error.clear()
-        error.append("Impossible de lancer `janus-lsp`.")
-        return false
-    }
-
-    private def writeBytes(
-    data : Ptr[byte],
-    size : usize,
-    error : TextBuilder
-    ) : bool {
+    private def hasProcess() : bool {
         val previous : Option[ChildProcess] = this.takeProcess()
         return match move previous {
-            Some(child) => this.writeChild(move child, data, size, error),
-            None => this.reportUnavailable(error)
+            Some(child) => this.restoreAvailable(move child),
+            None => false
         }
     }
 
-    private def writeChild(
-    child : ChildProcess,
-    data : Ptr[byte],
-    size : usize,
-    error : TextBuilder
-    ) : bool {
-        val result : bool = match child.write(data, size) {
-            Ok(count) => count == size,
-            Error(systemError) => this.reportTransportFailure(error)
-        }
-        delete process
-        process = Option.Some[ChildProcess](move child)
-        return result
-    }
-
-    private def reportReadFailure(error : TextBuilder) : isize {
-        this.reportTransportFailure(error)
-        return isize(-1)
-    }
-
-    private def reportReadUnavailable(error : TextBuilder) : isize {
-        this.reportUnavailable(error)
-        return isize(-1)
-    }
-
-    private def readChunk(
-    target : Ptr[byte],
-    capacity : usize,
-    error : TextBuilder
-    ) : isize {
-        val previous : Option[ChildProcess] = this.takeProcess()
-        return match move previous {
-            Some(child) => this.readChild(move child, target, capacity, error),
-            None => this.reportReadUnavailable(error)
-        }
-    }
-
-    private def readChild(
-    child : ChildProcess,
-    target : Ptr[byte],
-    capacity : usize,
-    error : TextBuilder
-    ) : isize {
-        val result : isize = match child.read(target, capacity) {
-            Ok(count) => truncatingCast[isize](count),
-            Error(systemError) => this.reportReadFailure(error)
-        }
-        delete process
-        process = Option.Some[ChildProcess](move child)
-        return result
+    private def restoreAvailable(child : ChildProcess) : bool {
+        this.restoreChild(move child)
+        return true
     }
 
     private def sendBody(error : TextBuilder) : bool {
+        if body.size() > lspMaximumBodyBytes {
+            error.clear()
+            error.append("Corps LSP sortant trop volumineux.")
+            return false
+        }
         header.clear()
         header.append("Content-Length: ")
         header.appendUSize(body.size())
         header.append("\r\n\r\n")
-        return this.writeBytes(
-        stringData(header.view()),
-        stringLength(header.view()),
-        error
-        ) && this.writeBytes(body.data(), body.size(), error)
-    }
-
-    private def readMessage(error : TextBuilder) : bool {
-        header.clear()
-        var boundary : int = 0
-        val single : Ptr[byte] = alloc[byte](usize(1))
-        defer free(single)
-        while boundary < 4 && header.size() < usize(8192) {
-            val count : isize = this.readChunk(single, usize(1), error)
-            if count != isize(1) { return false }
-            val value : int = unsignedByte(single.load(usize(0)))
-            header.appendChar(char(value))
-            if boundary == 0 && value == 13 {
-                boundary = 1
-            } else if boundary == 1 && value == 10 {
-                boundary = 2
-            } else if boundary == 2 && value == 13 {
-                boundary = 3
-            } else if boundary == 3 && value == 10 {
-                boundary = 4
-            } else if value == 13 {
-                boundary = 1
-            } else {
-                boundary = 0
-            }
-        }
-        val length : usize = parseContentLength(header.view())
-        if boundary != 4 || length == usize(0) {
+        val currentSize : usize = candidateOutgoing.size()
+        if currentSize > lspMaximumOutgoingBytes ||
+        header.size() > lspMaximumOutgoingBytes - currentSize ||
+        body.size() > lspMaximumOutgoingBytes - currentSize - header.size() {
             error.clear()
-            error.append("Réponse LSP invalide.")
+            error.append("File LSP sortante trop volumineuse.")
             return false
         }
-        response.clear()
-        val chunk : Ptr[byte] = alloc[byte](usize(4096))
-        defer free(chunk)
-        while response.size() < length {
-            val remaining : usize = length - response.size()
-            val requested : usize = if remaining < usize(4096) {
-                remaining
-            } else {
-                usize(4096)
-            }
-            val count : isize = this.readChunk(chunk, requested, error)
-            if count <= isize(0) ||
-            !response.append(chunk, numericCast[usize](count)) { return false }
-        }
-        return true
-    }
-
-    private def inspectResponse(
-    result : Result[string, TextDecodeError],
-    id : usize
-    ) : bool {
-        return match result {
-            Ok(json) => this.copyMatchingResponse(json, id),
-            Error(decodeError) => false
-        }
-    }
-
-    private def copyMatchingResponse(json : string, id : usize) : bool {
-        if !messageHasId(json, id) { return false }
-        responseJson.clear()
-        responseJson.append(json)
-        return true
-    }
-
-    private def readResponse(id : usize, error : TextBuilder) : bool {
-        var attempts : usize = usize(0)
-        while attempts < usize(64) {
-            if !this.readMessage(error) { return false }
-            if this.inspectResponse(response.asText(), id) { return true }
-            attempts = attempts + usize(1)
-        }
-        error.clear()
-        error.append("janus-lsp n'a pas répondu à la requête attendue.")
-        return false
+        return candidateOutgoing.append(
+        stringData(header.view()), stringLength(header.view())
+        ) && candidateOutgoing.append(body.data(), body.size())
     }
 
     private def appendNumber(value : usize) : bool {
@@ -460,48 +851,75 @@ private val responseJson : TextBuilder
     }
 
     def initialize(error : TextBuilder) : bool {
+        if !this.hasProcess() {
+            this.failAndBackoff(error, "Impossible de lancer `janus-lsp` ; nouvel essai.")
+            return false
+        }
         body.clear()
-        if !body.appendText(
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootPath\":"
-        ) || !appendJsonString(workspace.view(), body) ||
-        !body.appendText("}}") || !this.sendBody(error) ||
-        !this.readResponse(usize(1), error) {
+        candidateOutgoing.clear()
+        if !candidateOutgoing.append(outgoing.data(), outgoing.size()) {
             this.disable()
             return false
         }
+        if !body.appendText(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootPath\":"
+        ) || !appendJsonString(workspace.view(), body) ||
+        !body.appendText("}}") || !this.sendBody(error) {
+            this.disable()
+            return false
+        }
+        val previous : ByteBuffer = move outgoing
+        outgoing = move candidateOutgoing
+        candidateOutgoing = move previous
+        machine.started(this.nowMilliseconds())
         requestId = usize(2)
         return true
     }
 
-    private def sendClose(error : TextBuilder) : bool {
+    private def sendClose(uri : string, error : TextBuilder) : bool {
         body.clear()
         return body.appendText(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":"
-        ) && appendJsonString(activeUri.view(), body) &&
+        ) && appendJsonString(uri, body) &&
         body.appendText("}}}") && this.sendBody(error)
     }
 
-    private def sendOpen(buffer : EditorBuffer, error : TextBuilder) : bool {
+    private def sendOpen(uri : string, buffer : EditorBuffer, error : TextBuilder) : bool {
+        if buffer.size() > lspMaximumBodyBytes / usize(6) {
+            error.clear()
+            error.append("Document trop volumineux pour LSP.")
+            return false
+        }
         snapshot.clear()
         buffer.appendText(snapshot)
         body.clear()
         return body.appendText(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":"
-        ) && appendJsonString(activeUri.view(), body) &&
+        ) && appendJsonString(uri, body) &&
         body.appendText(",\"languageId\":\"janus\",\"version\":1,\"text\":") &&
         appendJsonString(snapshot.view(), body) &&
         body.appendText("}}}") && this.sendBody(error)
     }
 
-    private def sendChange(buffer : EditorBuffer, error : TextBuilder) : bool {
+    private def sendChange(
+    uri : string,
+    version : usize,
+    buffer : EditorBuffer,
+    error : TextBuilder
+    ) : bool {
+        if buffer.size() > lspMaximumBodyBytes / usize(6) {
+            error.clear()
+            error.append("Document trop volumineux pour LSP.")
+            return false
+        }
         snapshot.clear()
         buffer.appendText(snapshot)
         body.clear()
         if !body.appendText(
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":"
-        ) || !appendJsonString(activeUri.view(), body) ||
+        ) || !appendJsonString(uri, body) ||
         !body.appendText(",\"version\":") ||
-        !this.appendNumber(documentVersion) ||
+        !this.appendNumber(version) ||
         !body.appendText("},\"contentChanges\":[{\"text\":") ||
         !appendJsonString(snapshot.view(), body) ||
         !body.appendText("}]}}") { return false }
@@ -519,16 +937,33 @@ private val responseJson : TextBuilder
             return false
         }
         if requestedUri.view() != activeUri.view() {
-            if activeUri.size() > usize(0) && !this.sendClose(error) {
-                return false
-            }
-            activeUri.clear()
-            activeUri.append(requestedUri.view())
-            documentVersion = usize(1)
-            return this.sendOpen(buffer, error)
+            if activeUri.size() > usize(0) &&
+            !this.sendClose(activeUri.view(), error) { return false }
+            candidateDocumentVersion = usize(1)
+            return this.sendOpen(requestedUri.view(), buffer, error)
         }
-        documentVersion = documentVersion + usize(1)
-        return this.sendChange(buffer, error)
+        if documentVersion == usize(-1) {
+            error.clear(); error.append("Version de document LSP épuisée.")
+            return false
+        }
+        candidateDocumentVersion = documentVersion + usize(1)
+        return this.sendChange(activeUri.view(), candidateDocumentVersion, buffer, error)
+    }
+
+    private def commitCandidate() : Unit {
+        if buildingReplacement {
+            val previous : ByteBuffer = move replacementOutgoing
+            replacementOutgoing = move candidateOutgoing
+            candidateOutgoing = move previous
+            replacementUri.clear(); replacementUri.append(requestedUri.view())
+            replacementDocumentVersion = candidateDocumentVersion
+        } else {
+            val previous : ByteBuffer = move outgoing
+            outgoing = move candidateOutgoing
+            candidateOutgoing = move previous
+            activeUri.clear(); activeUri.append(requestedUri.view())
+            documentVersion = candidateDocumentVersion
+        }
     }
 
     def requestCompletion(
@@ -541,33 +976,310 @@ private val responseJson : TextBuilder
     ) : bool {
         labels.clear()
         error.clear()
-        if !this.synchronizeDocument(path, buffer, error) { return false }
+        buildingReplacement = machine.state() != LspMachineState.Ready
+        candidateOutgoing.clear()
+        if buildingReplacement {
+            candidateDocumentVersion = documentVersion
+        } else if !candidateOutgoing.append(outgoing.data(), outgoing.size()) {
+            error.append("Impossible de préparer la file LSP sortante.")
+            buildingReplacement = false
+            return false
+        }
+        if !this.synchronizeDocument(path, buffer, error) {
+            buildingReplacement = false
+            return false
+        }
+        if requestId == usize(-1) {
+            error.append("Identifiant LSP épuisé.")
+            buildingReplacement = false
+            return false
+        }
         val id : usize = requestId
-        requestId = requestId + usize(1)
         body.clear()
         if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
         !this.appendNumber(id) || !body.appendText(
         ",\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":"
-        ) || !appendJsonString(activeUri.view(), body) ||
+        ) || !appendJsonString(requestedUri.view(), body) ||
         !body.appendText("},\"position\":{\"line\":") ||
         !this.appendNumber(line) || !body.appendText(",\"character\":") ||
         !this.appendNumber(column) || !body.appendText("}}}") ||
-        !this.sendBody(error) || !this.readResponse(id, error) { return false }
-        extractCompletionLabels(responseJson.view(), labels)
-        return labels.size() > usize(0)
+        !this.sendBody(error) {
+            buildingReplacement = false
+            return false
+        }
+        this.commitCandidate()
+        requestId = requestId + usize(1)
+        machine.request(id, this.nowMilliseconds())
+        buildingReplacement = false
+        return true
     }
 
+    private def restoreChild(child : ChildProcess) : Unit {
+        this.disable()
+        process = Option.Some[ChildProcess](move child)
+    }
+
+    private def installChild(child : ChildProcess) : bool {
+        this.disable()
+        process = Option.Some[ChildProcess](move child)
+        return true
+    }
+
+    private def failAndBackoff(error : TextBuilder, message : string) : Unit {
+        this.disable()
+        machine.ensureBackoff(this.nowMilliseconds())
+        outgoing.clear()
+        replacementOutgoing.clear()
+        incomingChunk.clear()
+        frameParser.reset()
+        readyLabels.clear()
+        completionReady = false
+        buildingReplacement = false
+        outgoingOffset = usize(0)
+        activeUri.clear()
+        replacementUri.clear()
+        requestedUri.clear()
+        snapshot.clear()
+        documentVersion = usize(0)
+        replacementDocumentVersion = usize(0)
+        error.clear()
+        error.append(message)
+    }
+
+    private def pollWriteChild(
+    child : ChildProcess,
+    budget : usize,
+    error : TextBuilder
+    ) : usize {
+        if outgoingOffset >= outgoing.size() { this.restoreChild(move child); return usize(0) }
+        val remaining : usize = outgoing.size() - outgoingOffset
+        val requested : usize = if remaining < budget { remaining } else { budget }
+        val chunk : Ptr[byte] = alloc[byte](requested)
+        defer free(chunk)
+        var copied : usize = usize(0)
+        while copied < requested {
+            chunk.store(copied, outgoing.data().load(outgoingOffset + copied))
+            copied = copied + usize(1)
+        }
+        val outcome : isize = match child.tryWrite(
+        chunk, requested
+        ) {
+            Ok(count) => truncatingCast[isize](count),
+            Error(systemError) => if systemError.category == SystemErrorCategory.WouldBlock {
+                isize(0)
+            } else { isize(-1) }
+        }
+        if outcome < isize(0) {
+            this.failAndBackoff(error, "Écriture LSP interrompue ; redémarrage.")
+            this.stopChild(move child)
+            return usize(0)
+        }
+        val written : usize = numericCast[usize](outcome)
+        outgoingOffset = outgoingOffset + written
+        if outgoingOffset == outgoing.size() {
+            outgoing.clear()
+            outgoingOffset = usize(0)
+        }
+        this.restoreChild(move child)
+        return written
+    }
+
+    private def acceptMessage(error : TextBuilder) : bool {
+        val decoded : Result[string, TextDecodeError] = frameParser.message()
+        val accepted : bool = match decoded {
+            Ok(json) => this.acceptJsonMessage(json, error),
+            Error(decodeError) => false
+        }
+        if !accepted {
+            this.failAndBackoff(error, "Réponse LSP invalide ; redémarrage.")
+        }
+        return accepted
+    }
+
+    private def acceptJsonMessage(json : string, error : TextBuilder) : bool {
+        val active : usize = machine.activeRequest()
+        if active > usize(0) && messageHasId(json, active) {
+            val event : LspPollEvent = machine.response(
+            active,
+            this.nowMilliseconds()
+            )
+            if event == LspPollEvent.Initialized {
+                candidateOutgoing.clear()
+                if !appendInitializedPrefix(
+                replacementOutgoing, candidateOutgoing
+                ) {
+                    return false
+                }
+                val previous : ByteBuffer = move outgoing
+                outgoing = move candidateOutgoing
+                candidateOutgoing = move previous
+                outgoingOffset = usize(0)
+                if replacementOutgoing.size() > usize(0) {
+                    replacementOutgoing.clear()
+                    activeUri.clear()
+                    activeUri.append(replacementUri.view())
+                    documentVersion = replacementDocumentVersion
+                }
+            } else if event == LspPollEvent.Completion {
+                readyLabels.clear()
+                extractCompletionLabels(json, readyLabels)
+                completionReady = true
+            } else if event == LspPollEvent.Stale &&
+            replacementOutgoing.size() > usize(0) {
+                candidateOutgoing.clear()
+                if outgoing.size() > lspMaximumOutgoingBytes -
+                replacementOutgoing.size() ||
+                !candidateOutgoing.append(outgoing.data(), outgoing.size()) ||
+                !candidateOutgoing.append(
+                replacementOutgoing.data(), replacementOutgoing.size()
+                ) {
+                    return false
+                }
+                val previous : ByteBuffer = move outgoing
+                outgoing = move candidateOutgoing
+                candidateOutgoing = move previous
+                replacementOutgoing.clear()
+                activeUri.clear()
+                activeUri.append(replacementUri.view())
+                documentVersion = replacementDocumentVersion
+            }
+        }
+        frameParser.reset()
+        return true
+    }
+
+    private def pollReadChild(
+    child : ChildProcess,
+    budget : usize,
+    error : TextBuilder
+    ) : usize {
+        val requested : usize = frameParser.readCapacity(budget)
+        incomingChunk.clear()
+        val storage : Ptr[byte] = alloc[byte](requested)
+        defer free(storage)
+        val outcome : isize = match child.tryRead(storage, requested) {
+            Ok(value) => truncatingCast[isize](value),
+            Error(systemError) => if systemError.category == SystemErrorCategory.WouldBlock {
+                isize(-2)
+            } else { isize(-1) }
+        }
+        if outcome == isize(-2) { this.restoreChild(move child); return usize(0) }
+        if outcome == isize(-1) {
+            this.failAndBackoff(error, "Lecture LSP interrompue ; redémarrage.")
+            this.stopChild(move child)
+            return usize(0)
+        }
+        val count : usize = numericCast[usize](outcome)
+        if count == usize(0) {
+            this.failAndBackoff(error, "Fin de flux LSP ; redémarrage.")
+            this.stopChild(move child)
+            return usize(0)
+        }
+        incomingChunk.append(storage, count)
+        val frame : LspFrameResult = frameParser.feedBytes(storage, count, false)
+        if frame == LspFrameResult.Ready && !this.acceptMessage(error) {
+            this.stopChild(move child)
+            return count
+        }
+        else if frame == LspFrameResult.Invalid {
+            this.failAndBackoff(error, "Réponse LSP invalide ; redémarrage.")
+            this.stopChild(move child)
+            return count
+        }
+        this.restoreChild(move child)
+        return count
+    }
+
+    def poll(error : TextBuilder) : Unit {
+        val now : usize = this.nowMilliseconds()
+        val event : LspPollEvent = machine.advance(now)
+        if event == LspPollEvent.TimedOut {
+            this.failAndBackoff(error, "Délai LSP dépassé ; redémarrage.")
+            return
+        }
+        if event == LspPollEvent.Restart {
+            val arguments : Array[string] = new Array[string](usize(0))
+            val spawned : Result[ChildProcess, SystemError] =
+            spawnProcess("janus-lsp", arguments, workspace.view())
+            delete arguments
+            val installed : bool = match move spawned {
+                Ok(child) => this.installChild(move child),
+                Error(systemError) => false
+            }
+            if installed {
+                if !this.initialize(error) {
+                    this.failAndBackoff(error, "Initialisation LSP impossible ; nouvel essai.")
+                }
+            } else {
+                machine.restartFailed(now)
+                error.clear()
+                error.append("Impossible de relancer `janus-lsp` ; nouvel essai.")
+            }
+            return
+        }
+        var budget : usize = lspFrameIoBudget
+        var operations : usize = lspFrameOperationBudget
+        val writing : Option[ChildProcess] = this.takeProcess()
+        val written : usize = match move writing {
+            Some(child) => this.pollWriteChild(move child, budget, error),
+            None => usize(0)
+        }
+        budget = budget - written
+        operations = operations - usize(1)
+        if budget > usize(0) && operations > usize(0) {
+            var progressed : usize = usize(1)
+            while budget > usize(0) && operations > usize(0) && progressed > usize(0) {
+                val reading : Option[ChildProcess] = this.takeProcess()
+                progressed = match move reading {
+                    Some(child) => this.pollReadChild(move child, budget, error),
+                    None => usize(0)
+                }
+                budget = budget - progressed
+                operations = operations - usize(1)
+            }
+        }
+    }
+
+    def takeCompletion(labels : TextBuilder) : bool {
+        if !completionReady { return false }
+        labels.clear()
+        labels.append(readyLabels.view())
+        completionReady = false
+        readyLabels.clear()
+        return true
+    }
+
+    def invalidateCompletion() : Unit {
+        machine.invalidate()
+        completionReady = false
+        readyLabels.clear()
+        replacementOutgoing.clear()
+        buildingReplacement = false
+    }
+
+    /// Observabilité déterministe réservée aux régressions de transaction.
+    def queuedDocument() : string { return replacementUri.view() }
+    def queuedDocumentVersion() : usize { return replacementDocumentVersion }
+    def queuedBytes() : usize { return replacementOutgoing.size() }
+    def nextRequestId() : usize { return requestId }
+
     destructor {
-        delete process
+        this.disable()
         delete workspace
         delete body
-        delete response
         delete header
         delete number
         delete activeUri
+        delete replacementUri
         delete requestedUri
         delete snapshot
-        delete responseJson
+        delete outgoing
+        delete replacementOutgoing
+        delete candidateOutgoing
+        delete incomingChunk
+        delete frameParser
+        delete machine
+        delete readyLabels
     }
 }
 
@@ -583,12 +1295,18 @@ workspace : TextBuilder
     move state,
     move workspace,
     new ByteBuffer(usize(4096)),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
     new ByteBuffer(usize(4096)),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
+    new ByteBuffer(usize(4096)),
+    new ByteBuffer(usize(4096)),
+    new ByteBuffer(usize(4096)),
+    lspFrameParser(),
+    lspStateMachine(),
     new TextBuilder()
     )
 }
@@ -604,6 +1322,6 @@ def lspClient(error : TextBuilder) : LspClient {
     spawnProcess("janus-lsp", arguments, workspace.view()),
     move workspace
     )
-    client.initialize(error)
+    if !client.initialize(error) { error.clear(); error.append("Impossible de lancer `janus-lsp`.") }
     return move client
 }
