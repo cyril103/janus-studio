@@ -1,0 +1,50 @@
+import editor.close_policy
+import editor.vim
+import std.testing
+
+/// @test
+def allowsRegularCloseForCleanBuffer() : Unit {
+    assertTrue(closeAllowed(false, false))
+}
+
+/// @test
+def rejectsRegularCloseForModifiedBuffer() : Unit {
+    assertFalse(closeAllowed(true, false))
+}
+
+/// @test
+def allowsForcedCloseForModifiedBuffer() : Unit {
+    assertTrue(closeAllowed(true, true))
+}
+
+/// @test
+def mapsNativeCloseToRegularQuitAction() : Unit {
+    assertEqual[EditorAction](
+    resolveCloseAction(EditorAction.None, true),
+    EditorAction.Quit
+    )
+}
+
+/// @test
+def keepsNoActionWithoutNativeClose() : Unit {
+    assertEqual[EditorAction](
+    resolveCloseAction(EditorAction.None, false),
+    EditorAction.None
+    )
+}
+
+/// @test
+def preservesExplicitSaveDuringNativeClose() : Unit {
+    assertEqual[EditorAction](
+    resolveCloseAction(EditorAction.Save, true),
+    EditorAction.Save
+    )
+}
+
+/// @test
+def preservesExplicitForceQuitDuringNativeClose() : Unit {
+    assertEqual[EditorAction](
+    resolveCloseAction(EditorAction.ForceQuit, true),
+    EditorAction.ForceQuit
+    )
+}
