@@ -444,6 +444,62 @@ private val paths : Array[char]
         this.appendCharacters(paths, entry.pathStart, entry.pathLength, output)
     }
 
+    private def compactStorage() : Unit {
+        val newNames : Array[char] = new Array[char](names.size())
+        defer delete newNames
+        val newPaths : Array[char] = new Array[char](paths.size())
+        defer delete newPaths
+
+        var i : usize = usize(0)
+        while i < entries.size() {
+            val entry : ExplorerEntry = entries.get(i)
+            val newNameStart : usize = newNames.size()
+            var index : usize = usize(0)
+            while index < entry.nameLength {
+                newNames.push(names.get(entry.nameStart + index))
+                index = index + usize(1)
+            }
+            val newPathStart : usize = newPaths.size()
+            index = usize(0)
+            while index < entry.pathLength {
+                newPaths.push(paths.get(entry.pathStart + index))
+                index = index + usize(1)
+            }
+            entries.set(i, new ExplorerEntry(
+            newNameStart,
+            entry.nameLength,
+            newPathStart,
+            entry.pathLength,
+            entry.depth,
+            entry.kind,
+            entry.expanded
+            ))
+            i = i + usize(1)
+        }
+
+        names.clear()
+        i = usize(0)
+        while i < newNames.size() {
+            names.push(newNames.get(i))
+            i = i + usize(1)
+        }
+
+        paths.clear()
+        i = usize(0)
+        while i < newPaths.size() {
+            paths.push(newPaths.get(i))
+            i = i + usize(1)
+        }
+    }
+
+    def namesSize() : usize {
+        return names.size()
+    }
+
+    def pathsSize() : usize {
+        return paths.size()
+    }
+
     def toggle(index : usize) : bool {
         if index >= entries.size() || !this.isDirectory(index) {
             return false
@@ -470,6 +526,7 @@ private val paths : Array[char]
             } else if selectedIndex > index + removed {
                 selectedIndex = selectedIndex - removed
             }
+            this.compactStorage()
             return true
         }
         if !this.loadChildren(index, entry) {

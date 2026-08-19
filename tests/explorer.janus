@@ -87,3 +87,39 @@ def preservesExplorerStateWhenOpeningUnreadableDirectory() : Unit {
     assertEqual[string](scratch.view(), "src")
     assertTrue(findExplorerEntry(explorer, "main.janus", scratch) != usize(-1))
 }
+
+/// @test
+def reclaimsMemoryStorageOnDirectoryCollapse() : Unit {
+    val explorer : ProjectExplorer = projectExplorer(".")
+    defer delete explorer
+    val scratch : TextBuilder = new TextBuilder()
+    defer delete scratch
+
+    val source : usize = findExplorerEntry(explorer, "src", scratch)
+    assertTrue(source != usize(-1))
+
+    // First expand & collapse cycle
+    assertTrue(explorer.toggle(source))
+    assertTrue(explorer.isExpanded(source))
+    val expandedNamesSize : usize = explorer.namesSize()
+    val expandedPathsSize : usize = explorer.pathsSize()
+
+    assertTrue(explorer.toggle(source))
+    assertFalse(explorer.isExpanded(source))
+    val collapsedNamesSize : usize = explorer.namesSize()
+    val collapsedPathsSize : usize = explorer.pathsSize()
+
+    // 100 repeated expand/collapse cycles must maintain bounded storage footprint
+    var cycle : usize = usize(0)
+    while cycle < usize(100) {
+        assertTrue(explorer.toggle(source))
+        assertEqual[usize](explorer.namesSize(), expandedNamesSize)
+        assertEqual[usize](explorer.pathsSize(), expandedPathsSize)
+
+        assertTrue(explorer.toggle(source))
+        assertEqual[usize](explorer.namesSize(), collapsedNamesSize)
+        assertEqual[usize](explorer.pathsSize(), collapsedPathsSize)
+
+        cycle = cycle + usize(1)
+    }
+}
