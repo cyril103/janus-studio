@@ -367,11 +367,42 @@ private val paths : Array[char]
         if explorerKindResult(metadata(root)) != int(ExplorerEntryKind.Directory) {
             return false
         }
+        val tempEntries : Array[ExplorerEntry] = new Array[ExplorerEntry](usize(64))
+        val tempNames : Array[char] = new Array[char](usize(256))
+        val tempPaths : Array[char] = new Array[char](usize(1024))
+        val tempExplorer : ProjectExplorer = new ProjectExplorer(
+        move tempEntries,
+        move tempNames,
+        move tempPaths
+        )
+        tempExplorer.addRoot(root)
+        if !tempExplorer.toggle(usize(0)) {
+            delete tempExplorer
+            return false
+        }
+
         entries.clear()
         names.clear()
         paths.clear()
-        this.addRoot(root)
-        return this.toggle(usize(0))
+
+        var i : usize = usize(0)
+        while i < tempExplorer.entries.size() {
+            entries.push(tempExplorer.entries.get(i))
+            i = i + usize(1)
+        }
+        i = usize(0)
+        while i < tempExplorer.names.size() {
+            names.push(tempExplorer.names.get(i))
+            i = i + usize(1)
+        }
+        i = usize(0)
+        while i < tempExplorer.paths.size() {
+            paths.push(tempExplorer.paths.get(i))
+            i = i + usize(1)
+        }
+        selectedIndex = tempExplorer.selectedIndex
+        delete tempExplorer
+        return true
     }
 
     def close() : Unit {

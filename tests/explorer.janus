@@ -67,3 +67,23 @@ def opensAndClosesProjectDirectories() : Unit {
     assertFalse(explorer.open("un-dossier-qui-n-existe-pas"))
     assertEqual[usize](explorer.size(), usize(0))
 }
+
+/// @test
+def preservesExplorerStateWhenOpeningUnreadableDirectory() : Unit {
+    val explorer : ProjectExplorer = projectExplorer("src")
+    defer delete explorer
+    val scratch : TextBuilder = new TextBuilder()
+    defer delete scratch
+
+    val initialSize : usize = explorer.size()
+    assertTrue(initialSize > usize(1))
+    explorer.appendLabel(usize(0), scratch)
+    assertEqual[string](scratch.view(), "src")
+
+    assertFalse(explorer.open("un-dossier-qui-n-existe-pas"))
+
+    assertEqual[usize](explorer.size(), initialSize)
+    explorer.appendLabel(usize(0), scratch)
+    assertEqual[string](scratch.view(), "src")
+    assertTrue(findExplorerEntry(explorer, "main.janus", scratch) != usize(-1))
+}
