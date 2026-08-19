@@ -237,7 +237,9 @@ def openProjectFolder(
 path : string,
 projectRoot : TextBuilder,
 explorer : ProjectExplorer,
-status : TextBuilder
+lsp : LspClient,
+status : TextBuilder,
+error : TextBuilder
 ) : bool {
     if path == "" {
         setStatus(status, "Saisissez un chemin de dossier.")
@@ -249,6 +251,7 @@ status : TextBuilder
     }
     projectRoot.clear()
     projectRoot.append(path)
+    lsp.setWorkspace(path, error)
     setStatus(status, "Dossier ouvert.")
     return true
 }
@@ -1363,6 +1366,7 @@ def main() : int {
                 explorer.close()
                 projectRoot.clear()
                 firstExplorerEntry = usize(0)
+                languageServer.setWorkspace(".", completionError)
                 setStatus(status, "Dossier fermé.")
             }
             fileMenuOpen = false
@@ -1447,7 +1451,9 @@ def main() : int {
                     filePrompt.value(),
                     projectRoot,
                     explorer,
-                    status
+                    languageServer,
+                    status,
+                    completionError
                     ) {
                         filePrompt.dismiss()
                         firstExplorerEntry = usize(0)

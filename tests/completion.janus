@@ -527,3 +527,19 @@ def navigatesAndAcceptsUnicodeCompletion() : Unit {
     assertEqual[string](output.view(), "val x = αβγ")
     assertTrue(!completion.isVisible())
 }
+
+/// @test
+def resynchronizesLspWorkspaceWhenChangingFolders() : Unit {
+    val error : TextBuilder = new TextBuilder()
+    defer delete error
+    val client : LspClient = lspClientForRoot("samples", error)
+    defer delete client
+
+    assertTrue(containsCompletionLabel(client.workspacePath(), "samples"))
+
+    assertTrue(client.setWorkspace("src", error))
+    assertTrue(containsCompletionLabel(client.workspacePath(), "src"))
+
+    assertTrue(client.setWorkspace("tests", error))
+    assertTrue(containsCompletionLabel(client.workspacePath(), "tests"))
+}
