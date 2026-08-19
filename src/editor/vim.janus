@@ -191,7 +191,6 @@ private val lineRegister : Array[char]
         val newLen : usize = len - removeCount
         if newLen == usize(0) {
             command.clear()
-            this.escape()
             return
         }
         val shortened : TextBuilder = new TextBuilder()
