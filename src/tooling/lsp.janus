@@ -947,10 +947,12 @@ private val replacementState : TextBuilder
 
     def replace(uri : string) : LspDocumentTransition {
         if replacementState.view() != uri {
-            val transition : LspDocumentTransition = if replacementState.size() == usize(0) {
-                LspDocumentTransition.Open
-            } else { LspDocumentTransition.CloseThenOpen }
-            replacementState.clear(); replacementState.append(uri)
+            var transition : LspDocumentTransition = LspDocumentTransition.CloseThenOpen
+            if replacementState.size() == usize(0) {
+                transition = LspDocumentTransition.Open
+            }
+            replacementState.clear()
+            replacementState.append(uri)
             replacementVersion = usize(1)
             return transition
         }
@@ -1563,6 +1565,47 @@ private val readyLabels : TextBuilder
     def queuedDocumentVersion() : usize { return replacementDocumentVersion }
     def queuedBytes() : usize { return replacementOutgoing.size() }
     def nextRequestId() : usize { return requestId }
+    def workspacePath() : string { return workspace.view() }
+
+    def setWorkspace(newRoot : string, error : TextBuilder) : bool {
+        this.disable()
+        activeUri.clear()
+        replacementUri.clear()
+        requestedUri.clear()
+        snapshot.clear()
+        documentVersion = usize(0)
+        replacementDocumentVersion = usize(0)
+        candidateDocumentVersion = usize(0)
+        outgoingOffset = usize(0)
+        completionReady = false
+        buildingReplacement = false
+        readyLabels.clear()
+        outgoing.clear()
+        replacementOutgoing.clear()
+        candidateOutgoing.clear()
+        frameParser.reset()
+        machine.invalidate()
+
+        workspace.clear()
+        if !captureWorkingDirectory(newRoot, workspace) {
+            if !captureWorkingDirectory(currentWorkingDirectory(), workspace) {
+                workspace.append(".")
+            }
+        }
+        val arguments : Array[string] = new Array[string](usize(0))
+        defer delete arguments
+        val spawned : Result[ChildProcess, SystemError] = spawnProcess("janus-lsp", arguments, workspace.view())
+        val installed : bool = match move spawned {
+            Ok(child) => this.installChild(move child),
+            Error(err) => false
+        }
+        if !installed {
+            error.clear()
+            error.append("Impossible de relancer `janus-lsp` pour le nouveau workspace.")
+            return false
+        }
+        return this.initialize(error)
+    }
 
     destructor {
         this.disable()
@@ -1612,10 +1655,12 @@ workspace : TextBuilder
     )
 }
 
-def lspClient(error : TextBuilder) : LspClient {
+def lspClientForRoot(rootPath : string, error : TextBuilder) : LspClient {
     val workspace : TextBuilder = new TextBuilder()
-    if !captureWorkingDirectory(currentWorkingDirectory(), workspace) {
-        workspace.append(".")
+    if !captureWorkingDirectory(rootPath, workspace) {
+        if !captureWorkingDirectory(currentWorkingDirectory(), workspace) {
+            workspace.append(".")
+        }
     }
     val arguments : Array[string] = new Array[string](usize(0))
     defer delete arguments
@@ -1625,4 +1670,8 @@ def lspClient(error : TextBuilder) : LspClient {
     )
     if !client.initialize(error) { error.clear(); error.append("Impossible de lancer `janus-lsp`.") }
     return move client
+}
+
+def lspClient(error : TextBuilder) : LspClient {
+    return lspClientForRoot(currentWorkingDirectory(), error)
 }
