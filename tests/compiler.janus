@@ -8,3 +8,29 @@ def checksTheWelcomeSample() : Unit {
     defer delete output
     assertTrue(checkFile("samples/welcome.janus", output))
 }
+
+/// @test
+def neutralizesHelpOptionInjection() : Unit {
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    val succeeded : bool = checkFile("--help", output)
+    assertTrue(!succeeded)
+    assertTrue(!containsCompletionLabel(output.view(), "Usage:"))
+    assertTrue(!containsCompletionLabel(output.view(), "Option"))
+}
+
+/// @test
+def neutralizesOfflineOptionInjection() : Unit {
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    val succeeded : bool = checkFile("--offline", output)
+    assertTrue(!succeeded)
+}
+
+/// @test
+def handlesPathWithSpacesAndUnicode() : Unit {
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    val succeeded : bool = checkFile("samples/wel come.janus", output)
+    assertTrue(!succeeded)
+}
