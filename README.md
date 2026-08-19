@@ -138,11 +138,17 @@ Le curseur du champ de chemin se déplace avec les flèches, `Home` et `End` ;
 unique reçoit automatiquement un `/`, et plusieurs résultats avancent jusqu'à
 leur préfixe commun.
 
+## Support Unicode & Rendu de polices
+
+Le chargement des fichiers, l'édition interactive, l'historique et la ligne de commande prennent en charge l'ensemble des codepoints Unicode UTF-8 (sur 1, 2, 3 et 4 octets). Les séquences UTF-8 invalides sont remplacées par U+FFFD.
+
+**Polices et Repli de Glyphes :**
+- Les atlas de polices embarquent l'ASCII, le Latin étendu (accents européens), les symboles grecs (`α`, `λ`), la ponctuation typographique et les symboles scientifiques/UI courants (`→`, `≠`, `✓`, `€`).
+- Pour les codepoints hors de l'atlas ou hors BMP (tels que certains émoticônes 4 octets `😀`), le binaire de rendu utilise le glyphe de repli (`?` / U+FFFD) sans corrompre le buffer de texte, les métriques d'alignement du curseur ou la navigation.
+
 ## Limites connues du MVP
 
-Le chargement des fichiers et la saisie interactive prennent en charge Unicode.
-Les séquences UTF-8 invalides sont remplacées par U+FFFD. Les prochaines étapes
-prévues sont :
+Les prochaines étapes prévues sont :
 
 1. implémenter la sélection de texte ;
 2. ajouter plusieurs onglets et la recherche dans le projet ;

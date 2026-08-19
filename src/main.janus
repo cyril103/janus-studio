@@ -1219,7 +1219,7 @@ def main() : int {
     disableExitKey()
 
     val fontCharacters : string =
-    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~•€ÀÂÇÉÈÊËÎÏÔÙÛÜŸàâçéèêëîïôùûüÿŒœ"
+    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~•€ÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸàâäçéèêëîïôöùûüÿŒœæÆøØñÑßαβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ→←↑↓↔≠≤≥±×÷°′″…–—•·§¶©®™$£¥₹¿¡«»“”‘’✓✗★☆"
     val uiFont : Font = loadFontUtf8(
     "assets/fonts/DejaVuSans.ttf",
     32,

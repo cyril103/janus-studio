@@ -21,6 +21,15 @@ enum EditorAction derives Copy, Equality, Debug {
     SaveAndQuit
 }
 
+private def unsignedByteVal(value : byte) : int {
+    val numeric : int = int(value)
+    return if numeric < 0 { numeric + 256 } else { numeric }
+}
+
+private def isContinuationByteVal(value : int) : bool {
+    return value >= 128 && value <= 191
+}
+
 class VimController(
 private var currentMode : EditorMode,
 private var pendingG : bool,
@@ -163,16 +172,33 @@ private val lineRegister : Array[char]
     }
 
     def commandBackspace() : Unit {
-        if command.size() == usize(0) {
+        val current : string = command.view()
+        val len : usize = stringLength(current)
+        if len == usize(0) {
+            this.escape()
+            return
+        }
+        val data : Ptr[byte] = stringData(current)
+        var removeCount : usize = usize(1)
+        while removeCount < len {
+            val byteVal : int = unsignedByteVal(data.load(len - removeCount))
+            if isContinuationByteVal(byteVal) {
+                removeCount = removeCount + usize(1)
+            } else {
+                break
+            }
+        }
+        val newLen : usize = len - removeCount
+        if newLen == usize(0) {
+            command.clear()
             this.escape()
             return
         }
         val shortened : TextBuilder = new TextBuilder()
         defer delete shortened
-        val current : string = command.view()
         var index : usize = usize(0)
-        while index + usize(1) < stringLength(current) {
-            shortened.appendChar(char(stringData(current).load(index)))
+        while index < newLen {
+            shortened.appendByte(data.load(index))
             index = index + usize(1)
         }
         command.clear()

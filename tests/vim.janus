@@ -118,3 +118,50 @@ def parsesColonCommands() : Unit {
     controller.appendCommandLine(commandLine)
     assertEqual[string](commandLine.view(), "")
 }
+
+/// @test
+def deletesFullUnicodeCharactersInCommandLine() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val controller : VimController = vimController()
+    defer delete controller
+    val commandLine : TextBuilder = new TextBuilder()
+    defer delete commandLine
+
+    controller.handleNormal(':', buffer)
+    assertEqual[EditorMode](controller.mode(), EditorMode.Command)
+
+    // 2-byte UTF-8 ('é')
+    controller.handleCommand('é')
+    commandLine.clear()
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), ":é")
+    controller.commandBackspace()
+    commandLine.clear()
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), ":")
+
+    // 3-byte UTF-8 ('世')
+    controller.handleCommand('世')
+    commandLine.clear()
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), ":世")
+    controller.commandBackspace()
+    commandLine.clear()
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), ":")
+
+    // 4-byte UTF-8 ('😀')
+    controller.handleCommand('😀')
+    commandLine.clear()
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), ":😀")
+    controller.commandBackspace()
+    commandLine.clear()
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), ":")
+
+    // Final backspace exits command mode cleanly
+    controller.commandBackspace()
+    assertEqual[EditorMode](controller.mode(), EditorMode.Normal)
+}
