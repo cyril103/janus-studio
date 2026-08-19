@@ -456,7 +456,7 @@ status : TextBuilder
     path,
     buffer,
     buffer.line(),
-    buffer.column(),
+    buffer.columnUtf16(),
     labels,
     error
     ) {
