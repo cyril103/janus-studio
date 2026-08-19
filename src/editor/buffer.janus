@@ -378,6 +378,23 @@ private val redoStates : Array[BufferSnapshot]
         return result
     }
 
+    def columnUtf16() : usize {
+        var result : usize = usize(0)
+        val start : usize = this.lineStart(cursorPosition)
+        var pos : usize = start
+        while pos < cursorPosition {
+            val ch : char = characters.get(pos)
+            val cp : int = int(ch)
+            if cp >= 0x10000 {
+                result = result + usize(2)
+            } else {
+                result = result + usize(1)
+            }
+            pos = pos + usize(1)
+        }
+        return result
+    }
+
     private def lineStart(position : usize) : usize {
         var result : usize = position
         while result > usize(0) && characters.get(result - usize(1)) != '\n' {

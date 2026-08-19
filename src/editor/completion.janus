@@ -78,7 +78,7 @@ private val selectedLabel : TextBuilder
             position = position + usize(1)
         }
         while position < stringLength(source) && data.load(position) != byte(10) {
-            output.appendChar(char(data.load(position)))
+            output.appendByte(data.load(position))
             position = position + usize(1)
         }
     }

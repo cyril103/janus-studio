@@ -497,3 +497,33 @@ def navigatesAndAcceptsCompletion() : Unit {
     assertEqual[string](output.view(), "xs.size")
     assertTrue(!completion.isVisible())
 }
+
+/// @test
+def navigatesAndAcceptsUnicodeCompletion() : Unit {
+    val completion : CompletionModel = completionModel()
+    defer delete completion
+    completion.load("été\nαβγ\n😀emoji\n")
+    assertTrue(completion.isVisible())
+    assertEqual[usize](completion.size(), usize(3))
+
+    val selected : TextBuilder = new TextBuilder()
+    defer delete selected
+    completion.appendItem(completion.selected(), selected)
+    assertEqual[string](selected.view(), "été")
+
+    completion.selectNext()
+    selected.clear()
+    completion.appendItem(completion.selected(), selected)
+    assertEqual[string](selected.view(), "αβγ")
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("val x = ")
+    assertTrue(completion.accept(buffer))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "val x = αβγ")
+    assertTrue(!completion.isVisible())
+}

@@ -45,6 +45,24 @@ def insertsUnicodeCharacters() : Unit {
 }
 
 /// @test
+def convertsBufferColumnToUtf16ForLsp() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+
+    buffer.load("abc")
+    assertEqual[usize](buffer.column(), usize(3))
+    assertEqual[usize](buffer.columnUtf16(), usize(3))
+
+    buffer.load("été λ")
+    assertEqual[usize](buffer.column(), usize(5))
+    assertEqual[usize](buffer.columnUtf16(), usize(5))
+
+    buffer.load("😀a")
+    assertEqual[usize](buffer.column(), usize(2))
+    assertEqual[usize](buffer.columnUtf16(), usize(3))
+}
+
+/// @test
 def loadsUtf8AsUnicodeCharacters() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
