@@ -2,6 +2,7 @@
 module tooling.compiler
 
 import std.array
+import std.fs
 import std.process
 import std.result
 import std.system
@@ -33,15 +34,53 @@ private def reportStartFailure(output : TextBuilder) : bool {
     return false
 }
 
+private def resolveAbsolutePath(path : string, output : TextBuilder) : Unit {
+    output.clear()
+    val data : Ptr[byte] = stringData(path)
+    if stringLength(path) > usize(0) && data.load(usize(0)) == byte(47) {
+        output.append(path)
+        return
+    }
+    val cwdResult : Result[WorkingDirectory, SystemError] = currentWorkingDirectory()
+    val baseBuilder : TextBuilder = new TextBuilder()
+    defer delete baseBuilder
+    val _hasCwd : bool = match move cwdResult {
+        Ok(dir) => {
+            baseBuilder.append(dir.view())
+            delete dir
+            true
+        },
+        Error(err) => {
+            baseBuilder.append(".")
+            false
+        }
+    }
+    val joined : Result[Path, SystemError] = joinPath(baseBuilder.view(), path)
+    match move joined {
+        Ok(p) => {
+            output.append(p.view())
+            delete p
+        },
+        Error(err) => {
+            output.append(path)
+        }
+    }
+}
+
 /// Exécute `janus check` sur le fichier actif et copie ses diagnostics.
 def checkFile(path : string, output : TextBuilder) : bool {
     output.clear()
-    val arguments : Array[string] = new Array[string](usize(4))
+    val targetPath : TextBuilder = new TextBuilder()
+    defer delete targetPath
+    resolveAbsolutePath(path, targetPath)
+
+    val arguments : Array[string] = new Array[string](usize(5))
     defer delete arguments
     arguments.push("check")
-    arguments.push(path)
     arguments.push("--diagnostic-format")
     arguments.push("human")
+    arguments.push("--")
+    arguments.push(targetPath.view())
 
     val result : Result[ProcessResult, SystemError] =
     runProcess("janus", arguments, "", true, true)
