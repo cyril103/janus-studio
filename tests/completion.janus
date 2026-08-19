@@ -108,6 +108,67 @@ def parsesLspFramesAndResponseIds() : Unit {
     ))
 }
 
+/// @test
+def parsesJsonRpcWithWhitespaceAndEscapes() : Unit {
+    val labels : TextBuilder = new TextBuilder()
+    defer delete labels
+
+    assertTrue(messageHasId("{\"id\" : 7, \"result\": []}", usize(7)))
+
+    extractCompletionLabels("[{\"label\":\"a\\\"b\"}]", labels)
+    assertEqual[string](labels.view(), "a\"b\n")
+
+    labels.clear()
+    extractCompletionLabels("[{\"label\":\"line\\nnext\"}]", labels)
+    assertEqual[string](labels.view(), "line\nnext\n")
+
+    labels.clear()
+    extractCompletionLabels("[{\"label\":\"h\\u00e9llo\"}]", labels)
+    assertEqual[string](labels.view(), "héllo\n")
+}
+
+/// @test
+def parsesCompletionListAndItemArray() : Unit {
+    val labels : TextBuilder = new TextBuilder()
+    defer delete labels
+
+    extractCompletionLabels(
+    "{\"isIncomplete\": false, \"items\": [{\"label\": \"foo\"}, {\"label\": \"bar\"}]}",
+    labels
+    )
+    assertEqual[string](labels.view(), "foo\nbar\n")
+
+    labels.clear()
+    extractCompletionLabels(
+    "{\"jsonrpc\":\"2.0\",\"id\":10,\"result\":{\"isIncomplete\":true,\"items\":[{\"label\":\"one\"}]}}",
+    labels
+    )
+    assertEqual[string](labels.view(), "one\n")
+}
+
+/// @test
+def classifiesJsonRpcMessageTypes() : Unit {
+    val msg : JsonRpcMessage = jsonRpcMessage()
+    defer delete msg
+
+    assertTrue(parseJsonRpcMessage("{\"jsonrpc\":\"2.0\",\"method\":\"window/logMessage\",\"params\":{\"message\":\"hi\"}}", msg))
+    assertEqual[JsonRpcKind](msg.kind, JsonRpcKind.Notification)
+    assertEqual[JsonIdKind](msg.idKind, JsonIdKind.None)
+
+    assertTrue(parseJsonRpcMessage("{\"jsonrpc\":\"2.0\",\"id\":42,\"result\":[{\"label\":\"test\"}]}", msg))
+    assertEqual[JsonRpcKind](msg.kind, JsonRpcKind.Response)
+    assertEqual[JsonIdKind](msg.idKind, JsonIdKind.Number)
+    assertEqual[usize](msg.idNumber, usize(42))
+
+    assertTrue(parseJsonRpcMessage("{\"jsonrpc\":\"2.0\",\"id\":42,\"error\":{\"code\":-32601,\"message\":\"Not found\"}}", msg))
+    assertEqual[JsonRpcKind](msg.kind, JsonRpcKind.ErrorResponse)
+    assertEqual[JsonIdKind](msg.idKind, JsonIdKind.Number)
+    assertEqual[usize](msg.idNumber, usize(42))
+
+    assertTrue(!messageHasId("{\"id\": true, \"result\": []}", usize(1)))
+    assertTrue(!messageHasId("{\"id\": [1, 2], \"result\": []}", usize(1)))
+}
+
 /// Faux serveur déterministe injecté à la frontière transport : le parseur reçoit
 /// directement ses octets et la machine son temps synthétique/EOF. Cela reproduit
 /// lecture, silence et fermeture sans processus ni horloge dépendant de la machine.
