@@ -1298,7 +1298,12 @@ maximumLines : usize
 ) : Unit {
     buffer.appendVisibleCharacters(visibleCharacters, firstLine, maximumLines)
     highlight(visibleCharacters, syntaxSpans)
-    buildStatusLine(statusLine, path, buffer)
+    if tabs.size() == usize(0) {
+        statusLine.clear()
+        statusLine.append("Aucun fichier ouvert")
+    } else {
+        buildStatusLine(statusLine, path, buffer)
+    }
     diagnostics.appendForLine(buffer.line(), diagnosticText)
 
     val background : Color = rgb(17, 19, 27)
@@ -1538,7 +1543,7 @@ maximumLines : usize
         )
     }
 
-    if buffer.line() >= firstLine &&
+    if tabs.size() > usize(0) && buffer.line() >= firstLine &&
     buffer.line() < firstLine + maximumLines {
         val activeRow : int = truncatingCast[int](buffer.line() - firstLine)
         drawRectangle(
@@ -1611,7 +1616,8 @@ maximumLines : usize
     glyphAdvance,
     lineAdvance
     )
-    val cursorLineVisible : bool = buffer.line() >= firstLine &&
+    val cursorLineVisible : bool = tabs.size() > usize(0) &&
+    buffer.line() >= firstLine &&
     buffer.line() < firstLine + maximumLines
     val visibleColumns : usize = visibleEditorColumns(glyphAdvance)
     val cursorVisible : bool = cursorLineVisible &&

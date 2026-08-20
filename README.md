@@ -119,8 +119,9 @@ janus run -- /chemin/vers/un-fichier.janus
 janus run -- /chemin/vers/un-dossier
 ```
 
-Le chemin par défaut est `samples/welcome.janus`. Lorsqu'un dossier est passé
-en argument, il devient la racine de l'explorateur et l'éditeur démarre vide.
+Sans fichier en argument, Janus Studio démarre sans onglet ouvert. Lorsqu'un
+dossier est passé en argument, il devient la racine de l'explorateur. Un chemin
+de fichier ouvre directement ce document dans un onglet.
 
 ## Raccourcis
 

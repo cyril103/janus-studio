@@ -79,7 +79,12 @@ def main() : int {
     val controller : VimController = vimController()
     defer delete controller
 
-    loadFile(activePath.view(), buffer, status)
+    if activePath.view() == "" {
+        buffer.clear()
+        setStatus(status, "Aucun fichier ouvert.")
+    } else {
+        loadFile(activePath.view(), buffer, status)
+    }
     val tabs : DocumentTabs = documentTabs(activePath.view(), buffer)
     defer delete tabs
     toolOutput.append("F5 lance `janus check` sur le fichier actif.")
@@ -564,7 +569,8 @@ def main() : int {
                 }
                 fileInputConsumed = true
             }
-        } else if !layoutMouseConsumed && !filePrompt.isVisible() && leftMousePressed &&
+        } else if !layoutMouseConsumed && !filePrompt.isVisible() &&
+        tabs.size() > usize(0) && leftMousePressed &&
         pointInArea(
         editorLeft,
         editorTop,
@@ -683,7 +689,8 @@ def main() : int {
                 }
             }
             fileInputConsumed = true
-        } else if !fileInputConsumed && control && shift &&
+        } else if !fileInputConsumed && tabs.size() > usize(0) &&
+        control && shift &&
         isKeyPressed(Key.S) {
             filePrompt.begin(PathPromptAction.SaveAs, activePath.view())
             completion.dismiss()
@@ -696,7 +703,8 @@ def main() : int {
             filePrompt.begin(PathPromptAction.Create, "")
             completion.dismiss()
             fileInputConsumed = true
-        } else if !fileInputConsumed && control && isKeyPressed(Key.W) {
+        } else if !fileInputConsumed && tabs.size() > usize(0) &&
+        control && isKeyPressed(Key.W) {
             val closed : bool = tabs.close(
             tabs.selected(),
             buffer,
@@ -719,7 +727,8 @@ def main() : int {
                 )
             }
             fileInputConsumed = true
-        } else if !fileInputConsumed && control && isKeyPressed(Key.Tab) {
+        } else if !fileInputConsumed && tabs.size() > usize(0) &&
+        control && isKeyPressed(Key.Tab) {
             val nextTab : usize = if shift {
                 if tabs.selected() == usize(0) {
                     tabs.size() - usize(1)
@@ -751,20 +760,23 @@ def main() : int {
             fileInputConsumed = true
         }
 
-        if !fileInputConsumed && control && isKeyPressed(Key.C) &&
+        if !fileInputConsumed && tabs.size() > usize(0) &&
+        control && isKeyPressed(Key.C) &&
         buffer.appendSelection(clipboard) {
             setClipboardText(clipboard.view())
             setStatus(status, "Sélection copiée.")
             fileInputConsumed = true
         }
-        if !fileInputConsumed && control && isKeyPressed(Key.X) &&
+        if !fileInputConsumed && tabs.size() > usize(0) &&
+        control && isKeyPressed(Key.X) &&
         buffer.appendSelection(clipboard) {
             setClipboardText(clipboard.view())
             buffer.deleteSelection()
             setStatus(status, "Sélection coupée.")
             fileInputConsumed = true
         }
-        if !fileInputConsumed && control && isKeyPressed(Key.V) &&
+        if !fileInputConsumed && tabs.size() > usize(0) &&
+        control && isKeyPressed(Key.V) &&
         controller.mode() == EditorMode.Insert {
             val systemClipboard : string = clipboardText()
             if systemClipboard != "" {
@@ -776,11 +788,13 @@ def main() : int {
             fileInputConsumed = true
         }
 
-        if !fileInputConsumed && control && isKeyPressed(Key.S) {
+        if !fileInputConsumed && tabs.size() > usize(0) &&
+        control && isKeyPressed(Key.S) {
             saveFile(activePath.view(), buffer, status)
             fileInputConsumed = true
         }
-        if !fileInputConsumed && isKeyPressed(Key.F5) {
+        if !fileInputConsumed && tabs.size() > usize(0) &&
+        isKeyPressed(Key.F5) {
             if saveFile(activePath.view(), buffer, status) {
                 checkFileWithDiagnostics(
                 activePath.view(),
@@ -794,7 +808,7 @@ def main() : int {
         }
 
         val completionConsumed : bool =
-        if fileInputConsumed {
+        if fileInputConsumed || tabs.size() == usize(0) {
             true
         } else {
             handleCompletionKeys(completion, buffer, pendingSignature)

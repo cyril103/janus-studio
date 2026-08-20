@@ -4,6 +4,33 @@ import std.testing
 import std.text
 
 /// @test
+def startsAndReturnsToNoOpenDocument() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val tabs : DocumentTabs = documentTabs("", buffer)
+    defer delete tabs
+    val path : TextBuilder = new TextBuilder()
+    defer delete path
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+
+    assertEqual[usize](tabs.size(), usize(0))
+    tabs.create("nouveau.janus", buffer, path, usize(0), usize(0))
+    assertEqual[usize](tabs.size(), usize(1))
+    assertEqual[string](path.view(), "nouveau.janus")
+    assertTrue(tabs.close(
+    usize(0),
+    buffer,
+    path,
+    status,
+    usize(0),
+    usize(0)
+    ))
+    assertEqual[usize](tabs.size(), usize(0))
+    assertEqual[string](path.view(), "")
+}
+
+/// @test
 def restoresIndependentDocuments() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
