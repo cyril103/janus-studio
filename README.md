@@ -55,6 +55,15 @@ janus test
 janus build
 ```
 
+## Organisation du code
+
+- `src/main.janus` initialise la session et orchestre la boucle de l'application ;
+- `src/studio/files.janus` gère les documents et le dossier de projet ;
+- `src/studio/input.janus` traduit les entrées en actions d'édition ;
+- `src/studio/view.janus` contient la géométrie, le défilement et le rendu ;
+- `src/editor/` regroupe les modèles d'édition indépendants de l'interface ;
+- `src/tooling/` contient les intégrations avec le compilateur et le LSP.
+
 ## Lancer
 
 Depuis ce répertoire :

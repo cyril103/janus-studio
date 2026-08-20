@@ -1,0 +1,996 @@
+/// Géométrie, navigation visuelle et rendu de Janus Studio.
+module studio.view
+
+import editor.buffer
+import editor.completion
+import editor.explorer
+import editor.path_prompt
+import editor.search
+import editor.syntax
+import editor.vim
+import tooling.diagnostics
+import std.array
+import std.graphics
+import std.text
+
+var editorLeft : int = 236
+const editorTop : int = 54
+var editorBottom : int = 590
+const codeFontSize : float = 20.0f
+const codeFontSpacing : float = 1.0f
+const statusBarHeight : int = 28
+const commandLineHeight : int = 28
+const explorerTreeTop : int = 104
+const explorerRowHeight : int = 22
+const explorerIndentWidth : int = 14
+const doubleClickDelayMilliseconds : usize = usize(500)
+const fileMenuX : int = 188
+const fileMenuWidth : int = 250
+const fileMenuButtonWidth : int = 86
+const fileMenuTop : int = 46
+const fileMenuRowHeight : int = 36
+const separatorHitWidth : int = 5
+const minimumExplorerWidth : int = 150
+const minimumEditorWidth : int = 360
+const minimumEditorHeight : int = 180
+const minimumOutputHeight : int = 80
+const editorGutterWidth : int = 56
+
+def editorCodeLeft() : int {
+    return editorLeft + editorGutterWidth
+}
+
+enum PaneResize derives Copy, Equality, Debug {
+    None,
+    Explorer,
+    Output
+}
+
+def pathPromptTitle(action : PathPromptAction) : string {
+    return match action {
+        Open => "OUVRIR UN FICHIER",
+        OpenFolder => "OUVRIR UN DOSSIER",
+        Create => "NOUVEAU FICHIER",
+        SaveAs => "ENREGISTRER SOUS",
+        None => "FICHIER"
+    }
+}
+
+def pointInArea(x : int, y : int, width : int, height : int) : bool {
+    return mouseX() >= x && mouseX() < x + width &&
+    mouseY() >= y && mouseY() < y + height
+}
+
+def distance(left : int, right : int) : int {
+    return if left >= right { left - right } else { right - left }
+}
+
+def explorerSeparatorHovered() : bool {
+    return distance(mouseX(), editorLeft - 12) <= separatorHitWidth &&
+    mouseY() >= editorTop &&
+    mouseY() < screenHeight() - statusBarHeight - commandLineHeight
+}
+
+def outputSeparatorHovered() : bool {
+    return distance(mouseY(), editorBottom) <= separatorHitWidth &&
+    mouseX() >= editorLeft - 12 && mouseX() < screenWidth()
+}
+
+def resizeExplorerToMouse() : Unit {
+    val requested : int = mouseX() + 12
+    val maximum : int = screenWidth() - minimumEditorWidth
+    if requested < minimumExplorerWidth + 12 {
+        editorLeft = minimumExplorerWidth + 12
+    } else if requested > maximum {
+        editorLeft = maximum
+    } else {
+        editorLeft = requested
+    }
+}
+
+def resizeOutputToMouse() : Unit {
+    val requested : int = mouseY()
+    val maximum : int = screenHeight() - statusBarHeight -
+    commandLineHeight - minimumOutputHeight
+    if requested < editorTop + minimumEditorHeight {
+        editorBottom = editorTop + minimumEditorHeight
+    } else if requested > maximum {
+        editorBottom = maximum
+    } else {
+        editorBottom = requested
+    }
+}
+
+def keepCursorVisible(
+buffer : EditorBuffer,
+firstLine : usize,
+maximumLines : usize
+) : usize {
+    val cursorLine : usize = buffer.line()
+    if cursorLine < firstLine {
+        return cursorLine
+    }
+    if cursorLine >= firstLine + maximumLines {
+        return cursorLine - maximumLines + usize(1)
+    }
+    return firstLine
+}
+
+def maximumEditorFirst(
+buffer : EditorBuffer,
+maximumLines : usize
+) : usize {
+    return if buffer.lineCount() > maximumLines {
+        buffer.lineCount() - maximumLines
+    } else {
+        usize(0)
+    }
+}
+
+def scrollEditor(
+buffer : EditorBuffer,
+first : usize,
+maximumLines : usize
+) : usize {
+    if mouseX() < editorLeft - 12 || mouseX() >= screenWidth() ||
+    mouseY() < editorTop || mouseY() >= editorBottom {
+        return first
+    }
+    val movement : float = mouseWheelMove()
+    if movement > 0.0f {
+        return if first > usize(2) { first - usize(3) } else { usize(0) }
+    }
+    if movement < 0.0f {
+        val maximum : usize = maximumEditorFirst(buffer, maximumLines)
+        val requested : usize = first + usize(3)
+        return if requested < maximum { requested } else { maximum }
+    }
+    return first
+}
+
+def moveCursorToEditorMouse(
+buffer : EditorBuffer,
+firstLine : usize,
+glyphAdvance : float,
+lineAdvance : float,
+maximumLines : usize
+) : Unit {
+    val relativeY : int = mouseY() - editorTop - 12
+    var row : usize = if relativeY > 0 {
+        numericCast[usize](truncatingCast[int](
+        numericCast[float](relativeY) / lineAdvance
+        ))
+    } else {
+        usize(0)
+    }
+    if maximumLines > usize(0) && row >= maximumLines {
+        row = maximumLines - usize(1)
+    }
+    val relativeX : int = mouseX() - editorCodeLeft()
+    val column : usize = if relativeX > 0 {
+        numericCast[usize](truncatingCast[int](
+        (numericCast[float](relativeX) + glyphAdvance * 0.5f) /
+        glyphAdvance
+        ))
+    } else {
+        usize(0)
+    }
+    buffer.moveTo(firstLine + row, column)
+}
+
+def explorerVisibleRows() : usize {
+    val available : int = screenHeight() - statusBarHeight -
+    commandLineHeight - explorerTreeTop
+    if available <= 0 {
+        return usize(0)
+    }
+    return numericCast[usize](available / explorerRowHeight)
+}
+
+def maximumExplorerFirst(
+explorer : ProjectExplorer,
+visibleRows : usize
+) : usize {
+    return if explorer.size() > visibleRows {
+        explorer.size() - visibleRows
+    } else {
+        usize(0)
+    }
+}
+
+def scrollExplorer(
+explorer : ProjectExplorer,
+first : usize,
+visibleRows : usize
+) : usize {
+    if mouseX() >= editorLeft - 12 || mouseY() < explorerTreeTop ||
+    mouseY() >= explorerTreeTop +
+    truncatingCast[int](visibleRows) * explorerRowHeight {
+        return first
+    }
+    val movement : float = mouseWheelMove()
+    if movement > 0.0f {
+        return if first > usize(2) { first - usize(3) } else { usize(0) }
+    }
+    if movement < 0.0f {
+        val maximum : usize = maximumExplorerFirst(explorer, visibleRows)
+        val requested : usize = first + usize(3)
+        return if requested < maximum { requested } else { maximum }
+    }
+    return first
+}
+
+def explorerEntryAtMouse(
+explorer : ProjectExplorer,
+first : usize,
+visibleRows : usize
+) : usize {
+    if mouseX() < 0 || mouseX() >= editorLeft - 12 ||
+    mouseY() < explorerTreeTop ||
+    mouseY() >= explorerTreeTop +
+    truncatingCast[int](visibleRows) * explorerRowHeight {
+        return usize(-1)
+    }
+    val row : usize = numericCast[usize](
+    (mouseY() - explorerTreeTop) / explorerRowHeight
+    )
+    val index : usize = first + row
+    return if index < explorer.size() { index } else { usize(-1) }
+}
+
+def buildStatusLine(
+output : TextBuilder,
+path : string,
+buffer : EditorBuffer
+) : Unit {
+    output.clear()
+    output.append(path)
+    output.append(if buffer.isModified() { "  • modifié" } else { "  • enregistré" })
+    output.append("    ligne ")
+    output.appendUSize(buffer.line() + usize(1))
+    output.append(", colonne ")
+    output.appendUSize(buffer.column() + usize(1))
+}
+
+def drawUiText(
+font : Font,
+text : string,
+x : int,
+y : int,
+size : float,
+color : Color
+) : Unit {
+    font.draw(
+    text,
+    vector2(numericCast[float](x), numericCast[float](y)),
+    size,
+    0.25f,
+    color
+    )
+}
+
+def drawCodeText(
+font : Font,
+text : string,
+x : int,
+y : int,
+size : float,
+color : Color
+) : Unit {
+    font.draw(
+    text,
+    vector2(numericCast[float](x), numericCast[float](y)),
+    size,
+    codeFontSpacing,
+    color
+    )
+}
+
+def syntaxColor(kind : SyntaxKind) : Color {
+    if kind == SyntaxKind.Keyword {
+        return rgb(198, 120, 221)
+    }
+    if kind == SyntaxKind.Type {
+        return rgb(97, 175, 239)
+    }
+    if kind == SyntaxKind.String {
+        return rgb(152, 195, 121)
+    }
+    if kind == SyntaxKind.Character {
+        return rgb(86, 182, 194)
+    }
+    if kind == SyntaxKind.Number {
+        return rgb(209, 154, 102)
+    }
+    if kind == SyntaxKind.Comment {
+        return rgb(92, 110, 124)
+    }
+    if kind == SyntaxKind.Operator {
+        return rgb(229, 192, 123)
+    }
+    return rgb(220, 223, 228)
+}
+
+def modeColor(mode : EditorMode) : Color {
+    if mode == EditorMode.Insert {
+        return rgb(82, 183, 136)
+    }
+    if mode == EditorMode.Command || mode == EditorMode.Search {
+        return rgb(229, 192, 123)
+    }
+    return rgb(97, 175, 239)
+}
+
+def drawHighlightedCode(
+font : Font,
+characters : Array[char],
+spans : Array[SyntaxSpan],
+glyph : TextBuilder,
+x : int,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    var line : usize = usize(0)
+    var column : usize = usize(0)
+    var spanIndex : usize = usize(0)
+    while spanIndex < spans.size() {
+        val span : SyntaxSpan = spans.get(spanIndex)
+        val color : Color = syntaxColor(span.kind)
+        var index : usize = span.start
+        val end : usize = span.start + span.length
+        while index < end {
+            val value : char = characters.get(index)
+            if value == '\n' {
+                line = line + usize(1)
+                column = usize(0)
+            } else {
+                if value != ' ' && value != '\t' && value != '\r' {
+                    glyph.clear()
+                    glyph.appendChar(value)
+                    drawCodeText(
+                    font,
+                    glyph.view(),
+                    x + truncatingCast[int](
+                    numericCast[float](truncatingCast[int](column)) * glyphAdvance
+                    ),
+                    y + truncatingCast[int](
+                    numericCast[float](truncatingCast[int](line)) * lineAdvance
+                    ),
+                    codeFontSize,
+                    color
+                    )
+                }
+                column = column + usize(1)
+            }
+            index = index + usize(1)
+        }
+        spanIndex = spanIndex + usize(1)
+    }
+}
+
+def drawLineNumbers(
+font : Font,
+label : TextBuilder,
+firstLine : usize,
+maximumLines : usize,
+lineCount : usize,
+y : int,
+lineAdvance : float,
+color : Color
+) : Unit {
+    var row : usize = usize(0)
+    while row < maximumLines && firstLine + row < lineCount {
+        label.clear()
+        label.appendUSize(firstLine + row + usize(1))
+        drawCodeText(
+        font,
+        label.view(),
+        editorCodeLeft() - 48,
+        y + truncatingCast[int](
+        numericCast[float](truncatingCast[int](row)) * lineAdvance
+        ),
+        14.0f,
+        color
+        )
+        row = row + usize(1)
+    }
+}
+
+def drawEditorDiagnostics(
+diagnostics : EditorDiagnostics,
+firstLine : usize,
+maximumLines : usize,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    var index : usize = usize(0)
+    while index < diagnostics.size() {
+        val line : usize = diagnostics.line(index)
+        if line >= firstLine && line < firstLine + maximumLines {
+            val row : usize = line - firstLine
+            val diagnosticY : int = y + truncatingCast[int](
+            numericCast[float](truncatingCast[int](row)) * lineAdvance
+            )
+            val color : Color = if diagnostics.isError(index) {
+                rgb(224, 108, 117)
+            } else {
+                rgb(229, 192, 123)
+            }
+            drawRectangle(editorCodeLeft() - 12, diagnosticY + 7, 5, 12, color)
+            drawRectangle(
+            editorCodeLeft() + truncatingCast[int](
+            numericCast[float](truncatingCast[int](diagnostics.column(index))) *
+            glyphAdvance
+            ),
+            diagnosticY + 21,
+            truncatingCast[int](glyphAdvance),
+            2,
+            color
+            )
+        }
+        index = index + usize(1)
+    }
+}
+
+def drawSearchMatches(
+search : SearchModel,
+buffer : EditorBuffer,
+firstLine : usize,
+maximumLines : usize,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    var index : usize = usize(0)
+    while index < search.size() {
+        val line : usize = buffer.lineAtOffset(search.offset(index))
+        if line >= firstLine && line < firstLine + maximumLines {
+            val column : usize = buffer.columnAtOffset(search.offset(index))
+            val row : usize = line - firstLine
+            drawRectangle(
+            editorCodeLeft() + truncatingCast[int](
+            numericCast[float](truncatingCast[int](column)) * glyphAdvance
+            ),
+            y + truncatingCast[int](
+            numericCast[float](truncatingCast[int](row)) * lineAdvance
+            ),
+            truncatingCast[int](
+            numericCast[float](truncatingCast[int](search.length())) *
+            glyphAdvance
+            ),
+            23,
+            if index == search.selected() {
+                rgb(92, 112, 71)
+            } else {
+                rgb(54, 72, 65)
+            }
+            )
+        }
+        index = index + usize(1)
+    }
+}
+
+def drawSelection(
+buffer : EditorBuffer,
+firstLine : usize,
+maximumLines : usize,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    if !buffer.hasSelection() { return }
+    val startLine : usize = buffer.lineAtOffset(buffer.selectionStart())
+    val endLine : usize = buffer.lineAtOffset(buffer.selectionEnd())
+    val startColumn : usize = buffer.columnAtOffset(buffer.selectionStart())
+    val endColumn : usize = buffer.columnAtOffset(buffer.selectionEnd())
+    var line : usize = startLine
+    while line <= endLine {
+        if line >= firstLine && line < firstLine + maximumLines {
+            val firstColumn : usize = if line == startLine {
+                startColumn
+            } else {
+                usize(0)
+            }
+            val lastColumn : usize = if line == endLine {
+                endColumn
+            } else {
+                buffer.lineLength(line)
+            }
+            if lastColumn > firstColumn {
+                drawRectangle(
+                editorCodeLeft() + truncatingCast[int](
+                numericCast[float](truncatingCast[int](firstColumn)) *
+                glyphAdvance
+                ),
+                y + truncatingCast[int](
+                numericCast[float](truncatingCast[int](line - firstLine)) *
+                lineAdvance
+                ),
+                truncatingCast[int](
+                numericCast[float](truncatingCast[int](
+                lastColumn - firstColumn
+                )) * glyphAdvance
+                ),
+                23,
+                rgb(55, 79, 105)
+                )
+            }
+        }
+        line = line + usize(1)
+    }
+}
+
+def drawExplorer(
+explorer : ProjectExplorer,
+firstEntry : usize,
+visibleRows : usize,
+label : TextBuilder,
+font : Font,
+muted : Color
+) : Unit {
+    var index : usize = firstEntry
+    var row : usize = usize(0)
+    while index < explorer.size() && row < visibleRows {
+        val y : int = explorerTreeTop +
+        truncatingCast[int](row) * explorerRowHeight
+        if explorer.selected() == index {
+            drawRectangle(
+            0,
+            y - 1,
+            editorLeft - 12,
+            explorerRowHeight,
+            rgb(46, 59, 75)
+            )
+        }
+        val x : int = 12 + truncatingCast[int](explorer.depth(index)) *
+        explorerIndentWidth
+        if explorer.isDirectory(index) {
+            drawUiText(
+            font,
+            if explorer.isExpanded(index) { "v" } else { ">" },
+            x,
+            y + 2,
+            14.0f,
+            White
+            )
+        } else {
+            drawUiText(font, "-", x, y + 2, 14.0f, muted)
+        }
+        explorer.appendLabel(index, label)
+        drawUiText(
+        font,
+        label.view(),
+        x + 16,
+        y + 2,
+        14.0f,
+        if explorer.isDirectory(index) { White } else { muted }
+        )
+        index = index + usize(1)
+        row = row + usize(1)
+    }
+}
+
+def drawStudio(
+path : string,
+buffer : EditorBuffer,
+firstLine : usize,
+visibleCharacters : Array[char],
+syntaxSpans : Array[SyntaxSpan],
+glyph : TextBuilder,
+diagnostics : EditorDiagnostics,
+diagnosticText : TextBuilder,
+search : SearchModel,
+completion : CompletionModel,
+completionText : TextBuilder,
+signatureText : TextBuilder,
+pathPrompt : PathPrompt,
+statusLine : TextBuilder,
+status : TextBuilder,
+toolOutput : TextBuilder,
+modeLine : TextBuilder,
+commandLine : TextBuilder,
+explorer : ProjectExplorer,
+firstExplorerEntry : usize,
+visibleExplorerRows : usize,
+explorerLabel : TextBuilder,
+fileMenuOpen : bool,
+mode : EditorMode,
+uiFont : Font,
+codeFont : Font,
+glyphAdvance : float,
+lineAdvance : float,
+maximumLines : usize
+) : Unit {
+    buffer.appendVisibleCharacters(visibleCharacters, firstLine, maximumLines)
+    highlight(visibleCharacters, syntaxSpans)
+    buildStatusLine(statusLine, path, buffer)
+    diagnostics.appendForLine(buffer.line(), diagnosticText)
+
+    val background : Color = rgb(18, 24, 33)
+    val sidebar : Color = rgb(25, 34, 46)
+    val header : Color = rgb(31, 43, 57)
+    val panel : Color = rgb(13, 18, 25)
+    val accent : Color = rgb(82, 183, 136)
+    val muted : Color = rgb(151, 166, 181)
+    val bottomStatusY : int = screenHeight() - statusBarHeight - commandLineHeight
+    val commandLineY : int = screenHeight() - commandLineHeight
+
+    beginDrawing()
+    clearBackground(background)
+    drawRectangle(0, 0, screenWidth(), editorTop, header)
+    drawRectangle(0, editorTop, editorLeft - 12, screenHeight() - editorTop, sidebar)
+    drawRectangle(editorLeft - 12, editorBottom, screenWidth() - editorLeft + 12, screenHeight() - editorBottom, panel)
+    drawRectangle(
+    editorLeft - 14,
+    editorTop,
+    4,
+    screenHeight() - editorTop - statusBarHeight - commandLineHeight,
+    if explorerSeparatorHovered() { accent } else { header }
+    )
+    drawRectangle(
+    editorLeft - 12,
+    editorBottom - 2,
+    screenWidth() - editorLeft + 12,
+    4,
+    if outputSeparatorHovered() { accent } else { header }
+    )
+
+    drawUiText(uiFont, "JANUS STUDIO", 18, 13, 23.0f, accent)
+    if fileMenuOpen {
+        drawRectangle(fileMenuX, 0, fileMenuButtonWidth, editorTop, rgb(46, 59, 75))
+    }
+    drawUiText(uiFont, "FICHIER", fileMenuX + 10, 18, 14.0f, White)
+
+    drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
+    drawExplorer(
+    explorer,
+    firstExplorerEntry,
+    visibleExplorerRows,
+    explorerLabel,
+    uiFont,
+    muted
+    )
+
+    drawLineNumbers(
+    codeFont,
+    glyph,
+    firstLine,
+    maximumLines,
+    buffer.lineCount(),
+    editorTop + 12,
+    lineAdvance,
+    muted
+    )
+
+    drawSelection(
+    buffer,
+    firstLine,
+    maximumLines,
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
+    )
+
+    drawSearchMatches(
+    search,
+    buffer,
+    firstLine,
+    maximumLines,
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
+    )
+
+    drawHighlightedCode(
+    codeFont,
+    visibleCharacters,
+    syntaxSpans,
+    glyph,
+    editorCodeLeft(),
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
+    )
+    drawEditorDiagnostics(
+    diagnostics,
+    firstLine,
+    maximumLines,
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
+    )
+    val cursorVisible : bool = buffer.line() >= firstLine &&
+    buffer.line() < firstLine + maximumLines
+    var cursorX : int = editorCodeLeft()
+    var cursorY : int = editorTop + 12
+    if cursorVisible {
+        val cursorColumn : float = numericCast[float](
+        truncatingCast[int](buffer.column())
+        )
+        val cursorLine : float = numericCast[float](
+        truncatingCast[int](buffer.line() - firstLine)
+        )
+        cursorX = editorCodeLeft() +
+        truncatingCast[int](cursorColumn * glyphAdvance)
+        cursorY = editorTop + 12 +
+        truncatingCast[int](cursorLine * lineAdvance)
+        val cursorWidth : int = if mode == EditorMode.Insert {
+            2
+        } else {
+            truncatingCast[int](glyphAdvance)
+        }
+        drawRectangle(cursorX, cursorY, cursorWidth, 23, accent)
+    }
+
+    if buffer.lineCount() > maximumLines {
+        val trackHeight : int = editorBottom - editorTop
+        val lineCount : int = truncatingCast[int](buffer.lineCount())
+        var thumbHeight : int = trackHeight *
+        truncatingCast[int](maximumLines) / lineCount
+        if thumbHeight < 28 {
+            thumbHeight = 28
+        }
+        val maximumFirst : int = truncatingCast[int](
+        maximumEditorFirst(buffer, maximumLines)
+        )
+        val thumbY : int = editorTop +
+        (trackHeight - thumbHeight) * truncatingCast[int](firstLine) /
+        maximumFirst
+        drawRectangle(screenWidth() - 8, editorTop, 8, trackHeight, panel)
+        drawRectangle(screenWidth() - 7, thumbY, 6, thumbHeight, muted)
+    }
+
+    if completion.isVisible() && cursorVisible {
+        val shown : usize = if completion.size() < usize(8) {
+            completion.size()
+        } else {
+            usize(8)
+        }
+        val popupHeight : int = truncatingCast[int](shown) * 24 + 10
+        val requestedX : int = cursorX
+        val availablePopupWidth : int = screenWidth() - editorCodeLeft() - 16
+        val popupWidth : int = if availablePopupWidth < 620 {
+            availablePopupWidth
+        } else {
+            620
+        }
+        val fittedPopupX : int = if requestedX + popupWidth + 10 < screenWidth() {
+            requestedX
+        } else {
+            screenWidth() - popupWidth - 10
+        }
+        val popupX : int = if fittedPopupX < editorCodeLeft() {
+            editorCodeLeft()
+        } else { fittedPopupX }
+        val popupY : int = if cursorY + 27 + popupHeight < editorBottom {
+            cursorY + 27
+        } else {
+            cursorY - popupHeight
+        }
+        drawRectangle(
+        popupX,
+        popupY,
+        popupWidth,
+        popupHeight,
+        rgb(31, 43, 57)
+        )
+        completion.appendVisible(completionText, usize(8))
+        drawCodeText(
+        codeFont,
+        completionText.view(),
+        popupX + 8,
+        popupY + 5,
+        17.0f,
+        rgb(220, 223, 228)
+        )
+    }
+
+    if signatureText.size() > usize(0) && cursorVisible {
+        val availableSignatureWidth : int =
+        screenWidth() - editorCodeLeft() - 16
+        val signatureWidth : int = if availableSignatureWidth < 620 {
+            availableSignatureWidth
+        } else {
+            620
+        }
+        val fittedSignatureX : int =
+        if cursorX + signatureWidth + 10 < screenWidth() {
+            cursorX
+        } else {
+            screenWidth() - signatureWidth - 10
+        }
+        val signatureX : int = if fittedSignatureX < editorCodeLeft() {
+            editorCodeLeft()
+        } else { fittedSignatureX }
+        val signatureY : int = if cursorY - 38 >= editorTop {
+            cursorY - 38
+        } else {
+            cursorY + 27
+        }
+        drawRectangle(
+        signatureX,
+        signatureY,
+        signatureWidth,
+        32,
+        rgb(31, 43, 57)
+        )
+        drawCodeText(
+        codeFont,
+        signatureText.view(),
+        signatureX + 8,
+        signatureY + 5,
+        17.0f,
+        rgb(220, 223, 228)
+        )
+    }
+
+    if fileMenuOpen {
+        drawRectangle(
+        fileMenuX,
+        fileMenuTop,
+        fileMenuWidth,
+        fileMenuRowHeight * 2 + 8,
+        rgb(31, 43, 57)
+        )
+        if pointInArea(fileMenuX, fileMenuTop, fileMenuWidth, fileMenuRowHeight) {
+            drawRectangle(
+            fileMenuX,
+            fileMenuTop,
+            fileMenuWidth,
+            fileMenuRowHeight,
+            rgb(46, 59, 75)
+            )
+        }
+        if pointInArea(
+        fileMenuX,
+        fileMenuTop + fileMenuRowHeight,
+        fileMenuWidth,
+        fileMenuRowHeight
+        ) {
+            drawRectangle(
+            fileMenuX,
+            fileMenuTop + fileMenuRowHeight,
+            fileMenuWidth,
+            fileMenuRowHeight,
+            rgb(46, 59, 75)
+            )
+        }
+        drawUiText(
+        uiFont,
+        "Ouvrir un dossier...",
+        fileMenuX + 14,
+        fileMenuTop + 9,
+        15.0f,
+        White
+        )
+        drawUiText(
+        uiFont,
+        "Fermer le dossier",
+        fileMenuX + 14,
+        fileMenuTop + fileMenuRowHeight + 9,
+        15.0f,
+        if explorer.size() > usize(0) { White } else { muted }
+        )
+    }
+
+    if pathPrompt.isVisible() {
+        val dialogX : int = (screenWidth() - 720) / 2
+        val dialogY : int = 230
+        val dialogWidth : int = 720
+        drawRectangle(dialogX, dialogY, dialogWidth, 154, rgb(31, 43, 57))
+        drawUiText(
+        uiFont,
+        pathPromptTitle(pathPrompt.action()),
+        dialogX + 20,
+        dialogY + 18,
+        18.0f,
+        accent
+        )
+        drawRectangle(
+        dialogX + 20,
+        dialogY + 55,
+        dialogWidth - 40,
+        42,
+        rgb(18, 24, 33)
+        )
+        drawCodeText(
+        codeFont,
+        pathPrompt.value(),
+        dialogX + 30,
+        dialogY + 64,
+        17.0f,
+        White
+        )
+        val promptGlyph : Vector2 = codeFont.measure(
+        "M",
+        17.0f,
+        codeFontSpacing
+        )
+        val promptAdvance : float = codeFont.measure(
+        "MM",
+        17.0f,
+        codeFontSpacing
+        ).x - promptGlyph.x
+        drawRectangle(
+        dialogX + 30 + truncatingCast[int](
+        numericCast[float](truncatingCast[int](pathPrompt.cursor())) *
+        promptAdvance
+        ),
+        dialogY + 63,
+        2,
+        22,
+        accent
+        )
+        drawUiText(
+        uiFont,
+        "Tab : compléter    Entrée : valider    Esc : annuler",
+        dialogX + 20,
+        dialogY + 116,
+        15.0f,
+        muted
+        )
+    }
+
+    drawUiText(
+    uiFont,
+    "SORTIE JANUS",
+    editorLeft,
+    editorBottom + 16,
+    15.0f,
+    accent
+    )
+    drawCodeText(
+    codeFont,
+    toolOutput.view(),
+    editorLeft,
+    editorBottom + 42,
+    15.0f,
+    muted
+    )
+
+    drawRectangle(0, bottomStatusY, screenWidth(), statusBarHeight, header)
+    drawRectangle(
+    0,
+    bottomStatusY,
+    editorLeft - 12,
+    statusBarHeight,
+    modeColor(mode)
+    )
+    drawUiText(uiFont, modeLine.view(), 14, bottomStatusY + 5, 15.0f, background)
+    drawUiText(
+    uiFont,
+    statusLine.view(),
+    editorLeft,
+    bottomStatusY + 5,
+    15.0f,
+    White
+    )
+    drawRectangle(0, commandLineY, screenWidth(), commandLineHeight, panel)
+    if mode == EditorMode.Command || mode == EditorMode.Search {
+        drawCodeText(
+        codeFont,
+        commandLine.view(),
+        12,
+        commandLineY + 3,
+        17.0f,
+        White
+        )
+    } else {
+        drawUiText(
+        uiFont,
+        if diagnosticText.size() > usize(0) {
+            diagnosticText.view()
+        } else {
+            status.view()
+        },
+        12,
+        commandLineY + 5,
+        15.0f,
+        muted
+        )
+    }
+    endDrawing()
+}
+

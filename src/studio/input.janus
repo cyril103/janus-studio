@@ -1,0 +1,282 @@
+/// Traduction des entrées utilisateur en actions d'édition.
+module studio.input
+
+import editor.buffer
+import editor.completion
+import editor.path_prompt
+import editor.vim
+import studio.files
+import tooling.lsp
+import std.graphics
+import std.text
+
+def controlDown() : bool {
+    return isKeyDown(Key.LeftControl) || isKeyDown(Key.RightControl)
+}
+
+def shiftDown() : bool {
+    return isKeyDown(Key.LeftShift) || isKeyDown(Key.RightShift)
+}
+
+def handlePathPromptKeys(prompt : PathPrompt) : bool {
+    if isKeyPressed(Key.Escape) {
+        prompt.dismiss()
+        return false
+    }
+    if isKeyPressed(Key.Backspace) {
+        prompt.backspace()
+    }
+    if isKeyPressed(Key.Delete) {
+        prompt.deleteForward()
+    }
+    if isKeyPressed(Key.Left) {
+        prompt.moveLeft()
+    }
+    if isKeyPressed(Key.Right) {
+        prompt.moveRight()
+    }
+    if isKeyPressed(Key.Home) {
+        prompt.moveHome()
+    }
+    if isKeyPressed(Key.End) {
+        prompt.moveEnd()
+    }
+    if isKeyPressed(Key.Tab) {
+        prompt.completePath()
+    }
+    if isKeyPressed(Key.Enter) {
+        return true
+    }
+    var codepoint : int = characterPressed()
+    while codepoint != 0 {
+        if !controlDown() && codepoint >= 32 && codepoint != 127 {
+            prompt.append(char(codepoint))
+        }
+        codepoint = characterPressed()
+    }
+    return false
+}
+
+def handleModeKeys(
+controller : VimController,
+buffer : EditorBuffer
+) : EditorAction {
+    if isKeyPressed(Key.Escape) {
+        controller.escape()
+        buffer.clearSelection()
+        return EditorAction.None
+    }
+    if controller.mode() == EditorMode.Command ||
+    controller.mode() == EditorMode.Search {
+        if isKeyPressed(Key.Backspace) {
+            controller.commandBackspace()
+        }
+        if isKeyPressed(Key.Enter) {
+            return if controller.mode() == EditorMode.Search {
+                controller.executeSearch()
+            } else {
+                controller.executeCommand()
+            }
+        }
+        return EditorAction.None
+    }
+    val extendingSelection : bool = shiftDown()
+    if isKeyPressed(Key.Left) || isKeyPressed(Key.Right) ||
+    isKeyPressed(Key.Up) || isKeyPressed(Key.Down) ||
+    isKeyPressed(Key.Home) || isKeyPressed(Key.End) {
+        if extendingSelection {
+            buffer.beginSelection()
+        } else {
+            buffer.clearSelection()
+        }
+    }
+    if isKeyPressed(Key.Left) {
+        buffer.moveLeft()
+    }
+    if isKeyPressed(Key.Right) {
+        buffer.moveRightInLine()
+    }
+    if isKeyPressed(Key.Up) {
+        buffer.moveUp()
+    }
+    if isKeyPressed(Key.Down) {
+        buffer.moveDown()
+    }
+    if isKeyPressed(Key.Home) {
+        buffer.moveHome()
+    }
+    if isKeyPressed(Key.End) {
+        buffer.moveEnd()
+    }
+    if controller.mode() == EditorMode.Normal {
+        if isKeyPressed(Key.Delete) {
+            buffer.deleteCharacter()
+        }
+        if controlDown() && isKeyPressed(Key.R) {
+            buffer.redo()
+        }
+        return EditorAction.None
+    }
+    if isKeyPressed(Key.Backspace) {
+        buffer.backspace()
+    }
+    if isKeyPressed(Key.Delete) {
+        buffer.deleteForward()
+    }
+    if isKeyPressed(Key.Enter) {
+        buffer.insertIndentedNewline()
+    }
+    if isKeyPressed(Key.Tab) {
+        buffer.insertSpaces(usize(4))
+    }
+    return EditorAction.None
+}
+
+def handlePrintableKeys(
+controller : VimController,
+buffer : EditorBuffer,
+completion : CompletionModel
+) : EditorAction {
+    val control : bool = controlDown()
+    var action : EditorAction = EditorAction.None
+    var codepoint : int = characterPressed()
+    while codepoint != 0 {
+        if !control && codepoint >= 32 && codepoint != 127 {
+            val value : char = char(codepoint)
+            val completionCharacter : bool =
+            (value >= 'a' && value <= 'z') ||
+            (value >= 'A' && value <= 'Z') ||
+            (value >= '0' && value <= '9') || value == '_'
+            if controller.mode() == EditorMode.Insert {
+                controller.handleInsert(value, buffer)
+                if value == '.' {
+                    action = EditorAction.Complete
+                } else if completion.isFiltering() && completionCharacter {
+                    completion.refine(value)
+                    action = EditorAction.None
+                } else if value == char(40) || value == char(44) {
+                    action = EditorAction.SignatureHelp
+                } else if value == char(41) {
+                    action = EditorAction.DismissSignatureHelp
+                } else {
+                    action = EditorAction.DismissCompletion
+                }
+            } else if controller.mode() == EditorMode.Command ||
+            controller.mode() == EditorMode.Search {
+                controller.handleCommand(value)
+            } else {
+                action = controller.handleNormal(value, buffer)
+            }
+        }
+        codepoint = characterPressed()
+    }
+    return action
+}
+
+def handleCompletionKeys(
+completion : CompletionModel,
+buffer : EditorBuffer,
+pendingSignature : TextBuilder
+) : bool {
+    if !completion.isVisible() {
+        return false
+    }
+    if isKeyPressed(Key.Escape) {
+        completion.dismiss()
+        return true
+    }
+    if isKeyPressed(Key.Down) {
+        completion.selectNext()
+        return true
+    }
+    if isKeyPressed(Key.Up) {
+        completion.selectPrevious()
+        return true
+    }
+    if isKeyPressed(Key.Enter) || isKeyPressed(Key.Tab) {
+        completion.appendDisplayItem(completion.selected(), pendingSignature)
+        completion.accept(buffer)
+        return true
+    }
+    return false
+}
+
+def refreshCompletion(
+lsp : LspClient,
+path : string,
+buffer : EditorBuffer,
+completion : CompletionModel,
+labels : TextBuilder,
+error : TextBuilder,
+status : TextBuilder
+) : Unit {
+    if lsp.requestCompletion(
+    path,
+    buffer,
+    buffer.line(),
+    buffer.column(),
+    labels,
+    error
+    ) {
+        completion.load(labels.view())
+        status.clear()
+        status.appendUSize(completion.size())
+        status.append(" propositions — flèches puis Entrée")
+    } else {
+        completion.dismiss()
+        setStatus(
+        status,
+        if error.size() > usize(0) {
+            error.view()
+        } else {
+            "Aucune proposition à cette position."
+        }
+        )
+    }
+}
+
+def refreshSignatureHelp(
+lsp : LspClient,
+path : string,
+buffer : EditorBuffer,
+signature : TextBuilder,
+fallback : TextBuilder,
+error : TextBuilder
+) : Unit {
+    if !lsp.requestSignatureHelp(
+    path,
+    buffer,
+    buffer.line(),
+    buffer.column(),
+    signature,
+    error
+    ) && fallback.size() > usize(0) {
+        signature.append(fallback.view())
+    }
+}
+
+def applyEditorAction(
+action : EditorAction,
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if action == EditorAction.Save {
+        saveFile(path, buffer, status)
+        return false
+    }
+    if action == EditorAction.Quit {
+        if buffer.isModified() {
+            setStatus(status, "Modifications non enregistrées — utilisez :q!")
+            return false
+        }
+        return true
+    }
+    if action == EditorAction.ForceQuit {
+        return true
+    }
+    if action == EditorAction.SaveAndQuit {
+        return saveFile(path, buffer, status)
+    }
+    return false
+}

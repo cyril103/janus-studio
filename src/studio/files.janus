@@ -1,0 +1,219 @@
+/// Chargement, sauvegarde et changement de document dans Janus Studio.
+module studio.files
+
+import editor.buffer
+import editor.explorer
+import editor.path_prompt
+import editor.search
+import tooling.diagnostics
+import std.fs
+import std.option
+import std.process
+import std.result
+import std.system
+import std.text
+
+def isFile(path : string) : bool {
+    return match metadata(path) {
+        Ok(value) => value.kind == FileType.File,
+        Error(error) => false
+    }
+}
+
+def codeFontPath() : string {
+    val windowsPath : string = "C:/Windows/Fonts/consola.ttf"
+    if isFile(windowsPath) {
+        return windowsPath
+    }
+    val wslPath : string = "/mnt/c/Windows/Fonts/consola.ttf"
+    if isFile(wslPath) {
+        return wslPath
+    }
+    return "assets/fonts/DejaVuSansMono.ttf"
+}
+
+def selectedPath() : string {
+    return match programArgument(usize(1)) {
+        Some(path) => path,
+        None => "samples/welcome.janus"
+    }
+}
+
+def useWorkingDirectory(
+directory : WorkingDirectory,
+output : TextBuilder
+) : bool {
+    output.append(directory.view())
+    delete directory
+    return true
+}
+
+def captureProjectRoot(output : TextBuilder) : bool {
+    val directory : Result[WorkingDirectory, SystemError] =
+    currentWorkingDirectory()
+    return match move directory {
+        Ok(value) => useWorkingDirectory(move value, output),
+        Error(error) => false
+    }
+}
+
+def setStatus(status : TextBuilder, message : string) : Unit {
+    status.clear()
+    status.append(message)
+}
+
+def acceptFile(
+data : FileData,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    buffer.load(data.view())
+    buffer.moveFileStart()
+    delete data
+    setStatus(status, "Fichier chargé.")
+    return true
+}
+
+def startEmptyFile(
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    buffer.clear()
+    setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+    return false
+}
+
+def loadFile(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val result : Result[FileData, SystemError] = readFile(path)
+    return match move result {
+        Ok(data) => acceptFile(move data, buffer, status),
+        Error(error) => startEmptyFile(buffer, status)
+    }
+}
+
+def openFailed(status : TextBuilder) : bool {
+    setStatus(status, "Impossible d'ouvrir ce fichier.")
+    return false
+}
+
+def openExistingFile(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val result : Result[FileData, SystemError] = readFile(path)
+    return match move result {
+        Ok(data) => acceptFile(move data, buffer, status),
+        Error(error) => openFailed(status)
+    }
+}
+
+def saveSucceeded(
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    buffer.markSaved()
+    setStatus(status, "Fichier enregistré.")
+    return true
+}
+
+def saveFailed(status : TextBuilder) : bool {
+    setStatus(status, "Échec de l'enregistrement.")
+    return false
+}
+
+def saveFile(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val content : TextBuilder = new TextBuilder()
+    defer delete content
+    buffer.appendText(content)
+    return match writeTextFileAtomic(path, content.view()) {
+        Ok(written) => if written {
+            saveSucceeded(buffer, status)
+        } else {
+            saveFailed(status)
+        },
+        Error(error) => saveFailed(status)
+    }
+}
+
+def openProjectFolder(
+path : string,
+projectRoot : TextBuilder,
+explorer : ProjectExplorer,
+status : TextBuilder
+) : bool {
+    if path == "" {
+        setStatus(status, "Saisissez un chemin de dossier.")
+        return false
+    }
+    if !explorer.open(path) {
+        setStatus(status, "Impossible d'ouvrir ce dossier.")
+        return false
+    }
+    projectRoot.clear()
+    projectRoot.append(path)
+    setStatus(status, "Dossier ouvert.")
+    return true
+}
+
+def applyPathPrompt(
+prompt : PathPrompt,
+activePath : TextBuilder,
+buffer : EditorBuffer,
+diagnostics : EditorDiagnostics,
+search : SearchModel,
+status : TextBuilder
+) : bool {
+    if prompt.value() == "" {
+        setStatus(status, "Saisissez un chemin de fichier.")
+        return false
+    }
+    val action : PathPromptAction = prompt.action()
+    if action == PathPromptAction.Open &&
+    !openExistingFile(prompt.value(), buffer, status) {
+        return false
+    }
+    if action == PathPromptAction.SaveAs &&
+    !saveFile(prompt.value(), buffer, status) {
+        return false
+    }
+    if action == PathPromptAction.Create {
+        buffer.clear()
+        setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+    }
+    activePath.clear()
+    activePath.append(prompt.value())
+    diagnostics.clear()
+    search.clear()
+    prompt.dismiss()
+    return true
+}
+
+def openExplorerFile(
+path : string,
+activePath : TextBuilder,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if buffer.isModified() {
+        setStatus(
+        status,
+        "Enregistrez les modifications avant d'ouvrir un autre fichier."
+        )
+        return false
+    }
+    if !openExistingFile(path, buffer, status) {
+        return false
+    }
+    activePath.clear()
+    activePath.append(path)
+    return true
+}
