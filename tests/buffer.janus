@@ -22,6 +22,76 @@ def insertsAndDeletesAtCursor() : Unit {
 }
 
 /// @test
+def insertsAndSkipsAutomaticPairs() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.insertPaired(char(40))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "()")
+    assertEqual[usize](buffer.column(), usize(1))
+
+    buffer.insertPaired(char(41))
+    assertEqual[usize](buffer.column(), usize(2))
+    buffer.insertPaired(' ')
+    buffer.insertPaired(char(91))
+    buffer.insertPaired(char(123))
+    buffer.insertPaired(char(34))
+    buffer.insertPaired(char(34))
+    buffer.insertPaired(char(125))
+    buffer.insertPaired(char(93))
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "() [{\"\"}]")
+}
+
+/// @test
+def removesEmptyAutomaticPairWithBackspace() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.insertPaired(char(123))
+    buffer.backspace()
+    assertEqual[usize](buffer.size(), usize(0))
+    assertEqual[usize](buffer.cursor(), usize(0))
+}
+
+/// @test
+def indentsNewLineInsideBraces() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("    {}")
+    buffer.moveLeft()
+    buffer.insertIndentedNewline()
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "    {\n        \n    }")
+    assertEqual[usize](buffer.line(), usize(1))
+    assertEqual[usize](buffer.column(), usize(8))
+
+    assertTrue(buffer.undo())
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "    {}")
+}
+
+/// @test
+def preservesIndentationOnNewLine() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("    value")
+    buffer.insertIndentedNewline()
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "    value\n    ")
+    assertEqual[usize](buffer.column(), usize(4))
+}
+
+/// @test
 def countsVisibleTextLines() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer

@@ -230,6 +230,39 @@ private val redoStates : Array[BufferSnapshot]
         modified = true
     }
 
+    private def matchingClosing(value : char) : char {
+        if value == char(40) { return char(41) }
+        if value == char(91) { return char(93) }
+        if value == char(123) { return char(125) }
+        if value == char(34) { return char(34) }
+        if value == char(39) { return char(39) }
+        return '\0'
+    }
+
+    private def isAutomaticClosing(value : char) : bool {
+        return value == char(41) || value == char(93) ||
+        value == char(125) || value == char(34) || value == char(39)
+    }
+
+    def insertPaired(value : char) : Unit {
+        if this.isAutomaticClosing(value) &&
+        cursorPosition < characters.size() &&
+        characters.get(cursorPosition) == value {
+            cursorPosition = cursorPosition + usize(1)
+            return
+        }
+        val closing : char = this.matchingClosing(value)
+        if closing == '\0' {
+            this.insert(value)
+            return
+        }
+        this.rememberChange()
+        this.insertAt(cursorPosition, value)
+        this.insertAt(cursorPosition + usize(1), closing)
+        cursorPosition = cursorPosition + usize(1)
+        modified = true
+    }
+
     def insertText(text : string) : Unit {
         if stringLength(text) == usize(0) {
             return
@@ -261,11 +294,63 @@ private val redoStates : Array[BufferSnapshot]
         modified = true
     }
 
+    def insertIndentedNewline() : Unit {
+        val start : usize = this.lineStart(cursorPosition)
+        var indentation : usize = usize(0)
+        while start + indentation < cursorPosition &&
+        (characters.get(start + indentation) == ' ' ||
+        characters.get(start + indentation) == '\t') {
+            indentation = indentation + usize(1)
+        }
+        val afterOpening : bool = cursorPosition > usize(0) &&
+        characters.get(cursorPosition - usize(1)) == char(123)
+        val beforeClosing : bool = cursorPosition < characters.size() &&
+        characters.get(cursorPosition) == char(125)
+
+        this.rememberChange()
+        this.insertAt(cursorPosition, '\n')
+        cursorPosition = cursorPosition + usize(1)
+        var index : usize = usize(0)
+        while index < indentation {
+            this.insertAt(cursorPosition, characters.get(start + index))
+            cursorPosition = cursorPosition + usize(1)
+            index = index + usize(1)
+        }
+        if afterOpening {
+            index = usize(0)
+            while index < usize(4) {
+                this.insertAt(cursorPosition, ' ')
+                cursorPosition = cursorPosition + usize(1)
+                index = index + usize(1)
+            }
+        }
+        if afterOpening && beforeClosing {
+            val contentCursor : usize = cursorPosition
+            this.insertAt(contentCursor, '\n')
+            index = usize(0)
+            while index < indentation {
+                this.insertAt(
+                contentCursor + usize(1) + index,
+                characters.get(start + index)
+                )
+                index = index + usize(1)
+            }
+            cursorPosition = contentCursor
+        }
+        modified = true
+    }
+
     def backspace() : Unit {
         if cursorPosition == usize(0) {
             return
         }
         this.rememberChange()
+        val opening : char = characters.get(cursorPosition - usize(1))
+        val closing : char = this.matchingClosing(opening)
+        if closing != '\0' && cursorPosition < characters.size() &&
+        characters.get(cursorPosition) == closing {
+            val _closingRemoved : char = characters.remove(cursorPosition)
+        }
         val _removed : char = characters.remove(cursorPosition - usize(1))
         cursorPosition = cursorPosition - usize(1)
         modified = true
@@ -513,7 +598,7 @@ private val redoStates : Array[BufferSnapshot]
 
     def openLineBelow() : Unit {
         this.moveEnd()
-        this.insert('\n')
+        this.insertIndentedNewline()
     }
 
     def openLineAbove() : Unit {

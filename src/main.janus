@@ -377,7 +377,7 @@ buffer : EditorBuffer
         buffer.deleteForward()
     }
     if isKeyPressed(Key.Enter) {
-        buffer.insert('\n')
+        buffer.insertIndentedNewline()
     }
     if isKeyPressed(Key.Tab) {
         buffer.insertSpaces(usize(4))

@@ -157,7 +157,7 @@ private val lineRegister : Array[char]
     }
 
     def handleInsert(value : char, buffer : EditorBuffer) : Unit {
-        buffer.insert(value)
+        buffer.insertPaired(value)
     }
 
     def handleCommand(value : char) : Unit {
