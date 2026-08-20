@@ -642,6 +642,65 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
+    def findMatches(query : string, output : Array[usize]) : usize {
+        output.clear()
+        val requested : Array[char] = new Array[char](stringLength(query))
+        defer delete requested
+        decodeUtf8(query, requested)
+        if requested.size() == usize(0) { return usize(0) }
+        var start : usize = usize(0)
+        while start + requested.size() <= characters.size() {
+            var index : usize = usize(0)
+            var matches : bool = true
+            while matches && index < requested.size() {
+                if characters.get(start + index) != requested.get(index) {
+                    matches = false
+                }
+                index = index + usize(1)
+            }
+            if matches { output.push(start) }
+            start = start + usize(1)
+        }
+        return requested.size()
+    }
+
+    def moveToOffset(position : usize) : Unit {
+        cursorPosition = if position < characters.size() {
+            position
+        } else {
+            characters.size()
+        }
+    }
+
+    def lineAtOffset(position : usize) : usize {
+        var line : usize = usize(0)
+        var index : usize = usize(0)
+        val end : usize = if position < characters.size() {
+            position
+        } else {
+            characters.size()
+        }
+        while index < end {
+            if characters.get(index) == '\n' { line = line + usize(1) }
+            index = index + usize(1)
+        }
+        return line
+    }
+
+    def columnAtOffset(position : usize) : usize {
+        var column : usize = usize(0)
+        var index : usize = if position < characters.size() {
+            position
+        } else {
+            characters.size()
+        }
+        while index > usize(0) && characters.get(index - usize(1)) != '\n' {
+            column = column + usize(1)
+            index = index - usize(1)
+        }
+        return column
+    }
+
     def appendVisibleText(
     output : TextBuilder,
     firstLine : usize,

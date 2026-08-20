@@ -5,10 +5,16 @@ import editor.buffer
 import std.array
 import std.text
 
+private def unsignedByte(value : byte) : int {
+    val numeric : int = int(value)
+    return if numeric < 0 { numeric + 256 } else { numeric }
+}
+
 enum EditorMode derives Copy, Equality, Debug {
     Normal,
     Insert,
-    Command
+    Command,
+    Search
 }
 
 enum EditorAction derives Copy, Equality, Debug {
@@ -17,6 +23,9 @@ enum EditorAction derives Copy, Equality, Debug {
     DismissCompletion,
     SignatureHelp,
     DismissSignatureHelp,
+    Search,
+    SearchNext,
+    SearchPrevious,
     Save,
     Quit,
     ForceQuit,
@@ -41,7 +50,8 @@ private val lineRegister : Array[char]
         output.append(match currentMode {
             Normal => "NORMAL",
             Insert => "INSERT",
-            Command => "COMMAND"
+            Command => "COMMAND",
+            Search => "SEARCH"
         })
         if pendingG {
             output.append("  g")
@@ -58,6 +68,9 @@ private val lineRegister : Array[char]
         output.clear()
         if currentMode == EditorMode.Command {
             output.append(":")
+            output.append(command.view())
+        } else if currentMode == EditorMode.Search {
+            output.append("/")
             output.append(command.view())
         }
     }
@@ -76,6 +89,18 @@ private val lineRegister : Array[char]
         pendingD = false
         pendingY = false
         command.clear()
+    }
+
+    def enterSearch() : Unit {
+        currentMode = EditorMode.Search
+        pendingG = false
+        pendingD = false
+        pendingY = false
+        command.clear()
+    }
+
+    def commandView() : string {
+        return command.view()
     }
 
     def handleNormal(value : char, buffer : EditorBuffer) : EditorAction {
@@ -152,6 +177,12 @@ private val lineRegister : Array[char]
             currentMode = EditorMode.Insert
         } else if value == ':' {
             this.enterCommand()
+        } else if value == '/' {
+            this.enterSearch()
+        } else if value == 'n' {
+            return EditorAction.SearchNext
+        } else if value == 'N' {
+            return EditorAction.SearchPrevious
         }
         return EditorAction.None
     }
@@ -172,11 +203,14 @@ private val lineRegister : Array[char]
         val shortened : TextBuilder = new TextBuilder()
         defer delete shortened
         val current : string = command.view()
-        var index : usize = usize(0)
-        while index + usize(1) < stringLength(current) {
-            shortened.appendChar(char(stringData(current).load(index)))
-            index = index + usize(1)
+        val data : Ptr[byte] = stringData(current)
+        var end : usize = stringLength(current) - usize(1)
+        while end > usize(0) {
+            val value : int = unsignedByte(data.load(end))
+            if value < 128 || value > 191 { break }
+            end = end - usize(1)
         }
+        shortened.append(stringView(data, end))
         command.clear()
         command.append(shortened.view())
     }
@@ -195,6 +229,11 @@ private val lineRegister : Array[char]
         }
         this.escape()
         return action
+    }
+
+    def executeSearch() : EditorAction {
+        currentMode = EditorMode.Normal
+        return EditorAction.Search
     }
 
     destructor {

@@ -1,0 +1,90 @@
+/// Recherche textuelle dans le buffer actif.
+module editor.search
+
+import editor.buffer
+import std.array
+import std.text
+
+class SearchModel(
+private val query : TextBuilder,
+private val matches : Array[usize]
+) {
+    private var selectedIndex : usize = usize(0)
+    private var queryLength : usize = usize(0)
+
+    def size() : usize { return matches.size() }
+    def selected() : usize { return selectedIndex }
+    def length() : usize { return queryLength }
+    def offset(index : usize) : usize { return matches.get(index) }
+
+    def clear() : Unit {
+        query.clear()
+        matches.clear()
+        selectedIndex = usize(0)
+        queryLength = usize(0)
+    }
+
+    private def moveToSelected(buffer : EditorBuffer) : Unit {
+        if matches.size() > usize(0) {
+            buffer.moveToOffset(matches.get(selectedIndex))
+        }
+    }
+
+    def begin(buffer : EditorBuffer, value : string) : Unit {
+        query.clear()
+        query.append(value)
+        queryLength = buffer.findMatches(value, matches)
+        selectedIndex = usize(0)
+        while selectedIndex < matches.size() &&
+        matches.get(selectedIndex) < buffer.cursor() {
+            selectedIndex = selectedIndex + usize(1)
+        }
+        if selectedIndex >= matches.size() { selectedIndex = usize(0) }
+        this.moveToSelected(buffer)
+    }
+
+    def selectNext(buffer : EditorBuffer) : Unit {
+        if matches.size() == usize(0) { return }
+        selectedIndex = (selectedIndex + usize(1)) % matches.size()
+        this.moveToSelected(buffer)
+    }
+
+    def selectPrevious(buffer : EditorBuffer) : Unit {
+        if matches.size() == usize(0) { return }
+        selectedIndex = if selectedIndex == usize(0) {
+            matches.size() - usize(1)
+        } else {
+            selectedIndex - usize(1)
+        }
+        this.moveToSelected(buffer)
+    }
+
+    def appendStatus(output : TextBuilder) : Unit {
+        output.clear()
+        if query.size() == usize(0) {
+            output.append("Recherche vide.")
+        } else if matches.size() == usize(0) {
+            output.append("Aucun résultat pour /")
+            output.append(query.view())
+        } else {
+            output.appendUSize(selectedIndex + usize(1))
+            output.append(" / ")
+            output.appendUSize(matches.size())
+            output.append(" — /")
+            output.append(query.view())
+            output.append(" — n/N : suivant/précédent")
+        }
+    }
+
+    destructor {
+        delete query
+        delete matches
+    }
+}
+
+def searchModel() : SearchModel {
+    return new SearchModel(
+    new TextBuilder(),
+    new Array[usize](usize(16))
+    )
+}

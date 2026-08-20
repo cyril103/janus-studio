@@ -1,0 +1,46 @@
+import editor.buffer
+import editor.search
+import std.testing
+import std.text
+
+/// @test
+def findsAndNavigatesOccurrences() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("alpha beta alpha\nalpha")
+    buffer.moveFileStart()
+    val search : SearchModel = searchModel()
+    defer delete search
+    search.begin(buffer, "alpha")
+    assertEqual[usize](search.size(), usize(3))
+    assertEqual[usize](buffer.cursor(), usize(0))
+
+    search.selectNext(buffer)
+    assertEqual[usize](buffer.cursor(), usize(11))
+    search.selectNext(buffer)
+    assertEqual[usize](buffer.line(), usize(1))
+    search.selectNext(buffer)
+    assertEqual[usize](buffer.cursor(), usize(0))
+    search.selectPrevious(buffer)
+    assertEqual[usize](buffer.line(), usize(1))
+
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+    search.appendStatus(status)
+    assertEqual[string](status.view(), "3 / 3 — /alpha — n/N : suivant/précédent")
+}
+
+/// @test
+def reportsMissingSearch() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("alpha")
+    val search : SearchModel = searchModel()
+    defer delete search
+    search.begin(buffer, "missing")
+    assertEqual[usize](search.size(), usize(0))
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+    search.appendStatus(status)
+    assertEqual[string](status.view(), "Aucun résultat pour /missing")
+}

@@ -118,3 +118,35 @@ def parsesColonCommands() : Unit {
     controller.appendCommandLine(commandLine)
     assertEqual[string](commandLine.view(), "")
 }
+
+/// @test
+def entersSearchFromNormalMode() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val controller : VimController = vimController()
+    defer delete controller
+    controller.handleNormal('/', buffer)
+    assertEqual[EditorMode](controller.mode(), EditorMode.Search)
+    controller.handleCommand('n')
+    controller.handleCommand('a')
+    controller.handleCommand('m')
+    controller.handleCommand('e')
+    val commandLine : TextBuilder = new TextBuilder()
+    defer delete commandLine
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), "/name")
+    controller.handleCommand(char(233))
+    controller.commandBackspace()
+    controller.appendCommandLine(commandLine)
+    assertEqual[string](commandLine.view(), "/name")
+    assertEqual[EditorAction](controller.executeSearch(), EditorAction.Search)
+    assertEqual[EditorMode](controller.mode(), EditorMode.Normal)
+    assertEqual[EditorAction](
+    controller.handleNormal('n', buffer),
+    EditorAction.SearchNext
+    )
+    assertEqual[EditorAction](
+    controller.handleNormal('N', buffer),
+    EditorAction.SearchPrevious
+    )
+}

@@ -100,6 +100,8 @@ non enregistrées, afin d'éviter toute perte de travail.
 | `p`, `P` | coller la ligne du registre dessous ou dessus |
 | `u`, `Ctrl+R` | annuler ou rétablir |
 | `:` | passer en mode COMMAND |
+| `/` | rechercher dans le fichier courant |
+| `n`, `N` | résultat de recherche suivant ou précédent |
 | flèches, `Home`, `End` | déplacer le curseur |
 
 ### Mode INSERT et commandes
@@ -124,6 +126,9 @@ non enregistrées, afin d'éviter toute perte de travail.
 
 En mode NORMAL, `:` ouvre la ligne de commande en bas de la fenêtre, comme
 dans Vim. Les commandes `:w`, `:q`, `:q!`, `:wq` et `:x` y sont disponibles.
+La touche `/` réutilise cette ligne pour saisir une recherche. `Entrée` place
+le curseur sur la première occurrence à partir de sa position actuelle, puis
+`n` et `N` parcourent les résultats dans les deux directions.
 
 Les commandes de fichier ouvrent une fenêtre de saisie de chemin intégrée.
 `Entrée` valide le chemin et `Esc` annule l'opération. Les chemins relatifs sont

@@ -2,6 +2,7 @@ import editor.buffer
 import editor.completion
 import editor.explorer
 import editor.path_prompt
+import editor.search
 import editor.syntax
 import editor.vim
 import tooling.compiler
@@ -308,6 +309,7 @@ prompt : PathPrompt,
 activePath : TextBuilder,
 buffer : EditorBuffer,
 diagnostics : EditorDiagnostics,
+search : SearchModel,
 status : TextBuilder
 ) : bool {
     if prompt.value() == "" {
@@ -330,6 +332,7 @@ status : TextBuilder
     activePath.clear()
     activePath.append(prompt.value())
     diagnostics.clear()
+    search.clear()
     prompt.dismiss()
     return true
 }
@@ -342,12 +345,17 @@ buffer : EditorBuffer
         controller.escape()
         return EditorAction.None
     }
-    if controller.mode() == EditorMode.Command {
+    if controller.mode() == EditorMode.Command ||
+    controller.mode() == EditorMode.Search {
         if isKeyPressed(Key.Backspace) {
             controller.commandBackspace()
         }
         if isKeyPressed(Key.Enter) {
-            return controller.executeCommand()
+            return if controller.mode() == EditorMode.Search {
+                controller.executeSearch()
+            } else {
+                controller.executeCommand()
+            }
         }
         return EditorAction.None
     }
@@ -422,7 +430,8 @@ completion : CompletionModel
                 } else {
                     action = EditorAction.DismissCompletion
                 }
-            } else if controller.mode() == EditorMode.Command {
+            } else if controller.mode() == EditorMode.Command ||
+            controller.mode() == EditorMode.Search {
                 controller.handleCommand(value)
             } else {
                 action = controller.handleNormal(value, buffer)
@@ -776,7 +785,7 @@ def modeColor(mode : EditorMode) : Color {
     if mode == EditorMode.Insert {
         return rgb(82, 183, 136)
     }
-    if mode == EditorMode.Command {
+    if mode == EditorMode.Command || mode == EditorMode.Search {
         return rgb(229, 192, 123)
     }
     return rgb(97, 175, 239)
@@ -895,6 +904,44 @@ lineAdvance : float
     }
 }
 
+def drawSearchMatches(
+search : SearchModel,
+buffer : EditorBuffer,
+firstLine : usize,
+maximumLines : usize,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    var index : usize = usize(0)
+    while index < search.size() {
+        val line : usize = buffer.lineAtOffset(search.offset(index))
+        if line >= firstLine && line < firstLine + maximumLines {
+            val column : usize = buffer.columnAtOffset(search.offset(index))
+            val row : usize = line - firstLine
+            drawRectangle(
+            editorCodeLeft() + truncatingCast[int](
+            numericCast[float](truncatingCast[int](column)) * glyphAdvance
+            ),
+            y + truncatingCast[int](
+            numericCast[float](truncatingCast[int](row)) * lineAdvance
+            ),
+            truncatingCast[int](
+            numericCast[float](truncatingCast[int](search.length())) *
+            glyphAdvance
+            ),
+            23,
+            if index == search.selected() {
+                rgb(92, 112, 71)
+            } else {
+                rgb(54, 72, 65)
+            }
+            )
+        }
+        index = index + usize(1)
+    }
+}
+
 def drawExplorer(
 explorer : ProjectExplorer,
 firstEntry : usize,
@@ -954,6 +1001,7 @@ syntaxSpans : Array[SyntaxSpan],
 glyph : TextBuilder,
 diagnostics : EditorDiagnostics,
 diagnosticText : TextBuilder,
+search : SearchModel,
 completion : CompletionModel,
 completionText : TextBuilder,
 signatureText : TextBuilder,
@@ -1034,6 +1082,16 @@ maximumLines : usize
     editorTop + 12,
     lineAdvance,
     muted
+    )
+
+    drawSearchMatches(
+    search,
+    buffer,
+    firstLine,
+    maximumLines,
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
     )
 
     drawHighlightedCode(
@@ -1321,7 +1379,7 @@ maximumLines : usize
     White
     )
     drawRectangle(0, commandLineY, screenWidth(), commandLineHeight, panel)
-    if mode == EditorMode.Command {
+    if mode == EditorMode.Command || mode == EditorMode.Search {
         drawCodeText(
         codeFont,
         commandLine.view(),
@@ -1376,6 +1434,8 @@ def main() : int {
     defer delete diagnostics
     val diagnosticText : TextBuilder = new TextBuilder()
     defer delete diagnosticText
+    val search : SearchModel = searchModel()
+    defer delete search
     val completion : CompletionModel = completionModel()
     defer delete completion
     val completionLabels : TextBuilder = new TextBuilder()
@@ -1464,6 +1524,8 @@ def main() : int {
         val shift : bool = shiftDown()
         val cursorLineBeforeInput : usize = buffer.line()
         val cursorColumnBeforeInput : usize = buffer.column()
+        val bufferSizeBeforeInput : usize = buffer.size()
+        val editorModeBeforeInput : EditorMode = controller.mode()
         val leftMousePressed : bool = isMouseButtonPressed(MouseButton.Left)
         var fileInputConsumed : bool = false
         var layoutMouseConsumed : bool = false
@@ -1586,6 +1648,7 @@ def main() : int {
                             editorScrollDetached = false
                             completion.dismiss()
                             diagnostics.clear()
+                            search.clear()
                             controller.escape()
                         }
                         lastExplorerClick = usize(-1)
@@ -1638,6 +1701,7 @@ def main() : int {
                     activePath,
                     buffer,
                     diagnostics,
+                    search,
                     status
                     )
                     firstLine = usize(0)
@@ -1746,6 +1810,23 @@ def main() : int {
         isKeyPressed(Key.End) {
             signatureText.clear()
         }
+        if keyAction == EditorAction.Search {
+            search.begin(buffer, controller.commandView())
+            search.appendStatus(status)
+            keyAction = EditorAction.None
+        } else if keyAction == EditorAction.SearchNext ||
+        characterAction == EditorAction.SearchNext {
+            search.selectNext(buffer)
+            search.appendStatus(status)
+            keyAction = EditorAction.None
+            characterAction = EditorAction.None
+        } else if keyAction == EditorAction.SearchPrevious ||
+        characterAction == EditorAction.SearchPrevious {
+            search.selectPrevious(buffer)
+            search.appendStatus(status)
+            keyAction = EditorAction.None
+            characterAction = EditorAction.None
+        }
         quitRequested = applyEditorAction(
         if keyAction != EditorAction.None { keyAction } else { characterAction },
         activePath.view(),
@@ -1754,6 +1835,15 @@ def main() : int {
         )
         if buffer.isModified() {
             diagnostics.clear()
+        }
+        if buffer.size() != bufferSizeBeforeInput {
+            search.clear()
+        }
+        if controller.mode() != editorModeBeforeInput &&
+        (controller.mode() != EditorMode.Normal ||
+        (editorModeBeforeInput == EditorMode.Search &&
+        isKeyPressed(Key.Escape))) {
+            search.clear()
         }
         if buffer.line() != cursorLineBeforeInput ||
         buffer.column() != cursorColumnBeforeInput ||
@@ -1774,6 +1864,7 @@ def main() : int {
         glyph,
         diagnostics,
         diagnosticText,
+        search,
         completion,
         completionText,
         signatureText,
