@@ -5,6 +5,7 @@ import editor.path_prompt
 import editor.syntax
 import editor.vim
 import tooling.compiler
+import tooling.diagnostics
 import tooling.lsp
 import std.array
 import std.fs
@@ -37,6 +38,11 @@ const minimumExplorerWidth : int = 150
 const minimumEditorWidth : int = 360
 const minimumEditorHeight : int = 180
 const minimumOutputHeight : int = 80
+const editorGutterWidth : int = 56
+
+def editorCodeLeft() : int {
+    return editorLeft + editorGutterWidth
+}
 
 enum PaneResize derives Copy, Equality, Debug {
     None,
@@ -301,6 +307,7 @@ def applyPathPrompt(
 prompt : PathPrompt,
 activePath : TextBuilder,
 buffer : EditorBuffer,
+diagnostics : EditorDiagnostics,
 status : TextBuilder
 ) : bool {
     if prompt.value() == "" {
@@ -322,6 +329,7 @@ status : TextBuilder
     }
     activePath.clear()
     activePath.append(prompt.value())
+    diagnostics.clear()
     prompt.dismiss()
     return true
 }
@@ -598,7 +606,7 @@ maximumLines : usize
     if maximumLines > usize(0) && row >= maximumLines {
         row = maximumLines - usize(1)
     }
-    val relativeX : int = mouseX() - editorLeft
+    val relativeX : int = mouseX() - editorCodeLeft()
     val column : usize = if relativeX > 0 {
         numericCast[usize](truncatingCast[int](
         (numericCast[float](relativeX) + glyphAdvance * 0.5f) /
@@ -822,6 +830,71 @@ lineAdvance : float
     }
 }
 
+def drawLineNumbers(
+font : Font,
+label : TextBuilder,
+firstLine : usize,
+maximumLines : usize,
+lineCount : usize,
+y : int,
+lineAdvance : float,
+color : Color
+) : Unit {
+    var row : usize = usize(0)
+    while row < maximumLines && firstLine + row < lineCount {
+        label.clear()
+        label.appendUSize(firstLine + row + usize(1))
+        drawCodeText(
+        font,
+        label.view(),
+        editorCodeLeft() - 48,
+        y + truncatingCast[int](
+        numericCast[float](truncatingCast[int](row)) * lineAdvance
+        ),
+        14.0f,
+        color
+        )
+        row = row + usize(1)
+    }
+}
+
+def drawEditorDiagnostics(
+diagnostics : EditorDiagnostics,
+firstLine : usize,
+maximumLines : usize,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    var index : usize = usize(0)
+    while index < diagnostics.size() {
+        val line : usize = diagnostics.line(index)
+        if line >= firstLine && line < firstLine + maximumLines {
+            val row : usize = line - firstLine
+            val diagnosticY : int = y + truncatingCast[int](
+            numericCast[float](truncatingCast[int](row)) * lineAdvance
+            )
+            val color : Color = if diagnostics.isError(index) {
+                rgb(224, 108, 117)
+            } else {
+                rgb(229, 192, 123)
+            }
+            drawRectangle(editorCodeLeft() - 12, diagnosticY + 7, 5, 12, color)
+            drawRectangle(
+            editorCodeLeft() + truncatingCast[int](
+            numericCast[float](truncatingCast[int](diagnostics.column(index))) *
+            glyphAdvance
+            ),
+            diagnosticY + 21,
+            truncatingCast[int](glyphAdvance),
+            2,
+            color
+            )
+        }
+        index = index + usize(1)
+    }
+}
+
 def drawExplorer(
 explorer : ProjectExplorer,
 firstEntry : usize,
@@ -879,6 +952,8 @@ firstLine : usize,
 visibleCharacters : Array[char],
 syntaxSpans : Array[SyntaxSpan],
 glyph : TextBuilder,
+diagnostics : EditorDiagnostics,
+diagnosticText : TextBuilder,
 completion : CompletionModel,
 completionText : TextBuilder,
 signatureText : TextBuilder,
@@ -903,6 +978,7 @@ maximumLines : usize
     buffer.appendVisibleCharacters(visibleCharacters, firstLine, maximumLines)
     highlight(visibleCharacters, syntaxSpans)
     buildStatusLine(statusLine, path, buffer)
+    diagnostics.appendForLine(buffer.line(), diagnosticText)
 
     val background : Color = rgb(18, 24, 33)
     val sidebar : Color = rgb(25, 34, 46)
@@ -949,19 +1025,38 @@ maximumLines : usize
     muted
     )
 
+    drawLineNumbers(
+    codeFont,
+    glyph,
+    firstLine,
+    maximumLines,
+    buffer.lineCount(),
+    editorTop + 12,
+    lineAdvance,
+    muted
+    )
+
     drawHighlightedCode(
     codeFont,
     visibleCharacters,
     syntaxSpans,
     glyph,
-    editorLeft,
+    editorCodeLeft(),
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
+    )
+    drawEditorDiagnostics(
+    diagnostics,
+    firstLine,
+    maximumLines,
     editorTop + 12,
     glyphAdvance,
     lineAdvance
     )
     val cursorVisible : bool = buffer.line() >= firstLine &&
     buffer.line() < firstLine + maximumLines
-    var cursorX : int = editorLeft
+    var cursorX : int = editorCodeLeft()
     var cursorY : int = editorTop + 12
     if cursorVisible {
         val cursorColumn : float = numericCast[float](
@@ -970,7 +1065,8 @@ maximumLines : usize
         val cursorLine : float = numericCast[float](
         truncatingCast[int](buffer.line() - firstLine)
         )
-        cursorX = editorLeft + truncatingCast[int](cursorColumn * glyphAdvance)
+        cursorX = editorCodeLeft() +
+        truncatingCast[int](cursorColumn * glyphAdvance)
         cursorY = editorTop + 12 +
         truncatingCast[int](cursorLine * lineAdvance)
         val cursorWidth : int = if mode == EditorMode.Insert {
@@ -1007,7 +1103,7 @@ maximumLines : usize
         }
         val popupHeight : int = truncatingCast[int](shown) * 24 + 10
         val requestedX : int = cursorX
-        val availablePopupWidth : int = screenWidth() - editorLeft - 16
+        val availablePopupWidth : int = screenWidth() - editorCodeLeft() - 16
         val popupWidth : int = if availablePopupWidth < 620 {
             availablePopupWidth
         } else {
@@ -1018,8 +1114,8 @@ maximumLines : usize
         } else {
             screenWidth() - popupWidth - 10
         }
-        val popupX : int = if fittedPopupX < editorLeft {
-            editorLeft
+        val popupX : int = if fittedPopupX < editorCodeLeft() {
+            editorCodeLeft()
         } else { fittedPopupX }
         val popupY : int = if cursorY + 27 + popupHeight < editorBottom {
             cursorY + 27
@@ -1045,7 +1141,8 @@ maximumLines : usize
     }
 
     if signatureText.size() > usize(0) && cursorVisible {
-        val availableSignatureWidth : int = screenWidth() - editorLeft - 16
+        val availableSignatureWidth : int =
+        screenWidth() - editorCodeLeft() - 16
         val signatureWidth : int = if availableSignatureWidth < 620 {
             availableSignatureWidth
         } else {
@@ -1057,8 +1154,8 @@ maximumLines : usize
         } else {
             screenWidth() - signatureWidth - 10
         }
-        val signatureX : int = if fittedSignatureX < editorLeft {
-            editorLeft
+        val signatureX : int = if fittedSignatureX < editorCodeLeft() {
+            editorCodeLeft()
         } else { fittedSignatureX }
         val signatureY : int = if cursorY - 38 >= editorTop {
             cursorY - 38
@@ -1236,7 +1333,11 @@ maximumLines : usize
     } else {
         drawUiText(
         uiFont,
-        status.view(),
+        if diagnosticText.size() > usize(0) {
+            diagnosticText.view()
+        } else {
+            status.view()
+        },
         12,
         commandLineY + 5,
         15.0f,
@@ -1271,6 +1372,10 @@ def main() : int {
     defer delete syntaxSpans
     val glyph : TextBuilder = new TextBuilder()
     defer delete glyph
+    val diagnostics : EditorDiagnostics = editorDiagnostics()
+    defer delete diagnostics
+    val diagnosticText : TextBuilder = new TextBuilder()
+    defer delete diagnosticText
     val completion : CompletionModel = completionModel()
     defer delete completion
     val completionLabels : TextBuilder = new TextBuilder()
@@ -1480,6 +1585,7 @@ def main() : int {
                             firstLine = usize(0)
                             editorScrollDetached = false
                             completion.dismiss()
+                            diagnostics.clear()
                             controller.escape()
                         }
                         lastExplorerClick = usize(-1)
@@ -1527,7 +1633,13 @@ def main() : int {
                         firstExplorerEntry = usize(0)
                     }
                 } else {
-                    applyPathPrompt(filePrompt, activePath, buffer, status)
+                    applyPathPrompt(
+                    filePrompt,
+                    activePath,
+                    buffer,
+                    diagnostics,
+                    status
+                    )
                     firstLine = usize(0)
                     editorScrollDetached = false
                 }
@@ -1562,7 +1674,11 @@ def main() : int {
         }
         if !fileInputConsumed && isKeyPressed(Key.F5) {
             if saveFile(activePath.view(), buffer, status) {
-                checkFile(activePath.view(), toolOutput)
+                checkFileWithDiagnostics(
+                activePath.view(),
+                toolOutput,
+                diagnostics
+                )
             }
             fileInputConsumed = true
         }
@@ -1636,6 +1752,9 @@ def main() : int {
         buffer,
         status
         )
+        if buffer.isModified() {
+            diagnostics.clear()
+        }
         if buffer.line() != cursorLineBeforeInput ||
         buffer.column() != cursorColumnBeforeInput ||
         isKeyPressed(Key.Delete) {
@@ -1653,6 +1772,8 @@ def main() : int {
         visibleCharacters,
         syntaxSpans,
         glyph,
+        diagnostics,
+        diagnosticText,
         completion,
         completionText,
         signatureText,

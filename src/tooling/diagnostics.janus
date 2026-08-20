@@ -1,0 +1,205 @@
+/// Diagnostics structurés affichables dans l'éditeur.
+module tooling.diagnostics
+
+import std.array
+import std.text
+
+private def matchesAt(source : string, marker : string, start : usize) : bool {
+    if start + stringLength(marker) > stringLength(source) { return false }
+    val data : Ptr[byte] = stringData(source)
+    val expected : Ptr[byte] = stringData(marker)
+    var index : usize = usize(0)
+    while index < stringLength(marker) {
+        if data.load(start + index) != expected.load(index) { return false }
+        index = index + usize(1)
+    }
+    return true
+}
+
+private def findMarker(source : string, marker : string, start : usize) : usize {
+    var index : usize = start
+    while index + stringLength(marker) <= stringLength(source) {
+        if matchesAt(source, marker, index) { return index }
+        index = index + usize(1)
+    }
+    return stringLength(source)
+}
+
+private def parseNumber(source : string, start : usize) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = start
+    var value : usize = usize(0)
+    while index < stringLength(source) &&
+    data.load(index) >= byte(48) && data.load(index) <= byte(57) {
+        value = value * usize(10) +
+        numericCast[usize](int(data.load(index)) - 48)
+        index = index + usize(1)
+    }
+    return value
+}
+
+private def appendDecodedString(
+source : string,
+start : usize,
+output : TextBuilder
+) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = start
+    while index < stringLength(source) && data.load(index) != byte(34) {
+        if data.load(index) == byte(92) && index + usize(1) < stringLength(source) {
+            index = index + usize(1)
+            val escaped : byte = data.load(index)
+            if escaped == byte(110) {
+                output.append(" ")
+            } else if escaped == byte(116) {
+                output.append(" ")
+            } else if escaped == byte(114) {
+                output.append(" ")
+            } else {
+                output.appendChar(char(escaped))
+            }
+        } else {
+            output.appendChar(char(data.load(index)))
+        }
+        index = index + usize(1)
+    }
+    return index
+}
+
+class EditorDiagnostics(
+private val lines : Array[usize],
+private val columns : Array[usize],
+private val severities : Array[int],
+private val messageStarts : Array[usize],
+private val messageLengths : Array[usize],
+private val messages : TextBuilder
+) {
+    def clear() : Unit {
+        lines.clear()
+        columns.clear()
+        severities.clear()
+        messageStarts.clear()
+        messageLengths.clear()
+        messages.clear()
+    }
+
+    def size() : usize { return lines.size() }
+    def line(index : usize) : usize { return lines.get(index) }
+    def column(index : usize) : usize { return columns.get(index) }
+    def isError(index : usize) : bool { return severities.get(index) == 2 }
+
+    def appendForLine(requestedLine : usize, output : TextBuilder) : bool {
+        output.clear()
+        val source : string = messages.view()
+        val data : Ptr[byte] = stringData(source)
+        var index : usize = usize(0)
+        while index < this.size() {
+            if this.line(index) == requestedLine {
+                output.append(if this.isError(index) { "Erreur : " } else { "Avertissement : " })
+                var offset : usize = usize(0)
+                while offset < messageLengths.get(index) {
+                    output.appendChar(char(
+                    data.load(messageStarts.get(index) + offset)
+                    ))
+                    offset = offset + usize(1)
+                }
+                return true
+            }
+            index = index + usize(1)
+        }
+        return false
+    }
+
+    def load(json : string) : Unit {
+        this.clear()
+        val severityMarker : string = "\"severity\":\""
+        val messageMarker : string = "\"message\":\""
+        val primaryMarker : string = "\"primaryLocation\":"
+        val lineMarker : string = "\"line\":"
+        val columnMarker : string = "\"column\":"
+        var cursor : usize = usize(0)
+        while cursor < stringLength(json) {
+            val severity : usize = findMarker(json, severityMarker, cursor)
+            if severity == stringLength(json) { return }
+            val severityStart : usize = severity + stringLength(severityMarker)
+            val message : usize = findMarker(json, messageMarker, severityStart)
+            val primary : usize = findMarker(json, primaryMarker, severityStart)
+            if message == stringLength(json) || primary == stringLength(json) {
+                return
+            }
+            val line : usize = findMarker(json, lineMarker, primary)
+            val column : usize = findMarker(json, columnMarker, primary)
+            if line == stringLength(json) || column == stringLength(json) {
+                return
+            }
+
+            val start : usize = messages.size()
+            val messageEnd : usize = appendDecodedString(
+            json,
+            message + stringLength(messageMarker),
+            messages
+            )
+            val parsedLine : usize = parseNumber(
+            json,
+            line + stringLength(lineMarker)
+            )
+            val parsedColumn : usize = parseNumber(
+            json,
+            column + stringLength(columnMarker)
+            )
+            lines.push(if parsedLine > usize(0) { parsedLine - usize(1) } else { usize(0) })
+            columns.push(
+            if parsedColumn > usize(0) { parsedColumn - usize(1) } else { usize(0) }
+            )
+            severities.push(
+            if matchesAt(json, "error", severityStart) { 2 } else { 1 }
+            )
+            messageStarts.push(start)
+            messageLengths.push(messages.size() - start)
+            messages.append("\n")
+            cursor = messageEnd + usize(1)
+        }
+    }
+
+    def appendAll(output : TextBuilder) : Unit {
+        output.clear()
+        val source : string = messages.view()
+        val data : Ptr[byte] = stringData(source)
+        var index : usize = usize(0)
+        while index < this.size() {
+            output.append(if this.isError(index) { "erreur" } else { "avertissement" })
+            output.append(" ligne ")
+            output.appendUSize(this.line(index) + usize(1))
+            output.append(":")
+            output.appendUSize(this.column(index) + usize(1))
+            output.append(" — ")
+            var offset : usize = usize(0)
+            while offset < messageLengths.get(index) {
+                output.appendChar(char(data.load(messageStarts.get(index) + offset)))
+                offset = offset + usize(1)
+            }
+            output.append("\n")
+            index = index + usize(1)
+        }
+    }
+
+    destructor {
+        delete lines
+        delete columns
+        delete severities
+        delete messageStarts
+        delete messageLengths
+        delete messages
+    }
+}
+
+def editorDiagnostics() : EditorDiagnostics {
+    return new EditorDiagnostics(
+    new Array[usize](usize(8)),
+    new Array[usize](usize(8)),
+    new Array[int](usize(8)),
+    new Array[usize](usize(8)),
+    new Array[usize](usize(8)),
+    new TextBuilder()
+    )
+}

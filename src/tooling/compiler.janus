@@ -1,6 +1,7 @@
 /// Intégration minimale de la toolchain Janus.
 module tooling.compiler
 
+import tooling.diagnostics
 import std.array
 import std.process
 import std.result
@@ -47,6 +48,51 @@ def checkFile(path : string, output : TextBuilder) : bool {
     runProcess("janus", arguments, "", true, true)
     return match move result {
         Ok(process) => collectProcessResult(move process, output),
+        Error(error) => reportStartFailure(output)
+    }
+}
+
+private def collectStructuredResult(
+process : ProcessResult,
+output : TextBuilder,
+diagnostics : EditorDiagnostics
+) : bool {
+    val succeeded : bool = process.exitCode() == 0
+    val json : TextBuilder = new TextBuilder()
+    defer delete json
+    if process.stdoutSize() > usize(0) {
+        json.append(stringView(process.stdoutData(), process.stdoutSize()))
+    }
+    if process.stderrSize() > usize(0) {
+        json.append(stringView(process.stderrData(), process.stderrSize()))
+    }
+    diagnostics.load(json.view())
+    diagnostics.appendAll(output)
+    if output.size() == usize(0) {
+        output.append(if succeeded { "Aucun diagnostic." } else { "La commande a échoué sans diagnostic structuré." })
+    }
+    delete process
+    return succeeded
+}
+
+def checkFileWithDiagnostics(
+path : string,
+output : TextBuilder,
+diagnostics : EditorDiagnostics
+) : bool {
+    output.clear()
+    diagnostics.clear()
+    val arguments : Array[string] = new Array[string](usize(4))
+    defer delete arguments
+    arguments.push("check")
+    arguments.push(path)
+    arguments.push("--diagnostic-format")
+    arguments.push("json")
+
+    val result : Result[ProcessResult, SystemError] =
+    runProcess("janus", arguments, "", true, true)
+    return match move result {
+        Ok(process) => collectStructuredResult(move process, output, diagnostics),
         Error(error) => reportStartFailure(output)
     }
 }

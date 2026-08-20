@@ -5,6 +5,8 @@ Prototype d'IDE natif écrit en Janus pour développer des programmes Janus.
 Cette première version fournit :
 
 - un buffer éditable avec curseur et défilement vertical automatique ;
+- une gouttière avec numéros de ligne et marqueurs de diagnostics précis après
+  vérification du fichier ;
 - le défilement vertical indépendant de l'éditeur à la molette, avec une barre
   indiquant la position dans le fichier ;
 - le placement du curseur à la souris dans l'éditeur, borné à la fin de la ligne
@@ -141,5 +143,4 @@ Les séquences UTF-8 invalides sont remplacées par U+FFFD. Les prochaines étap
 prévues sont :
 
 1. implémenter la sélection de texte ;
-2. ajouter plusieurs onglets et la recherche dans le projet ;
-3. consommer les diagnostics JSON structurés plutôt que leur rendu humain.
+2. ajouter plusieurs onglets et la recherche dans le projet.

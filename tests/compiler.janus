@@ -1,4 +1,5 @@
 import tooling.compiler
+import tooling.diagnostics
 import std.testing
 import std.text
 
@@ -7,4 +8,21 @@ def checksTheWelcomeSample() : Unit {
     val output : TextBuilder = new TextBuilder()
     defer delete output
     assertTrue(checkFile("samples/welcome.janus", output))
+
+    val diagnostics : EditorDiagnostics = editorDiagnostics()
+    defer delete diagnostics
+    assertTrue(checkFileWithDiagnostics(
+    "samples/welcome.janus",
+    output,
+    diagnostics
+    ))
+    assertEqual[usize](diagnostics.size(), usize(0))
+
+    assertTrue(!checkFileWithDiagnostics(
+    "tests/invalid-diagnostic.txt",
+    output,
+    diagnostics
+    ))
+    assertTrue(diagnostics.size() > usize(0))
+    assertTrue(diagnostics.isError(usize(0)))
 }

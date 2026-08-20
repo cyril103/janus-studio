@@ -1,0 +1,28 @@
+import tooling.diagnostics
+import std.testing
+import std.text
+
+/// @test
+def parsesStructuredDiagnostics() : Unit {
+    val diagnostics : EditorDiagnostics = editorDiagnostics()
+    defer delete diagnostics
+    diagnostics.load(
+    "{\"schemaVersion\":\"0.5.2\",\"diagnostics\":[{\"severity\":\"error\",\"code\":\"JANA0001\",\"message\":\"type mismatch\",\"primaryLocation\":{\"file\":\"sample.janus\",\"position\":{\"offset\":12,\"line\":3,\"column\":5}},\"notes\":[],\"secondaryLocations\":[],\"suggestions\":[]},{\"severity\":\"warning\",\"code\":\"JANA0002\",\"message\":\"unused value\",\"primaryLocation\":{\"file\":\"sample.janus\",\"position\":{\"offset\":20,\"line\":6,\"column\":2}},\"notes\":[],\"secondaryLocations\":[],\"suggestions\":[]}]}"
+    )
+    assertEqual[usize](diagnostics.size(), usize(2))
+    assertEqual[usize](diagnostics.line(usize(0)), usize(2))
+    assertEqual[usize](diagnostics.column(usize(0)), usize(4))
+    assertTrue(diagnostics.isError(usize(0)))
+    assertTrue(!diagnostics.isError(usize(1)))
+
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    diagnostics.appendAll(output)
+    assertEqual[string](
+    output.view(),
+    "erreur ligne 3:5 — type mismatch\navertissement ligne 6:2 — unused value\n"
+    )
+    assertTrue(diagnostics.appendForLine(usize(2), output))
+    assertEqual[string](output.view(), "Erreur : type mismatch")
+    assertTrue(!diagnostics.appendForLine(usize(0), output))
+}
