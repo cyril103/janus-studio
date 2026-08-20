@@ -29,7 +29,12 @@ cp -R "$PROJECT_ROOT/samples/." "$SHARE_DIR/samples/"
 
 LAUNCHER="$BIN_DIR/janus-studio"
 cp "$SCRIPT_DIR/janus-studio.sh.in" "$LAUNCHER"
-chmod +x "$LAUNCHER" "$LIB_DIR/janus-studio"
+cp "$SCRIPT_DIR/uninstall.sh" "$BIN_DIR/janus-studio-uninstall"
+chmod +x \
+  "$LAUNCHER" \
+  "$BIN_DIR/janus-studio-uninstall" \
+  "$LIB_DIR/janus-studio"
+printf '%s\n' "janus-studio" > "$SHARE_DIR/.installed-by-janus-studio"
 
 case ":${PATH}:" in
   *":${BIN_DIR}:"*) ;;

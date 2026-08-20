@@ -56,11 +56,27 @@ popd
 exit /b %status%
 "@
 Set-Content -Encoding ASCII -LiteralPath (Join-Path $Bin "janus-studio.cmd") -Value $Launcher
+Set-Content -Encoding ASCII `
+    -LiteralPath (Join-Path $Share ".installed-by-janus-studio") `
+    -Value "janus-studio"
+Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot "uninstall.ps1") `
+    -Destination (Join-Path $Bin "janus-studio-uninstall.ps1")
+$UninstallLauncher = @"
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0janus-studio-uninstall.ps1" -Prefix "%~dp0.."
+exit /b %ERRORLEVEL%
+"@
+Set-Content -Encoding ASCII `
+    -LiteralPath (Join-Path $Bin "janus-studio-uninstall.cmd") `
+    -Value $UninstallLauncher
 
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if (($UserPath -split ";") -notcontains $Bin) {
     $UpdatedPath = if ($UserPath) { "$Bin;$UserPath" } else { $Bin }
     [Environment]::SetEnvironmentVariable("Path", $UpdatedPath, "User")
+    Set-Content -Encoding ASCII `
+        -LiteralPath (Join-Path $Share ".path-added-by-installer") `
+        -Value $Bin
     Write-Host "Le PATH utilisateur a été mis à jour; ouvrez un nouveau terminal."
 }
 

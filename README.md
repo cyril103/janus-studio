@@ -78,6 +78,21 @@ l'équivalent PowerShell installe l'application dans
 janus-studio C:\chemin\vers\un-projet
 ```
 
+Pour désinstaller uniquement les fichiers créés par ces scripts :
+
+```bash
+janus-studio-uninstall
+```
+
+```powershell
+janus-studio-uninstall
+```
+
+Utilisez le même `JANUS_STUDIO_PREFIX` (ou le paramètre PowerShell `-Prefix`)
+que lors de l'installation. Sous Windows, le dossier ajouté au `PATH` est
+également retiré. Les scripts `./scripts/uninstall.sh` et
+`.\scripts\uninstall.ps1` peuvent aussi être lancés directement depuis le dépôt.
+
 ## Organisation du code
 
 - `src/main.janus` initialise la session et orchestre la boucle de l'application ;
