@@ -8,6 +8,7 @@ import editor.search
 import tooling.diagnostics
 import std.fs
 import std.option
+import std.path
 import std.process
 import std.result
 import std.system
@@ -69,10 +70,38 @@ def useProjectDirectory(path : string, output : TextBuilder) : bool {
     return true
 }
 
+def useNormalizedProjectDirectory(path : Path, output : TextBuilder) : bool {
+    output.append(path.view())
+    delete path
+    return true
+}
+
+def joinProjectDirectory(
+directory : WorkingDirectory,
+path : string,
+output : TextBuilder
+) : bool {
+    val joined : Result[Path, SystemError] = joinPath(directory.view(), path)
+    delete directory
+    return match move joined {
+        Ok(value) => useNormalizedProjectDirectory(move value, output),
+        Error(error) => useProjectDirectory(path, output)
+    }
+}
+
+def captureProjectDirectory(path : string, output : TextBuilder) : bool {
+    val directory : Result[WorkingDirectory, SystemError] =
+    currentWorkingDirectory()
+    return match move directory {
+        Ok(value) => joinProjectDirectory(move value, path, output),
+        Error(error) => useProjectDirectory(path, output)
+    }
+}
+
 def captureProjectRoot(output : TextBuilder) : bool {
     return match programArgument(usize(1)) {
         Some(path) => if isDirectory(path) {
-            useProjectDirectory(path, output)
+            captureProjectDirectory(path, output)
         } else {
             captureWorkingDirectory(output)
         },

@@ -1,4 +1,5 @@
 import editor.explorer
+import studio.files
 import std.testing
 import std.text
 
@@ -66,4 +67,20 @@ def opensAndClosesProjectDirectories() : Unit {
     assertEqual[usize](explorer.size(), usize(0))
     assertFalse(explorer.open("un-dossier-qui-n-existe-pas"))
     assertEqual[usize](explorer.size(), usize(0))
+}
+
+/// @test
+def normalizesCurrentProjectDirectoryLabel() : Unit {
+    val root : TextBuilder = new TextBuilder()
+    defer delete root
+    assertTrue(captureProjectDirectory(".", root))
+
+    val explorer : ProjectExplorer = projectExplorer(root.view())
+    defer delete explorer
+    val label : TextBuilder = new TextBuilder()
+    defer delete label
+    explorer.appendLabel(usize(0), label)
+
+    assertTrue(label.view() != "")
+    assertTrue(label.view() != ".")
 }
