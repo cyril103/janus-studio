@@ -84,6 +84,7 @@ def main() : int {
         return 1
     }
     defer closeWindow()
+    setWindowResizable(true)
     disableExitKey()
 
     val fontCharacters : string =

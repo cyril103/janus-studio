@@ -13,6 +13,7 @@ Cette première version fournit :
   sélectionnée ;
 - le redimensionnement à la souris de l'explorateur et du panneau de sortie,
   avec un pointeur adapté au survol de chaque séparateur ;
+- une fenêtre native redimensionnable et maximisable sur Linux, Windows et WSL ;
 - l'ouverture d'un fichier passé en argument ;
 - l'ouverture et la création de fichiers depuis l'interface, ainsi que
   l'enregistrement sous un nouveau chemin ;
@@ -37,8 +38,9 @@ Cette première version fournit :
 
 ## Prérequis
 
-- la version de développement de Janus contenant `characterPressed` et
-  `setMouseCursor` (présente dans le dépôt frère `../janus`) ;
+- la version de développement de Janus contenant `characterPressed`,
+  `setMouseCursor` et `setWindowResizable` (présente dans le dépôt frère
+  `../janus`) ;
 - la version de développement de `janus-lsp` contenant la complétion typée des
   membres ;
 - raylib 6 disponible pour l'exécution de l'interface graphique.
