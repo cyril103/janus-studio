@@ -11,6 +11,8 @@ Cette première version fournit :
   vérification du fichier ;
 - le défilement vertical indépendant de l'éditeur à la molette, avec une barre
   indiquant la position dans le fichier ;
+- le défilement horizontal des longues lignes avec `Maj` + molette ou en
+  faisant glisser la barre située au bas de l'éditeur ;
 - le placement du curseur à la souris dans l'éditeur, borné à la fin de la ligne
   sélectionnée ;
 - le redimensionnement à la souris de l'explorateur et du panneau de sortie,
@@ -123,6 +125,17 @@ en argument, il devient la racine de l'explorateur et l'éditeur démarre vide.
 Janus Studio démarre en mode **NORMAL**. Le mode courant et la position du
 curseur restent visibles dans la barre d'état en bas de la fenêtre. `Esc`
 revient toujours dans ce mode.
+
+Dans l'éditeur, `Maj` + molette déplace les longues lignes horizontalement. La
+barre inférieure peut également être saisie à la souris. Un déplacement du
+curseur ramène automatiquement la colonne active dans la zone visible.
+
+Le panneau de sortie possède son propre défilement : la molette parcourt les
+messages verticalement, `Maj` + molette les déplace horizontalement, et les deux
+barres peuvent être saisies à la souris.
+
+L'explorateur suit les mêmes commandes pour parcourir une grande arborescence
+ou révéler des noms de fichiers et dossiers plus larges que le panneau.
 
 ### Explorateur de projet
 

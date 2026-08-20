@@ -153,6 +153,15 @@ def countsVisibleTextLines() : Unit {
 }
 
 /// @test
+def reportsMaximumLineLength() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("court\nune ligne beaucoup plus longue\nfin")
+
+    assertEqual[usize](buffer.maximumLineLength(), usize(30))
+}
+
+/// @test
 def insertsUnicodeCharacters() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer

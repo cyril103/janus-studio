@@ -120,19 +120,44 @@ def main() : int {
     codeFontSize,
     codeFontSpacing
     ).y - oneGlyph.y
+    val outputOneGlyph : Vector2 = codeFont.measure(
+    "M",
+    15.0f,
+    codeFontSpacing
+    )
+    val outputGlyphAdvance : float = codeFont.measure(
+    "MM",
+    15.0f,
+    codeFontSpacing
+    ).x - outputOneGlyph.x
+    val outputLineAdvance : float = codeFont.measure(
+    "M\nM",
+    15.0f,
+    codeFontSpacing
+    ).y - outputOneGlyph.y
     var maximumLines : usize = numericCast[usize](truncatingCast[int](
     numericCast[float](editorBottom - editorTop - 12) / lineAdvance
     ))
     setTargetFps(60)
 
     var firstLine : usize = usize(0)
+    var firstColumn : usize = usize(0)
+    var firstOutputLine : usize = usize(0)
+    var firstOutputColumn : usize = usize(0)
     var firstExplorerEntry : usize = usize(0)
+    var explorerHorizontalOffset : int = 0
     var lastExplorerClick : usize = usize(-1)
     var lastExplorerClickAt : usize = usize(0)
     var quitRequested : bool = false
     var fileMenuOpen : bool = false
     var editorScrollDetached : bool = false
+    var horizontalScrollDetached : bool = false
     var paneResize : PaneResize = PaneResize.None
+    var horizontalScrollbarDragging : bool = false
+    var outputVerticalScrollbarDragging : bool = false
+    var outputHorizontalScrollbarDragging : bool = false
+    var explorerVerticalScrollbarDragging : bool = false
+    var explorerHorizontalScrollbarDragging : bool = false
     var mouseSelecting : bool = false
     while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
@@ -142,9 +167,106 @@ def main() : int {
         val bufferSizeBeforeInput : usize = buffer.size()
         val editorModeBeforeInput : EditorMode = controller.mode()
         val leftMousePressed : bool = isMouseButtonPressed(MouseButton.Left)
+        var visibleColumns : usize = visibleEditorColumns(glyphAdvance)
+        var outputRows : usize = visibleOutputRows(outputLineAdvance)
+        var outputColumns : usize = visibleOutputColumns(outputGlyphAdvance)
+        var visibleExplorerRows : usize = explorerVisibleRows()
         var fileInputConsumed : bool = false
         var layoutMouseConsumed : bool = false
-        if paneResize == PaneResize.None && leftMousePressed {
+        if leftMousePressed && outputVerticalScrollbarHovered(
+        toolOutput.view(),
+        outputRows
+        ) {
+            outputVerticalScrollbarDragging = true
+        } else if leftMousePressed && outputHorizontalScrollbarHovered(
+        toolOutput.view(),
+        outputColumns
+        ) {
+            outputHorizontalScrollbarDragging = true
+        }
+        if leftMousePressed && !outputVerticalScrollbarDragging &&
+        !outputHorizontalScrollbarDragging && explorerVerticalScrollbarHovered(
+        explorer,
+        visibleExplorerRows
+        ) {
+            explorerVerticalScrollbarDragging = true
+        } else if leftMousePressed && !outputVerticalScrollbarDragging &&
+        !outputHorizontalScrollbarDragging && explorerHorizontalScrollbarHovered(
+        explorer,
+        explorerLabel,
+        uiFont
+        ) {
+            explorerHorizontalScrollbarDragging = true
+        }
+        if outputVerticalScrollbarDragging {
+            if isMouseButtonDown(MouseButton.Left) {
+                firstOutputLine = outputVerticalScrollAtMouse(
+                toolOutput.view(),
+                outputRows
+                )
+                layoutMouseConsumed = true
+            } else {
+                outputVerticalScrollbarDragging = false
+            }
+        }
+        if outputHorizontalScrollbarDragging {
+            if isMouseButtonDown(MouseButton.Left) {
+                firstOutputColumn = outputHorizontalScrollAtMouse(
+                toolOutput.view(),
+                outputColumns
+                )
+                layoutMouseConsumed = true
+            } else {
+                outputHorizontalScrollbarDragging = false
+            }
+        }
+        if explorerVerticalScrollbarDragging {
+            if isMouseButtonDown(MouseButton.Left) {
+                firstExplorerEntry = explorerVerticalScrollAtMouse(
+                explorer,
+                visibleExplorerRows
+                )
+                layoutMouseConsumed = true
+            } else {
+                explorerVerticalScrollbarDragging = false
+            }
+        }
+        if explorerHorizontalScrollbarDragging {
+            if isMouseButtonDown(MouseButton.Left) {
+                explorerHorizontalOffset = explorerHorizontalScrollAtMouse(
+                explorer,
+                explorerLabel,
+                uiFont
+                )
+                layoutMouseConsumed = true
+            } else {
+                explorerHorizontalScrollbarDragging = false
+            }
+        }
+        if paneResize == PaneResize.None &&
+        !outputVerticalScrollbarDragging &&
+        !outputHorizontalScrollbarDragging &&
+        !explorerVerticalScrollbarDragging &&
+        !explorerHorizontalScrollbarDragging && leftMousePressed &&
+        horizontalScrollbarHovered(buffer, visibleColumns) {
+            horizontalScrollbarDragging = true
+        }
+        if horizontalScrollbarDragging {
+            if isMouseButtonDown(MouseButton.Left) {
+                firstColumn = horizontalScrollAtMouse(buffer, visibleColumns)
+                horizontalScrollDetached = true
+                completion.dismiss()
+                layoutMouseConsumed = true
+            } else {
+                horizontalScrollbarDragging = false
+            }
+        }
+        if paneResize == PaneResize.None && !horizontalScrollbarDragging &&
+        !outputVerticalScrollbarDragging &&
+        !outputHorizontalScrollbarDragging &&
+        !explorerVerticalScrollbarDragging &&
+        !explorerHorizontalScrollbarDragging &&
+        leftMousePressed {
             if explorerSeparatorHovered() {
                 paneResize = PaneResize.Explorer
             } else if outputSeparatorHovered() {
@@ -163,7 +285,19 @@ def main() : int {
                 paneResize = PaneResize.None
             }
         }
-        if paneResize == PaneResize.Explorer || explorerSeparatorHovered() {
+        if explorerVerticalScrollbarDragging ||
+        explorerVerticalScrollbarHovered(explorer, visibleExplorerRows) ||
+        outputVerticalScrollbarDragging ||
+        outputVerticalScrollbarHovered(toolOutput.view(), outputRows) {
+            setMouseCursor(MouseCursor.ResizeNorthSouth)
+        } else if explorerHorizontalScrollbarDragging ||
+        explorerHorizontalScrollbarHovered(explorer, explorerLabel, uiFont) ||
+        outputHorizontalScrollbarDragging ||
+        outputHorizontalScrollbarHovered(toolOutput.view(), outputColumns) ||
+        horizontalScrollbarDragging ||
+        horizontalScrollbarHovered(buffer, visibleColumns) {
+            setMouseCursor(MouseCursor.ResizeEastWest)
+        } else if paneResize == PaneResize.Explorer || explorerSeparatorHovered() {
             setMouseCursor(MouseCursor.ResizeEastWest)
         } else if paneResize == PaneResize.Output || outputSeparatorHovered() {
             setMouseCursor(MouseCursor.ResizeNorthSouth)
@@ -173,6 +307,10 @@ def main() : int {
         maximumLines = numericCast[usize](truncatingCast[int](
         numericCast[float](editorBottom - editorTop - 12) / lineAdvance
         ))
+        visibleColumns = visibleEditorColumns(glyphAdvance)
+        outputRows = visibleOutputRows(outputLineAdvance)
+        outputColumns = visibleOutputColumns(outputGlyphAdvance)
+        visibleExplorerRows = explorerVisibleRows()
         val maximumFirstAfterResize : usize = maximumEditorFirst(
         buffer,
         maximumLines
@@ -180,22 +318,87 @@ def main() : int {
         if firstLine > maximumFirstAfterResize {
             firstLine = maximumFirstAfterResize
         }
-        val visibleExplorerRows : usize = explorerVisibleRows()
-        firstExplorerEntry = scrollExplorer(
+        val maximumColumnAfterResize : usize = maximumEditorFirstColumn(
+        buffer,
+        visibleColumns
+        )
+        if firstColumn > maximumColumnAfterResize {
+            firstColumn = maximumColumnAfterResize
+        }
+        val maximumOutputLineAfterResize : usize = maximumOutputFirstLine(
+        toolOutput.view(),
+        outputRows
+        )
+        if firstOutputLine > maximumOutputLineAfterResize {
+            firstOutputLine = maximumOutputLineAfterResize
+        }
+        val maximumOutputColumnAfterResize : usize = maximumOutputFirstColumn(
+        toolOutput.view(),
+        outputColumns
+        )
+        if firstOutputColumn > maximumOutputColumnAfterResize {
+            firstOutputColumn = maximumOutputColumnAfterResize
+        }
+        val maximumExplorerEntryAfterResize : usize = maximumExplorerFirst(
         explorer,
-        firstExplorerEntry,
         visibleExplorerRows
         )
+        if firstExplorerEntry > maximumExplorerEntryAfterResize {
+            firstExplorerEntry = maximumExplorerEntryAfterResize
+        }
+        val maximumExplorerOffsetAfterResize : int =
+        maximumExplorerHorizontalOffset(explorer, explorerLabel, uiFont)
+        if explorerHorizontalOffset > maximumExplorerOffsetAfterResize {
+            explorerHorizontalOffset = maximumExplorerOffsetAfterResize
+        }
         if !filePrompt.isVisible() && !fileMenuOpen {
-            val scrolledEditorFirst : usize = scrollEditor(
-            buffer,
-            firstLine,
-            maximumLines
-            )
-            if scrolledEditorFirst != firstLine {
-                firstLine = scrolledEditorFirst
-                editorScrollDetached = true
-                completion.dismiss()
+            if mouseInExplorerPanel() && shift {
+                explorerHorizontalOffset = scrollExplorerHorizontally(
+                explorer,
+                explorerLabel,
+                uiFont,
+                explorerHorizontalOffset
+                )
+            } else if mouseInExplorerPanel() {
+                firstExplorerEntry = scrollExplorer(
+                explorer,
+                firstExplorerEntry,
+                visibleExplorerRows
+                )
+            } else if mouseInOutputPanel() && shift {
+                firstOutputColumn = scrollOutputHorizontally(
+                toolOutput.view(),
+                firstOutputColumn,
+                outputColumns
+                )
+            } else if mouseInOutputPanel() {
+                firstOutputLine = scrollOutputVertically(
+                toolOutput.view(),
+                firstOutputLine,
+                outputRows
+                )
+            } else if shift {
+                val scrolledEditorColumn : usize = scrollEditorHorizontally(
+                buffer,
+                firstColumn,
+                visibleColumns
+                )
+                if scrolledEditorColumn != firstColumn {
+                    firstColumn = scrolledEditorColumn
+                    horizontalScrollDetached = true
+                    completion.dismiss()
+                }
+            } else {
+                val scrolledEditorFirst : usize = scrollEditor(
+                buffer,
+                firstLine,
+                maximumLines
+                )
+                if scrolledEditorFirst != firstLine {
+                    firstLine = scrolledEditorFirst
+                    editorScrollDetached = true
+                    completion.dismiss()
+                }
             }
         }
         if !layoutMouseConsumed && !filePrompt.isVisible() && leftMousePressed &&
@@ -221,6 +424,7 @@ def main() : int {
                 explorer.close()
                 projectRoot.clear()
                 firstExplorerEntry = usize(0)
+                explorerHorizontalOffset = 0
                 setStatus(status, "Dossier fermé.")
             }
             fileMenuOpen = false
@@ -260,7 +464,9 @@ def main() : int {
                         status
                         ) {
                             firstLine = usize(0)
+                            firstColumn = usize(0)
                             editorScrollDetached = false
+                            horizontalScrollDetached = false
                             completion.dismiss()
                             diagnostics.clear()
                             search.clear()
@@ -284,6 +490,7 @@ def main() : int {
             moveCursorToEditorMouse(
             buffer,
             firstLine,
+            firstColumn,
             glyphAdvance,
             lineAdvance,
             maximumLines
@@ -292,6 +499,7 @@ def main() : int {
             buffer.beginSelection()
             mouseSelecting = true
             editorScrollDetached = false
+            horizontalScrollDetached = false
             completion.dismiss()
             fileInputConsumed = true
         }
@@ -306,11 +514,13 @@ def main() : int {
                 moveCursorToEditorMouse(
                 buffer,
                 firstLine,
+                firstColumn,
                 glyphAdvance,
                 lineAdvance,
                 maximumLines
                 )
                 editorScrollDetached = false
+                horizontalScrollDetached = false
                 fileInputConsumed = true
             } else {
                 mouseSelecting = false
@@ -333,6 +543,7 @@ def main() : int {
                     ) {
                         filePrompt.dismiss()
                         firstExplorerEntry = usize(0)
+                        explorerHorizontalOffset = 0
                     }
                 } else {
                     applyPathPrompt(
@@ -344,7 +555,9 @@ def main() : int {
                     status
                     )
                     firstLine = usize(0)
+                    firstColumn = usize(0)
                     editorScrollDetached = false
+                    horizontalScrollDetached = false
                 }
             }
             fileInputConsumed = true
@@ -408,6 +621,8 @@ def main() : int {
                 diagnostics
                 )
             }
+            firstOutputLine = usize(0)
+            firstOutputColumn = usize(0)
             fileInputConsumed = true
         }
 
@@ -513,9 +728,17 @@ def main() : int {
         buffer.column() != cursorColumnBeforeInput ||
         isKeyPressed(Key.Delete) {
             editorScrollDetached = false
+            horizontalScrollDetached = false
         }
         if !editorScrollDetached {
             firstLine = keepCursorVisible(buffer, firstLine, maximumLines)
+        }
+        if !horizontalScrollDetached {
+            firstColumn = keepCursorHorizontallyVisible(
+            buffer,
+            firstColumn,
+            visibleColumns
+            )
         }
         controller.appendStatus(modeLine)
         controller.appendCommandLine(commandLine)
@@ -523,6 +746,7 @@ def main() : int {
         activePath.view(),
         buffer,
         firstLine,
+        firstColumn,
         visibleCharacters,
         syntaxSpans,
         glyph,
@@ -536,10 +760,13 @@ def main() : int {
         statusLine,
         status,
         toolOutput,
+        firstOutputLine,
+        firstOutputColumn,
         modeLine,
         commandLine,
         explorer,
         firstExplorerEntry,
+        explorerHorizontalOffset,
         visibleExplorerRows,
         explorerLabel,
         fileMenuOpen,
@@ -548,6 +775,8 @@ def main() : int {
         codeFont,
         glyphAdvance,
         lineAdvance,
+        outputGlyphAdvance,
+        outputLineAdvance,
         maximumLines
         )
     }

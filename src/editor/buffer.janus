@@ -517,6 +517,24 @@ private val redoStates : Array[BufferSnapshot]
         return result
     }
 
+    def maximumLineLength() : usize {
+        var maximum : usize = usize(0)
+        var current : usize = usize(0)
+        var index : usize = usize(0)
+        while index < characters.size() {
+            if characters.get(index) == '\n' {
+                if current > maximum {
+                    maximum = current
+                }
+                current = usize(0)
+            } else {
+                current = current + usize(1)
+            }
+            index = index + usize(1)
+        }
+        return if current > maximum { current } else { maximum }
+    }
+
     def column() : usize {
         var result : usize = usize(0)
         var index : usize = cursorPosition
