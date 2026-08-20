@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+BIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PREFIX=$(CDPATH= cd -- "$BIN_DIR/.." && pwd)
+LIB_DIR="$PREFIX/lib/janus-studio"
+SHARE_DIR="$PREFIX/share/janus-studio"
+
+if [ "$#" -gt 1 ]; then
+  echo "usage: janus-studio [dossier-ou-fichier]" >&2
+  exit 2
+fi
+
+if [ "$#" -eq 1 ]; then
+  case "$1" in
+    /*) target=$1 ;;
+    *) target=$PWD/$1 ;;
+  esac
+  set -- "$target"
+fi
+
+cd "$SHARE_DIR"
+exec "$LIB_DIR/janus-studio" "$@"

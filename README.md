@@ -57,6 +57,27 @@ janus test
 janus build
 ```
 
+## Installer
+
+Sous Linux ou WSL, l'installateur construit l'application en mode production,
+copie le binaire et ses ressources dans `~/.local`, puis crée la commande
+`janus-studio` :
+
+```bash
+./scripts/install.sh
+janus-studio .
+janus-studio /chemin/vers/un-projet
+```
+
+Le préfixe peut être personnalisé avec `JANUS_STUDIO_PREFIX`. Sous Windows,
+l'équivalent PowerShell installe l'application dans
+`%LOCALAPPDATA%\JanusStudio` et ajoute son dossier `bin` au `PATH` utilisateur :
+
+```powershell
+.\scripts\install.ps1
+janus-studio C:\chemin\vers\un-projet
+```
+
 ## Organisation du code
 
 - `src/main.janus` initialise la session et orchestre la boucle de l'application ;
@@ -74,9 +95,11 @@ Depuis ce répertoire :
 janus run
 janus run -- samples/welcome.janus
 janus run -- /chemin/vers/un-fichier.janus
+janus run -- /chemin/vers/un-dossier
 ```
 
-Le chemin par défaut est `samples/welcome.janus`.
+Le chemin par défaut est `samples/welcome.janus`. Lorsqu'un dossier est passé
+en argument, il devient la racine de l'explorateur et l'éditeur démarre vide.
 
 ## Raccourcis
 

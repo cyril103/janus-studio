@@ -20,6 +20,13 @@ def isFile(path : string) : bool {
     }
 }
 
+def isDirectory(path : string) : bool {
+    return match metadata(path) {
+        Ok(value) => value.kind == FileType.Directory,
+        Error(error) => false
+    }
+}
+
 def codeFontPath() : string {
     val windowsPath : string = "C:/Windows/Fonts/consola.ttf"
     if isFile(windowsPath) {
@@ -34,7 +41,7 @@ def codeFontPath() : string {
 
 def selectedPath() : string {
     return match programArgument(usize(1)) {
-        Some(path) => path,
+        Some(path) => if isDirectory(path) { "" } else { path },
         None => "samples/welcome.janus"
     }
 }
@@ -48,12 +55,28 @@ output : TextBuilder
     return true
 }
 
-def captureProjectRoot(output : TextBuilder) : bool {
+def captureWorkingDirectory(output : TextBuilder) : bool {
     val directory : Result[WorkingDirectory, SystemError] =
     currentWorkingDirectory()
     return match move directory {
         Ok(value) => useWorkingDirectory(move value, output),
         Error(error) => false
+    }
+}
+
+def useProjectDirectory(path : string, output : TextBuilder) : bool {
+    output.append(path)
+    return true
+}
+
+def captureProjectRoot(output : TextBuilder) : bool {
+    return match programArgument(usize(1)) {
+        Some(path) => if isDirectory(path) {
+            useProjectDirectory(path, output)
+        } else {
+            captureWorkingDirectory(output)
+        },
+        None => captureWorkingDirectory(output)
     }
 }
 
