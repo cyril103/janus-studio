@@ -1,5 +1,4 @@
 import std.array
-
 def greet(name : string) : Unit {
     val xs = [1,2,3]
     val ys = xs.map((x:int)=>x*2)  
