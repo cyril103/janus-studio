@@ -2,10 +2,14 @@ import std.array
 
 def greet(name : string) : Unit {
     val xs = [1,2,3]
+    val ys = xs.map((x:int)=>x*2)  
+    defer delete ys
+    
     xs.sortWith((a:int,b:int) => a>b)
     defer delete xs
     print("bonjour ")
     println(name)
+    
 }
 
 def main() : int {

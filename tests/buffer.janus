@@ -92,6 +92,57 @@ def preservesIndentationOnNewLine() : Unit {
 }
 
 /// @test
+def selectsCopiesAndReplacesText() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("alpha beta")
+    buffer.moveFileStart()
+    buffer.beginSelection()
+    buffer.moveRight()
+    buffer.moveRight()
+    buffer.moveRight()
+    buffer.moveRight()
+    buffer.moveRight()
+    assertTrue(buffer.hasSelection())
+    assertEqual[usize](buffer.selectionStart(), usize(0))
+    assertEqual[usize](buffer.selectionEnd(), usize(5))
+
+    val copied : TextBuilder = new TextBuilder()
+    defer delete copied
+    assertTrue(buffer.appendSelection(copied))
+    assertEqual[string](copied.view(), "alpha")
+    buffer.insertText("value")
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "value beta")
+    assertTrue(!buffer.hasSelection())
+    assertTrue(buffer.undo())
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "alpha beta")
+}
+
+/// @test
+def deletesSelectedTextInOneChange() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("first\nsecond")
+    buffer.moveFileStart()
+    buffer.beginSelection()
+    buffer.moveDown()
+    assertTrue(buffer.deleteSelection())
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "second")
+    assertTrue(buffer.undo())
+    output.clear()
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "first\nsecond")
+}
+
+/// @test
 def countsVisibleTextLines() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer

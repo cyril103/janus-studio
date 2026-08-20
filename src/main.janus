@@ -343,6 +343,7 @@ buffer : EditorBuffer
 ) : EditorAction {
     if isKeyPressed(Key.Escape) {
         controller.escape()
+        buffer.clearSelection()
         return EditorAction.None
     }
     if controller.mode() == EditorMode.Command ||
@@ -358,6 +359,16 @@ buffer : EditorBuffer
             }
         }
         return EditorAction.None
+    }
+    val extendingSelection : bool = shiftDown()
+    if isKeyPressed(Key.Left) || isKeyPressed(Key.Right) ||
+    isKeyPressed(Key.Up) || isKeyPressed(Key.Down) ||
+    isKeyPressed(Key.Home) || isKeyPressed(Key.End) {
+        if extendingSelection {
+            buffer.beginSelection()
+        } else {
+            buffer.clearSelection()
+        }
     }
     if isKeyPressed(Key.Left) {
         buffer.moveLeft()
@@ -942,6 +953,56 @@ lineAdvance : float
     }
 }
 
+def drawSelection(
+buffer : EditorBuffer,
+firstLine : usize,
+maximumLines : usize,
+y : int,
+glyphAdvance : float,
+lineAdvance : float
+) : Unit {
+    if !buffer.hasSelection() { return }
+    val startLine : usize = buffer.lineAtOffset(buffer.selectionStart())
+    val endLine : usize = buffer.lineAtOffset(buffer.selectionEnd())
+    val startColumn : usize = buffer.columnAtOffset(buffer.selectionStart())
+    val endColumn : usize = buffer.columnAtOffset(buffer.selectionEnd())
+    var line : usize = startLine
+    while line <= endLine {
+        if line >= firstLine && line < firstLine + maximumLines {
+            val firstColumn : usize = if line == startLine {
+                startColumn
+            } else {
+                usize(0)
+            }
+            val lastColumn : usize = if line == endLine {
+                endColumn
+            } else {
+                buffer.lineLength(line)
+            }
+            if lastColumn > firstColumn {
+                drawRectangle(
+                editorCodeLeft() + truncatingCast[int](
+                numericCast[float](truncatingCast[int](firstColumn)) *
+                glyphAdvance
+                ),
+                y + truncatingCast[int](
+                numericCast[float](truncatingCast[int](line - firstLine)) *
+                lineAdvance
+                ),
+                truncatingCast[int](
+                numericCast[float](truncatingCast[int](
+                lastColumn - firstColumn
+                )) * glyphAdvance
+                ),
+                23,
+                rgb(55, 79, 105)
+                )
+            }
+        }
+        line = line + usize(1)
+    }
+}
+
 def drawExplorer(
 explorer : ProjectExplorer,
 firstEntry : usize,
@@ -1082,6 +1143,15 @@ maximumLines : usize
     editorTop + 12,
     lineAdvance,
     muted
+    )
+
+    drawSelection(
+    buffer,
+    firstLine,
+    maximumLines,
+    editorTop + 12,
+    glyphAdvance,
+    lineAdvance
     )
 
     drawSearchMatches(
@@ -1460,6 +1530,8 @@ def main() : int {
     defer delete modeLine
     val commandLine : TextBuilder = new TextBuilder()
     defer delete commandLine
+    val clipboard : TextBuilder = new TextBuilder()
+    defer delete clipboard
     val controller : VimController = vimController()
     defer delete controller
 
@@ -1519,6 +1591,7 @@ def main() : int {
     var fileMenuOpen : bool = false
     var editorScrollDetached : bool = false
     var paneResize : PaneResize = PaneResize.None
+    var mouseSelecting : bool = false
     while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
         val shift : bool = shiftDown()
@@ -1673,9 +1746,33 @@ def main() : int {
             lineAdvance,
             maximumLines
             )
+            buffer.clearSelection()
+            buffer.beginSelection()
+            mouseSelecting = true
             editorScrollDetached = false
             completion.dismiss()
             fileInputConsumed = true
+        }
+        if mouseSelecting {
+            if isMouseButtonDown(MouseButton.Left) &&
+            pointInArea(
+            editorLeft,
+            editorTop,
+            screenWidth() - editorLeft - 8,
+            editorBottom - editorTop
+            ) {
+                moveCursorToEditorMouse(
+                buffer,
+                firstLine,
+                glyphAdvance,
+                lineAdvance,
+                maximumLines
+                )
+                editorScrollDetached = false
+                fileInputConsumed = true
+            } else {
+                mouseSelecting = false
+            }
         }
         if fileMenuOpen {
             if isKeyPressed(Key.Escape) {
@@ -1729,6 +1826,31 @@ def main() : int {
                 filePrompt.begin(PathPromptAction.Create, "")
                 completion.dismiss()
             }
+            fileInputConsumed = true
+        }
+
+        if !fileInputConsumed && control && isKeyPressed(Key.C) &&
+        buffer.appendSelection(clipboard) {
+            setClipboardText(clipboard.view())
+            setStatus(status, "Sélection copiée.")
+            fileInputConsumed = true
+        }
+        if !fileInputConsumed && control && isKeyPressed(Key.X) &&
+        buffer.appendSelection(clipboard) {
+            setClipboardText(clipboard.view())
+            buffer.deleteSelection()
+            setStatus(status, "Sélection coupée.")
+            fileInputConsumed = true
+        }
+        if !fileInputConsumed && control && isKeyPressed(Key.V) &&
+        controller.mode() == EditorMode.Insert {
+            val systemClipboard : string = clipboardText()
+            if systemClipboard != "" {
+                buffer.insertText(systemClipboard)
+            } else if clipboard.size() > usize(0) {
+                buffer.insertText(clipboard.view())
+            }
+            setStatus(status, "Presse-papiers collé.")
             fileInputConsumed = true
         }
 

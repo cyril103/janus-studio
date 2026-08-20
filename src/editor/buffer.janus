@@ -102,6 +102,47 @@ private val redoStates : Array[BufferSnapshot]
 ) {
     private var cursorPosition : usize = usize(0)
     private var modified : bool = false
+    private var selectionAnchor : usize = usize(0)
+    private var selecting : bool = false
+
+    def hasSelection() : bool {
+        return selecting && selectionAnchor != cursorPosition
+    }
+
+    def selectionStart() : usize {
+        return if selectionAnchor < cursorPosition {
+            selectionAnchor
+        } else {
+            cursorPosition
+        }
+    }
+
+    def selectionEnd() : usize {
+        return if selectionAnchor > cursorPosition {
+            selectionAnchor
+        } else {
+            cursorPosition
+        }
+    }
+
+    def beginSelection() : Unit {
+        if !selecting {
+            selectionAnchor = cursorPosition
+            selecting = true
+        }
+    }
+
+    def clearSelection() : Unit {
+        selectionAnchor = cursorPosition
+        selecting = false
+    }
+
+    private def removeSelection() : bool {
+        if !this.hasSelection() { return false }
+        this.eraseRange(this.selectionStart(), this.selectionEnd())
+        this.clearSelection()
+        return true
+    }
 
     private def snapshot() : BufferSnapshot {
         val copied : Array[char] = new Array[char](characters.size())
@@ -122,6 +163,7 @@ private val redoStates : Array[BufferSnapshot]
         }
         cursorPosition = state.cursor()
         modified = state.wasModified()
+        this.clearSelection()
         delete state
     }
 
@@ -212,6 +254,7 @@ private val redoStates : Array[BufferSnapshot]
         redoStates.clear()
         cursorPosition = usize(0)
         modified = false
+        this.clearSelection()
     }
 
     def load(text : string) : Unit {
@@ -221,10 +264,12 @@ private val redoStates : Array[BufferSnapshot]
         redoStates.clear()
         cursorPosition = characters.size()
         modified = false
+        this.clearSelection()
     }
 
     def insert(value : char) : Unit {
         this.rememberChange()
+        this.removeSelection()
         this.insertAt(cursorPosition, value)
         cursorPosition = cursorPosition + usize(1)
         modified = true
@@ -245,7 +290,7 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     def insertPaired(value : char) : Unit {
-        if this.isAutomaticClosing(value) &&
+        if !this.hasSelection() && this.isAutomaticClosing(value) &&
         cursorPosition < characters.size() &&
         characters.get(cursorPosition) == value {
             cursorPosition = cursorPosition + usize(1)
@@ -257,6 +302,7 @@ private val redoStates : Array[BufferSnapshot]
             return
         }
         this.rememberChange()
+        this.removeSelection()
         this.insertAt(cursorPosition, value)
         this.insertAt(cursorPosition + usize(1), closing)
         cursorPosition = cursorPosition + usize(1)
@@ -271,6 +317,7 @@ private val redoStates : Array[BufferSnapshot]
         defer delete decoded
         decodeUtf8(text, decoded)
         this.rememberChange()
+        this.removeSelection()
         var index : usize = usize(0)
         while index < decoded.size() {
             this.insertAt(cursorPosition, decoded.get(index))
@@ -285,6 +332,7 @@ private val redoStates : Array[BufferSnapshot]
             return
         }
         this.rememberChange()
+        this.removeSelection()
         var index : usize = usize(0)
         while index < count {
             this.insertAt(cursorPosition, ' ')
@@ -295,6 +343,14 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     def insertIndentedNewline() : Unit {
+        if this.hasSelection() {
+            this.rememberChange()
+            this.removeSelection()
+            this.insertAt(cursorPosition, '\n')
+            cursorPosition = cursorPosition + usize(1)
+            modified = true
+            return
+        }
         val start : usize = this.lineStart(cursorPosition)
         var indentation : usize = usize(0)
         while start + indentation < cursorPosition &&
@@ -341,6 +397,11 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     def backspace() : Unit {
+        if this.hasSelection() {
+            this.rememberChange()
+            this.removeSelection()
+            return
+        }
         if cursorPosition == usize(0) {
             return
         }
@@ -357,6 +418,11 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     def deleteForward() : Unit {
+        if this.hasSelection() {
+            this.rememberChange()
+            this.removeSelection()
+            return
+        }
         if cursorPosition >= characters.size() {
             return
         }
@@ -670,6 +736,34 @@ private val redoStates : Array[BufferSnapshot]
         } else {
             characters.size()
         }
+    }
+
+    def lineLength(requestedLine : usize) : usize {
+        var line : usize = usize(0)
+        var start : usize = usize(0)
+        while line < requestedLine && start < characters.size() {
+            if characters.get(start) == '\n' { line = line + usize(1) }
+            start = start + usize(1)
+        }
+        if line != requestedLine { return usize(0) }
+        return this.lineEnd(start) - start
+    }
+
+    def appendSelection(output : TextBuilder) : bool {
+        output.clear()
+        if !this.hasSelection() { return false }
+        var index : usize = this.selectionStart()
+        while index < this.selectionEnd() {
+            output.appendChar(characters.get(index))
+            index = index + usize(1)
+        }
+        return true
+    }
+
+    def deleteSelection() : bool {
+        if !this.hasSelection() { return false }
+        this.rememberChange()
+        return this.removeSelection()
     }
 
     def lineAtOffset(position : usize) : usize {
