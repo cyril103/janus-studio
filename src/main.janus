@@ -7,6 +7,7 @@ import editor.syntax
 import editor.vim
 import studio.files
 import studio.input
+import studio.tabs
 import studio.view
 import tooling.compiler
 import tooling.diagnostics
@@ -26,6 +27,8 @@ def main() : int {
     defer delete explorer
     val explorerLabel : TextBuilder = new TextBuilder()
     defer delete explorerLabel
+    val tabLabel : TextBuilder = new TextBuilder()
+    defer delete tabLabel
     val explorerPath : TextBuilder = new TextBuilder()
     defer delete explorerPath
     val activePath : TextBuilder = new TextBuilder()
@@ -77,6 +80,8 @@ def main() : int {
     defer delete controller
 
     loadFile(activePath.view(), buffer, status)
+    val tabs : DocumentTabs = documentTabs(activePath.view(), buffer)
+    defer delete tabs
     toolOutput.append("F5 lance `janus check` sur le fichier actif.")
 
     if !initWindow(1200, 760, "Janus Studio") {
@@ -144,6 +149,7 @@ def main() : int {
     var firstColumn : usize = usize(0)
     var firstOutputLine : usize = usize(0)
     var firstOutputColumn : usize = usize(0)
+    var firstDocumentTab : usize = usize(0)
     var firstExplorerEntry : usize = usize(0)
     var explorerHorizontalOffset : int = 0
     var lastExplorerClick : usize = usize(-1)
@@ -158,6 +164,7 @@ def main() : int {
     var outputHorizontalScrollbarDragging : bool = false
     var explorerVerticalScrollbarDragging : bool = false
     var explorerHorizontalScrollbarDragging : bool = false
+    var documentTabScrollbarDragging : bool = false
     var mouseSelecting : bool = false
     while !windowShouldClose() && !quitRequested {
         val control : bool = controlDown()
@@ -173,7 +180,67 @@ def main() : int {
         var visibleExplorerRows : usize = explorerVisibleRows()
         var fileInputConsumed : bool = false
         var layoutMouseConsumed : bool = false
-        if leftMousePressed && outputVerticalScrollbarHovered(
+        if leftMousePressed && documentTabScrollbarHovered(tabs) {
+            documentTabScrollbarDragging = true
+        }
+        if documentTabScrollbarDragging {
+            if isMouseButtonDown(MouseButton.Left) {
+                firstDocumentTab = documentTabScrollAtMouse(tabs)
+                layoutMouseConsumed = true
+            } else {
+                documentTabScrollbarDragging = false
+            }
+        }
+        if leftMousePressed {
+            val clickedTab : usize = documentTabAtMouse(
+            tabs,
+            firstDocumentTab
+            )
+            if clickedTab != usize(-1) {
+                val previouslySelected : usize = tabs.selected()
+                val closingTab : bool = documentTabCloseHovered(
+                tabs,
+                firstDocumentTab,
+                clickedTab
+                )
+                val changed : bool = if closingTab {
+                    tabs.close(
+                    clickedTab,
+                    buffer,
+                    activePath,
+                    status,
+                    firstLine,
+                    firstColumn
+                    )
+                } else {
+                    tabs.switchTo(
+                    clickedTab,
+                    buffer,
+                    activePath,
+                    firstLine,
+                    firstColumn
+                    )
+                }
+                if changed && (!closingTab ||
+                clickedTab == previouslySelected) {
+                    firstLine = tabs.firstLine()
+                    firstColumn = tabs.firstColumn()
+                    diagnostics.clear()
+                    search.clear()
+                    completion.dismiss()
+                    signatureText.clear()
+                    controller.escape()
+                    firstDocumentTab = keepSelectedDocumentTabVisible(
+                    tabs,
+                    firstDocumentTab
+                    )
+                }
+                fileInputConsumed = true
+                layoutMouseConsumed = true
+            }
+        }
+        if !documentTabScrollbarDragging && leftMousePressed &&
+        outputVerticalScrollbarHovered(
         toolOutput.view(),
         outputRows
         ) {
@@ -290,7 +357,9 @@ def main() : int {
         outputVerticalScrollbarDragging ||
         outputVerticalScrollbarHovered(toolOutput.view(), outputRows) {
             setMouseCursor(MouseCursor.ResizeNorthSouth)
-        } else if explorerHorizontalScrollbarDragging ||
+        } else if documentTabScrollbarDragging ||
+        documentTabScrollbarHovered(tabs) ||
+        explorerHorizontalScrollbarDragging ||
         explorerHorizontalScrollbarHovered(explorer, explorerLabel, uiFont) ||
         outputHorizontalScrollbarDragging ||
         outputHorizontalScrollbarHovered(toolOutput.view(), outputColumns) ||
@@ -351,8 +420,17 @@ def main() : int {
         if explorerHorizontalOffset > maximumExplorerOffsetAfterResize {
             explorerHorizontalOffset = maximumExplorerOffsetAfterResize
         }
+        val maximumFirstTabAfterResize : usize = maximumFirstDocumentTab(tabs)
+        if firstDocumentTab > maximumFirstTabAfterResize {
+            firstDocumentTab = maximumFirstTabAfterResize
+        }
         if !filePrompt.isVisible() && !fileMenuOpen {
-            if mouseInExplorerPanel() && shift {
+            if mouseInDocumentTabs() {
+                firstDocumentTab = scrollDocumentTabs(
+                tabs,
+                firstDocumentTab
+                )
+            } else if mouseInExplorerPanel() && shift {
                 explorerHorizontalOffset = scrollExplorerHorizontally(
                 explorer,
                 explorerLabel,
@@ -457,20 +535,26 @@ def main() : int {
                     doubleClickDelayMilliseconds
                     if isDoubleClick {
                         explorer.appendPath(clicked, explorerPath)
-                        if openExplorerFile(
+                        if tabs.open(
                         explorerPath.view(),
-                        activePath,
                         buffer,
-                        status
+                        activePath,
+                        status,
+                        firstLine,
+                        firstColumn
                         ) {
-                            firstLine = usize(0)
-                            firstColumn = usize(0)
+                            firstLine = tabs.firstLine()
+                            firstColumn = tabs.firstColumn()
                             editorScrollDetached = false
                             horizontalScrollDetached = false
                             completion.dismiss()
                             diagnostics.clear()
                             search.clear()
                             controller.escape()
+                            firstDocumentTab = keepSelectedDocumentTabVisible(
+                            tabs,
+                            firstDocumentTab
+                            )
                         }
                         lastExplorerClick = usize(-1)
                     } else {
@@ -546,18 +630,56 @@ def main() : int {
                         explorerHorizontalOffset = 0
                     }
                 } else {
-                    applyPathPrompt(
+                    val action : PathPromptAction = filePrompt.action()
+                    var applied : bool = false
+                    if filePrompt.value() == "" {
+                        setStatus(status, "Saisissez un chemin de fichier.")
+                    } else if action == PathPromptAction.Open {
+                        applied = tabs.open(
+                        filePrompt.value(),
+                        buffer,
+                        activePath,
+                        status,
+                        firstLine,
+                        firstColumn
+                        )
+                        if applied { filePrompt.dismiss() }
+                    } else if action == PathPromptAction.Create {
+                        tabs.create(
+                        filePrompt.value(),
+                        buffer,
+                        activePath,
+                        firstLine,
+                        firstColumn
+                        )
+                        setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+                        filePrompt.dismiss()
+                        applied = true
+                    } else if applyPathPrompt(
                     filePrompt,
                     activePath,
                     buffer,
                     diagnostics,
                     search,
                     status
-                    )
-                    firstLine = usize(0)
-                    firstColumn = usize(0)
-                    editorScrollDetached = false
-                    horizontalScrollDetached = false
+                    ) {
+                        tabs.updateActivePath(activePath.view())
+                        applied = true
+                    }
+                    if applied {
+                        firstLine = tabs.firstLine()
+                        firstColumn = tabs.firstColumn()
+                        editorScrollDetached = false
+                        horizontalScrollDetached = false
+                        completion.dismiss()
+                        diagnostics.clear()
+                        search.clear()
+                        controller.escape()
+                        firstDocumentTab = keepSelectedDocumentTabVisible(
+                        tabs,
+                        firstDocumentTab
+                        )
+                    }
                 }
             }
             fileInputConsumed = true
@@ -567,19 +689,64 @@ def main() : int {
             completion.dismiss()
             fileInputConsumed = true
         } else if !fileInputConsumed && control && isKeyPressed(Key.O) {
-            if buffer.isModified() {
-                setStatus(status, "Enregistrez les modifications avant d'ouvrir un fichier.")
-            } else {
-                filePrompt.begin(PathPromptAction.Open, "")
-                completion.dismiss()
-            }
+            filePrompt.begin(PathPromptAction.Open, "")
+            completion.dismiss()
             fileInputConsumed = true
         } else if !fileInputConsumed && control && isKeyPressed(Key.N) {
-            if buffer.isModified() {
-                setStatus(status, "Enregistrez les modifications avant de créer un fichier.")
-            } else {
-                filePrompt.begin(PathPromptAction.Create, "")
+            filePrompt.begin(PathPromptAction.Create, "")
+            completion.dismiss()
+            fileInputConsumed = true
+        } else if !fileInputConsumed && control && isKeyPressed(Key.W) {
+            val closed : bool = tabs.close(
+            tabs.selected(),
+            buffer,
+            activePath,
+            status,
+            firstLine,
+            firstColumn
+            )
+            if closed {
+                firstLine = tabs.firstLine()
+                firstColumn = tabs.firstColumn()
+                diagnostics.clear()
+                search.clear()
                 completion.dismiss()
+                signatureText.clear()
+                controller.escape()
+                firstDocumentTab = keepSelectedDocumentTabVisible(
+                tabs,
+                firstDocumentTab
+                )
+            }
+            fileInputConsumed = true
+        } else if !fileInputConsumed && control && isKeyPressed(Key.Tab) {
+            val nextTab : usize = if shift {
+                if tabs.selected() == usize(0) {
+                    tabs.size() - usize(1)
+                } else {
+                    tabs.selected() - usize(1)
+                }
+            } else {
+                (tabs.selected() + usize(1)) % tabs.size()
+            }
+            if tabs.switchTo(
+            nextTab,
+            buffer,
+            activePath,
+            firstLine,
+            firstColumn
+            ) {
+                firstLine = tabs.firstLine()
+                firstColumn = tabs.firstColumn()
+                diagnostics.clear()
+                search.clear()
+                completion.dismiss()
+                signatureText.clear()
+                controller.escape()
+                firstDocumentTab = keepSelectedDocumentTabVisible(
+                tabs,
+                firstDocumentTab
+                )
             }
             fileInputConsumed = true
         }
@@ -706,12 +873,19 @@ def main() : int {
             keyAction = EditorAction.None
             characterAction = EditorAction.None
         }
+        val requestedAction : EditorAction =
+        if keyAction != EditorAction.None { keyAction } else { characterAction }
         quitRequested = applyEditorAction(
-        if keyAction != EditorAction.None { keyAction } else { characterAction },
+        requestedAction,
         activePath.view(),
         buffer,
         status
         )
+        if quitRequested && requestedAction != EditorAction.ForceQuit &&
+        tabs.anyModified(buffer) {
+            quitRequested = false
+            setStatus(status, "Des onglets contiennent des modifications non enregistrées.")
+        }
         if buffer.isModified() {
             diagnostics.clear()
         }
@@ -745,6 +919,9 @@ def main() : int {
         drawStudio(
         activePath.view(),
         buffer,
+        tabs,
+        tabLabel,
+        firstDocumentTab,
         firstLine,
         firstColumn,
         visibleCharacters,

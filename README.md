@@ -4,6 +4,8 @@ Prototype d'IDE natif écrit en Janus pour développer des programmes Janus.
 
 Cette première version fournit :
 
+- l'ouverture de plusieurs fichiers dans des onglets indépendants, avec
+  indicateur de modification et fermeture protégée ;
 - une interface sombre modernisée avec onglet actif, panneaux hiérarchisés,
   états de survol et dialogues visuellement distincts ;
 - un buffer éditable avec curseur et défilement vertical automatique ;
@@ -129,6 +131,13 @@ revient toujours dans ce mode.
 Dans l'éditeur, `Maj` + molette déplace les longues lignes horizontalement. La
 barre inférieure peut également être saisie à la souris. Un déplacement du
 curseur ramène automatiquement la colonne active dans la zone visible.
+
+Les fichiers ouverts restent disponibles dans la barre d'onglets. Cliquez sur
+un onglet pour l'activer ou sur son `x` pour le fermer. `Ctrl+Tab` passe à
+l'onglet suivant, `Ctrl+Maj+Tab` au précédent et `Ctrl+W` ferme l'onglet actif.
+Un onglet contenant des modifications non enregistrées ne peut pas être fermé.
+Lorsque la barre est pleine, la molette au-dessus des onglets ou la barre de
+défilement située sous ceux-ci permet de parcourir tous les documents ouverts.
 
 Le panneau de sortie possède son propre défilement : la molette parcourt les
 messages verticalement, `Maj` + molette les déplace horizontalement, et les deux

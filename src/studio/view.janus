@@ -8,6 +8,7 @@ import editor.path_prompt
 import editor.search
 import editor.syntax
 import editor.vim
+import studio.tabs
 import tooling.diagnostics
 import std.array
 import std.graphics
@@ -35,6 +36,8 @@ const minimumEditorWidth : int = 360
 const minimumEditorHeight : int = 180
 const minimumOutputHeight : int = 80
 const editorGutterWidth : int = 56
+const documentTabWidth : int = 190
+const documentTabGap : int = 4
 
 def editorCodeLeft() : int {
     return editorLeft + editorGutterWidth
@@ -59,6 +62,105 @@ def pathPromptTitle(action : PathPromptAction) : string {
 def pointInArea(x : int, y : int, width : int, height : int) : bool {
     return mouseX() >= x && mouseX() < x + width &&
     mouseY() >= y && mouseY() < y + height
+}
+
+def visibleDocumentTabs() : usize {
+    val available : int = screenWidth() - editorLeft - 16
+    if available <= documentTabWidth { return usize(1) }
+    return numericCast[usize](available / (documentTabWidth + documentTabGap))
+}
+
+def maximumFirstDocumentTab(tabs : DocumentTabs) : usize {
+    val visible : usize = visibleDocumentTabs()
+    return if tabs.size() > visible {
+        tabs.size() - visible
+    } else {
+        usize(0)
+    }
+}
+
+def keepSelectedDocumentTabVisible(
+tabs : DocumentTabs,
+first : usize
+) : usize {
+    val visible : usize = visibleDocumentTabs()
+    if tabs.selected() < first { return tabs.selected() }
+    if tabs.selected() >= first + visible {
+        return tabs.selected() - visible + usize(1)
+    }
+    val maximum : usize = maximumFirstDocumentTab(tabs)
+    return if first < maximum { first } else { maximum }
+}
+
+def mouseInDocumentTabs() : bool {
+    return mouseX() >= editorLeft && mouseX() < screenWidth() &&
+    mouseY() >= 10 && mouseY() < editorTop
+}
+
+def scrollDocumentTabs(tabs : DocumentTabs, first : usize) : usize {
+    if !mouseInDocumentTabs() { return first }
+    val movement : float = mouseWheelMove()
+    if movement > 0.0f {
+        return if first > usize(0) { first - usize(1) } else { usize(0) }
+    }
+    if movement < 0.0f {
+        val maximum : usize = maximumFirstDocumentTab(tabs)
+        return if first < maximum { first + usize(1) } else { maximum }
+    }
+    return first
+}
+
+def documentTabScrollbarHovered(tabs : DocumentTabs) : bool {
+    return maximumFirstDocumentTab(tabs) > usize(0) &&
+    pointInArea(editorLeft, editorTop - 10, screenWidth() - editorLeft - 8, 10)
+}
+
+def documentTabScrollAtMouse(tabs : DocumentTabs) : usize {
+    val maximum : usize = maximumFirstDocumentTab(tabs)
+    if maximum == usize(0) { return usize(0) }
+    val trackWidth : int = screenWidth() - editorLeft - 8
+    var thumbWidth : int = trackWidth *
+    truncatingCast[int](visibleDocumentTabs()) /
+    truncatingCast[int](tabs.size())
+    if thumbWidth < 36 { thumbWidth = 36 }
+    val available : int = trackWidth - thumbWidth
+    var requested : int = mouseX() - editorLeft - thumbWidth / 2
+    if requested < 0 {
+        requested = 0
+    } else if requested > available {
+        requested = available
+    }
+    return if available > 0 {
+        numericCast[usize](
+        requested * truncatingCast[int](maximum) / available
+        )
+    } else {
+        usize(0)
+    }
+}
+
+def documentTabAtMouse(tabs : DocumentTabs, first : usize) : usize {
+    if mouseY() < 10 || mouseY() >= 52 || mouseX() < editorLeft {
+        return usize(-1)
+    }
+    val stride : int = documentTabWidth + documentTabGap
+    val relative : int = mouseX() - editorLeft
+    if relative % stride >= documentTabWidth { return usize(-1) }
+    val index : usize = first +
+    numericCast[usize](relative / stride)
+    return if index < tabs.size() { index } else { usize(-1) }
+}
+
+def documentTabCloseHovered(
+tabs : DocumentTabs,
+first : usize,
+index : usize
+) : bool {
+    if index == usize(-1) { return false }
+    val visibleIndex : usize = index - first
+    val x : int = editorLeft + truncatingCast[int](visibleIndex) *
+    (documentTabWidth + documentTabGap)
+    return pointInArea(x + documentTabWidth - 34, 17, 28, 28)
 }
 
 def distance(left : int, right : int) : int {
@@ -1157,6 +1259,9 @@ muted : Color
 def drawStudio(
 path : string,
 buffer : EditorBuffer,
+tabs : DocumentTabs,
+tabLabel : TextBuilder,
+firstDocumentTab : usize,
 firstLine : usize,
 firstColumn : usize,
 visibleCharacters : Array[char],
@@ -1273,30 +1378,89 @@ maximumLines : usize
     }
     drawUiText(uiFont, "Fichier", fileMenuX + 11, 19, 16.0f, text)
 
-    val availableTabWidth : int = screenWidth() - editorLeft - 24
-    val activeTabWidth : int = if availableTabWidth > 380 {
-        380
-    } else {
-        availableTabWidth
-    }
-    if activeTabWidth > 100 {
+    val visibleTabs : usize = visibleDocumentTabs()
+    var tabIndex : usize = firstDocumentTab
+    var tabSlot : usize = usize(0)
+    while tabIndex < tabs.size() && tabSlot < visibleTabs {
+        val tabX : int = editorLeft + truncatingCast[int](tabSlot) *
+        (documentTabWidth + documentTabGap)
+        val selectedTab : bool = tabIndex == tabs.selected()
         drawRoundedRectangle(
-        editorLeft,
+        tabX,
         10,
-        activeTabWidth,
+        documentTabWidth,
         42,
         0.18f,
-        surface
+        if selectedTab { surface } else { header }
         )
-        drawRoundedRectangle(editorLeft, 18, 3, 26, 0.8f, accent)
-        drawCircle(editorLeft + 19, 31, 4.0f, rgb(166, 218, 149))
+        if selectedTab {
+            drawRoundedRectangle(tabX, 18, 3, 26, 0.8f, accent)
+        }
+        drawCircle(
+        tabX + 17,
+        31,
+        4.0f,
+        if tabs.isModified(tabIndex, buffer) {
+            rgb(250, 179, 135)
+        } else {
+            rgb(166, 218, 149)
+        }
+        )
+        tabs.appendLabel(tabIndex, tabLabel)
+        beginScissor(rectangle(
+        numericCast[float](tabX + 28),
+        10.0f,
+        numericCast[float](documentTabWidth - 66),
+        42.0f
+        ))
         drawUiText(
         uiFont,
-        if path == "" { "Nouveau fichier" } else { path },
-        editorLeft + 31,
+        tabLabel.view(),
+        tabX + 29,
         23,
         16.0f,
-        text
+        if selectedTab { text } else { muted }
+        )
+        endScissor()
+        drawUiText(
+        uiFont,
+        "x",
+        tabX + documentTabWidth - 27,
+        22,
+        16.0f,
+        if documentTabCloseHovered(
+        tabs,
+        firstDocumentTab,
+        tabIndex
+        ) { accent } else { muted }
+        )
+        tabIndex = tabIndex + usize(1)
+        tabSlot = tabSlot + usize(1)
+    }
+    val maximumFirstTab : usize = maximumFirstDocumentTab(tabs)
+    if maximumFirstTab > usize(0) {
+        val tabTrackWidth : int = screenWidth() - editorLeft - 8
+        var tabThumbWidth : int = tabTrackWidth *
+        truncatingCast[int](visibleTabs) / truncatingCast[int](tabs.size())
+        if tabThumbWidth < 36 { tabThumbWidth = 36 }
+        val tabThumbX : int = editorLeft +
+        (tabTrackWidth - tabThumbWidth) *
+        truncatingCast[int](firstDocumentTab) /
+        truncatingCast[int](maximumFirstTab)
+        drawRectangle(
+        editorLeft,
+        editorTop - 8,
+        tabTrackWidth,
+        8,
+        header
+        )
+        drawRoundedRectangle(
+        tabThumbX,
+        editorTop - 6,
+        tabThumbWidth,
+        4,
+        0.8f,
+        rgb(89, 96, 120)
         )
     }
 

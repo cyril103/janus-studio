@@ -267,6 +267,16 @@ private val redoStates : Array[BufferSnapshot]
         this.clearSelection()
     }
 
+    def restoreDocument(text : string, position : usize, wasModified : bool) : Unit {
+        this.load(text)
+        cursorPosition = if position < characters.size() {
+            position
+        } else {
+            characters.size()
+        }
+        modified = wasModified
+    }
+
     def insert(value : char) : Unit {
         this.rememberChange()
         this.removeSelection()
@@ -722,6 +732,15 @@ private val redoStates : Array[BufferSnapshot]
         var index : usize = usize(0)
         while index < characters.size() {
             output.appendChar(characters.get(index))
+            index = index + usize(1)
+        }
+    }
+
+    def appendCharacters(output : Array[char]) : Unit {
+        output.clear()
+        var index : usize = usize(0)
+        while index < characters.size() {
+            output.push(characters.get(index))
             index = index + usize(1)
         }
     }

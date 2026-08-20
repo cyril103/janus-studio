@@ -1,0 +1,88 @@
+import editor.buffer
+import studio.tabs
+import std.testing
+import std.text
+
+/// @test
+def restoresIndependentDocuments() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("premier")
+    val tabs : DocumentTabs = documentTabs("src/premier.janus", buffer)
+    defer delete tabs
+    val path : TextBuilder = new TextBuilder()
+    defer delete path
+    path.append("src/premier.janus")
+
+    buffer.insert('!')
+    tabs.create("src/deuxième.janus", buffer, path, usize(3), usize(4))
+    assertEqual[usize](tabs.size(), usize(2))
+    assertEqual[string](path.view(), "src/deuxième.janus")
+    buffer.insertText("second")
+
+    assertTrue(tabs.switchTo(
+    usize(0),
+    buffer,
+    path,
+    usize(7),
+    usize(8)
+    ))
+    val text : TextBuilder = new TextBuilder()
+    defer delete text
+    buffer.appendText(text)
+    assertEqual[string](text.view(), "premier!")
+    assertTrue(buffer.isModified())
+    assertEqual[usize](tabs.firstLine(), usize(3))
+    assertEqual[usize](tabs.firstColumn(), usize(4))
+
+    assertTrue(tabs.switchTo(
+    usize(1),
+    buffer,
+    path,
+    usize(1),
+    usize(2)
+    ))
+    text.clear()
+    buffer.appendText(text)
+    assertEqual[string](text.view(), "second")
+    assertEqual[usize](tabs.firstLine(), usize(7))
+    assertEqual[usize](tabs.firstColumn(), usize(8))
+}
+
+/// @test
+def protectsAndClosesModifiedTabs() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("stable")
+    val tabs : DocumentTabs = documentTabs("stable.janus", buffer)
+    defer delete tabs
+    val path : TextBuilder = new TextBuilder()
+    defer delete path
+    path.append("stable.janus")
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+
+    tabs.create("travail.janus", buffer, path, usize(0), usize(0))
+    buffer.insertText("modifié")
+    assertFalse(tabs.close(
+    tabs.selected(),
+    buffer,
+    path,
+    status,
+    usize(0),
+    usize(0)
+    ))
+    assertEqual[usize](tabs.size(), usize(2))
+
+    buffer.markSaved()
+    assertTrue(tabs.close(
+    tabs.selected(),
+    buffer,
+    path,
+    status,
+    usize(0),
+    usize(0)
+    ))
+    assertEqual[usize](tabs.size(), usize(1))
+    assertEqual[string](path.view(), "stable.janus")
+}
