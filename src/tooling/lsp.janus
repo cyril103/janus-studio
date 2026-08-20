@@ -25,6 +25,21 @@ def hasLabelMarker(source : string, size : usize, index : usize) : bool {
     data.load(index + usize(8)) == byte(34)
 }
 
+def hasDetailMarker(source : string, size : usize, index : usize) : bool {
+    val data : Ptr[byte] = stringData(source)
+    return index + usize(10) <= size &&
+    data.load(index) == byte(34) &&
+    data.load(index + usize(1)) == byte(100) &&
+    data.load(index + usize(2)) == byte(101) &&
+    data.load(index + usize(3)) == byte(116) &&
+    data.load(index + usize(4)) == byte(97) &&
+    data.load(index + usize(5)) == byte(105) &&
+    data.load(index + usize(6)) == byte(108) &&
+    data.load(index + usize(7)) == byte(34) &&
+    data.load(index + usize(8)) == byte(58) &&
+    data.load(index + usize(9)) == byte(34)
+}
+
 def containsLabel(
 labels : string,
 source : string,
@@ -37,7 +52,8 @@ end : usize
     var lineStart : usize = usize(0)
     var index : usize = usize(0)
     while index <= stringLength(labels) {
-        if index == stringLength(labels) || labelData.load(index) == byte(10) {
+        if index == stringLength(labels) || labelData.load(index) == byte(9) ||
+        labelData.load(index) == byte(10) {
             if index - lineStart == requestedLength {
                 var offset : usize = usize(0)
                 var matches : bool = true
@@ -49,6 +65,10 @@ end : usize
                     offset = offset + usize(1)
                 }
                 if matches { return true }
+            }
+            while index < stringLength(labels) &&
+            labelData.load(index) != byte(10) {
+                index = index + usize(1)
             }
             lineStart = index + usize(1)
         }
@@ -62,24 +82,61 @@ def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
     var index : usize = usize(0)
+    var itemStart : usize = usize(0)
     while index < size {
-        if hasLabelMarker(json, size, index) {
+        if data.load(index) == byte(123) {
+            itemStart = index
+            index = index + usize(1)
+        } else if hasLabelMarker(json, size, index) {
             index = index + usize(9)
             val start : usize = index
             while index < size && data.load(index) != byte(34) {
                 index = index + usize(1)
             }
-            if !containsLabel(output.view(), json, start, index) {
-                var labelIndex : usize = start
-                while labelIndex < index {
-                    output.appendChar(char(data.load(labelIndex)))
-                    labelIndex = labelIndex + usize(1)
-                }
-                output.append("\n")
+            var labelIndex : usize = start
+            while labelIndex < index {
+                output.appendChar(char(data.load(labelIndex)))
+                labelIndex = labelIndex + usize(1)
             }
+
+            var detailMarker : usize = itemStart
+            var detailStart : usize = usize(0)
+            while detailMarker < start {
+                if hasDetailMarker(json, size, detailMarker) {
+                    detailStart = detailMarker + usize(10)
+                }
+                detailMarker = detailMarker + usize(1)
+            }
+            if detailStart > usize(0) {
+                output.append("\t")
+                var detailIndex : usize = detailStart
+                while detailIndex < start && data.load(detailIndex) != byte(34) {
+                    output.appendChar(char(data.load(detailIndex)))
+                    detailIndex = detailIndex + usize(1)
+                }
+            }
+            output.append("\n")
         } else {
             index = index + usize(1)
         }
+    }
+}
+
+def extractSignatureLabel(json : string, output : TextBuilder) : Unit {
+    output.clear()
+    val data : Ptr[byte] = stringData(json)
+    val size : usize = stringLength(json)
+    var index : usize = usize(0)
+    while index < size {
+        if hasLabelMarker(json, size, index) {
+            index = index + usize(9)
+            while index < size && data.load(index) != byte(34) {
+                output.appendChar(char(data.load(index)))
+                index = index + usize(1)
+            }
+            return
+        }
+        index = index + usize(1)
     }
 }
 
@@ -555,6 +612,32 @@ private val responseJson : TextBuilder
         !this.sendBody(error) || !this.readResponse(id, error) { return false }
         extractCompletionLabels(responseJson.view(), labels)
         return labels.size() > usize(0)
+    }
+
+    def requestSignatureHelp(
+    path : string,
+    buffer : EditorBuffer,
+    line : usize,
+    column : usize,
+    signature : TextBuilder,
+    error : TextBuilder
+    ) : bool {
+        signature.clear()
+        error.clear()
+        if !this.synchronizeDocument(path, buffer, error) { return false }
+        val id : usize = requestId
+        requestId = requestId + usize(1)
+        body.clear()
+        if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
+        !this.appendNumber(id) || !body.appendText(
+        ",\"method\":\"textDocument/signatureHelp\",\"params\":{\"textDocument\":{\"uri\":"
+        ) || !appendJsonString(activeUri.view(), body) ||
+        !body.appendText("},\"position\":{\"line\":") ||
+        !this.appendNumber(line) || !body.appendText(",\"character\":") ||
+        !this.appendNumber(column) || !body.appendText("}}}") ||
+        !this.sendBody(error) || !this.readResponse(id, error) { return false }
+        extractSignatureLabel(responseJson.view(), signature)
+        return signature.size() > usize(0)
     }
 
     destructor {

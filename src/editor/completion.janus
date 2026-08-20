@@ -2,15 +2,20 @@
 module editor.completion
 
 import editor.buffer
+import std.array
 import std.text
 
 class CompletionModel(
+private val allLabels : TextBuilder,
 private val labels : TextBuilder,
-private val selectedLabel : TextBuilder
+private val selectedLabel : TextBuilder,
+private val insertionLabel : TextBuilder,
+private val prefix : Array[char]
 ) {
     private var itemCount : usize = usize(0)
     private var selectedIndex : usize = usize(0)
     private var visible : bool = false
+    private var filtering : bool = false
 
     def isVisible() : bool {
         return visible
@@ -24,24 +29,80 @@ private val selectedLabel : TextBuilder
         return selectedIndex
     }
 
-    def load(source : string) : Unit {
+    def isFiltering() : bool {
+        return filtering
+    }
+
+    private def rebuildFilter() : Unit {
         labels.clear()
-        labels.append(source)
         itemCount = usize(0)
+        val source : string = allLabels.view()
         val data : Ptr[byte] = stringData(source)
-        var index : usize = usize(0)
-        while index < stringLength(source) {
-            if data.load(index) == byte(10) {
+        var lineStart : usize = usize(0)
+        while lineStart < stringLength(source) {
+            var labelEnd : usize = lineStart
+            while labelEnd < stringLength(source) &&
+            data.load(labelEnd) != byte(9) && data.load(labelEnd) != byte(10) {
+                labelEnd = labelEnd + usize(1)
+            }
+            var matches : bool = prefix.size() <= labelEnd - lineStart
+            var prefixIndex : usize = usize(0)
+            while matches && prefixIndex < prefix.size() {
+                if int(data.load(lineStart + prefixIndex)) !=
+                int(prefix.get(prefixIndex)) {
+                    matches = false
+                }
+                prefixIndex = prefixIndex + usize(1)
+            }
+            var lineEnd : usize = labelEnd
+            while lineEnd < stringLength(source) &&
+            data.load(lineEnd) != byte(10) {
+                lineEnd = lineEnd + usize(1)
+            }
+            if lineEnd < stringLength(source) {
+                lineEnd = lineEnd + usize(1)
+            }
+            if matches {
+                var index : usize = lineStart
+                while index < lineEnd {
+                    labels.appendChar(char(data.load(index)))
+                    index = index + usize(1)
+                }
                 itemCount = itemCount + usize(1)
             }
-            index = index + usize(1)
+            lineStart = lineEnd
         }
         selectedIndex = usize(0)
         visible = itemCount > usize(0)
     }
 
+    def load(source : string) : Unit {
+        allLabels.clear()
+        allLabels.append(source)
+        prefix.clear()
+        filtering = true
+        this.rebuildFilter()
+    }
+
+    def refine(value : char) : Unit {
+        if !filtering { return }
+        prefix.push(value)
+        this.rebuildFilter()
+    }
+
+    def broaden() : Unit {
+        if !filtering { return }
+        if prefix.size() == usize(0) {
+            this.dismiss()
+            return
+        }
+        val _removed : char = prefix.pop()
+        this.rebuildFilter()
+    }
+
     def dismiss() : Unit {
         visible = false
+        filtering = false
     }
 
     def selectNext() : Unit {
@@ -77,6 +138,38 @@ private val selectedLabel : TextBuilder
             }
             position = position + usize(1)
         }
+        while position < stringLength(source) && data.load(position) != byte(9) &&
+        data.load(position) != byte(10) {
+            output.appendChar(char(data.load(position)))
+            position = position + usize(1)
+        }
+    }
+
+    def appendDisplayItem(index : usize, output : TextBuilder) : Unit {
+        output.clear()
+        if index >= itemCount {
+            return
+        }
+        val source : string = labels.view()
+        val data : Ptr[byte] = stringData(source)
+        var current : usize = usize(0)
+        var position : usize = usize(0)
+        while position < stringLength(source) && current < index {
+            if data.load(position) == byte(10) {
+                current = current + usize(1)
+            }
+            position = position + usize(1)
+        }
+        val lineStart : usize = position
+        while position < stringLength(source) &&
+        data.load(position) != byte(9) && data.load(position) != byte(10) {
+            position = position + usize(1)
+        }
+        if position < stringLength(source) && data.load(position) == byte(9) {
+            position = position + usize(1)
+        } else {
+            position = lineStart
+        }
         while position < stringLength(source) && data.load(position) != byte(10) {
             output.appendChar(char(data.load(position)))
             position = position + usize(1)
@@ -93,7 +186,7 @@ private val selectedLabel : TextBuilder
         var index : usize = first
         while index < itemCount && index < first + maximumItems {
             output.append(if index == selectedIndex { "> " } else { "  " })
-            this.appendItem(index, selectedLabel)
+            this.appendDisplayItem(index, selectedLabel)
             output.append(selectedLabel.view())
             output.append("\n")
             index = index + usize(1)
@@ -105,17 +198,35 @@ private val selectedLabel : TextBuilder
             return false
         }
         this.appendItem(selectedIndex, selectedLabel)
-        buffer.insertText(selectedLabel.view())
+        insertionLabel.clear()
+        val selected : string = selectedLabel.view()
+        val data : Ptr[byte] = stringData(selected)
+        var index : usize = prefix.size()
+        while index < stringLength(selected) {
+            insertionLabel.appendChar(char(data.load(index)))
+            index = index + usize(1)
+        }
+        buffer.insertText(insertionLabel.view())
         visible = false
+        filtering = false
         return true
     }
 
     destructor {
+        delete allLabels
         delete labels
         delete selectedLabel
+        delete insertionLabel
+        delete prefix
     }
 }
 
 def completionModel() : CompletionModel {
-    return new CompletionModel(new TextBuilder(), new TextBuilder())
+    return new CompletionModel(
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new TextBuilder(),
+    new Array[char](usize(8))
+    )
 }

@@ -10,10 +10,28 @@ def extractsCompletionLabels() : Unit {
     val labels : TextBuilder = new TextBuilder()
     defer delete labels
     extractCompletionLabels(
-    "{\"items\":[{\"detail\":\"def get\",\"label\":\"get\"},{\"detail\":\"def size\",\"label\":\"size\"},{\"detail\":\"get overload\",\"label\":\"get\"}]}",
+    "{\"items\":[{\"detail\":\"def get(index : usize) : int\",\"label\":\"get\"},{\"detail\":\"def size() : usize\",\"label\":\"size\"},{\"detail\":\"def get(index : int) : int\",\"label\":\"get\"}]}",
     labels
     )
-    assertEqual[string](labels.view(), "get\nsize\n")
+    assertEqual[string](
+    labels.view(),
+    "get\tdef get(index : usize) : int\nsize\tdef size() : usize\nget\tdef get(index : int) : int\n"
+    )
+    assertTrue(containsLabel(labels.view(), "size", usize(0), usize(4)))
+}
+
+/// @test
+def extractsSignatureLabel() : Unit {
+    val signature : TextBuilder = new TextBuilder()
+    defer delete signature
+    extractSignatureLabel(
+    "{\"activeParameter\":1,\"activeSignature\":0,\"signatures\":[{\"label\":\"combine(left : int, right : int) : int\",\"parameters\":[{\"label\":\"left : int\"},{\"label\":\"right : int\"}]}]}",
+    signature
+    )
+    assertEqual[string](
+    signature.view(),
+    "combine(left : int, right : int) : int"
+    )
 }
 
 /// @test
@@ -74,6 +92,21 @@ def reusesPersistentLspSession() : Unit {
     error
     ))
     assertTrue(containsLabel(labels.view(), "size", usize(0), usize(4)))
+
+    val signature : TextBuilder = new TextBuilder()
+    defer delete signature
+    buffer.load(
+    "class Values() {\n    def get(index : usize) : int { return 0 }\n}\n\ndef main() : int {\n    val xs : Values = new Values()\n    xs.get(0)\n    return 0\n}"
+    )
+    assertTrue(client.requestSignatureHelp(
+    "samples/persistent-completion.janus",
+    buffer,
+    usize(6),
+    usize(11),
+    signature,
+    error
+    ))
+    assertEqual[string](signature.view(), "get(index : usize) : int")
 }
 
 /// @test
@@ -89,6 +122,17 @@ def navigatesAndAcceptsCompletion() : Unit {
     defer delete selected
     completion.appendItem(completion.selected(), selected)
     assertEqual[string](selected.view(), "size")
+    completion.appendDisplayItem(completion.selected(), selected)
+    assertEqual[string](selected.view(), "size")
+
+    completion.load(
+    "get\tdef get(index : usize) : int\nsize\tdef size() : usize\n"
+    )
+    completion.selectNext()
+    completion.appendDisplayItem(completion.selected(), selected)
+    assertEqual[string](selected.view(), "def size() : usize")
+    completion.appendItem(completion.selected(), selected)
+    assertEqual[string](selected.view(), "size")
 
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
@@ -99,4 +143,42 @@ def navigatesAndAcceptsCompletion() : Unit {
     buffer.appendText(output)
     assertEqual[string](output.view(), "xs.size")
     assertTrue(!completion.isVisible())
+}
+
+/// @test
+def filtersCompletionWhileTyping() : Unit {
+    val completion : CompletionModel = completionModel()
+    defer delete completion
+    completion.load(
+    "get\tdef get(index : usize) : int\ngrow\tdef grow() : Unit\nsize\tdef size() : usize\n"
+    )
+    completion.refine('g')
+    assertEqual[usize](completion.size(), usize(2))
+    completion.refine('e')
+    assertEqual[usize](completion.size(), usize(1))
+
+    val selected : TextBuilder = new TextBuilder()
+    defer delete selected
+    completion.appendItem(completion.selected(), selected)
+    assertEqual[string](selected.view(), "get")
+
+    completion.broaden()
+    assertEqual[usize](completion.size(), usize(2))
+    completion.refine('e')
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("xs.ge")
+    assertTrue(completion.accept(buffer))
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "xs.get")
+
+    completion.load("get\nsize\n")
+    completion.refine('x')
+    assertTrue(!completion.isVisible())
+    completion.broaden()
+    assertEqual[usize](completion.size(), usize(2))
+    completion.broaden()
+    assertTrue(!completion.isFiltering())
 }

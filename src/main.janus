@@ -387,7 +387,8 @@ buffer : EditorBuffer
 
 def handlePrintableKeys(
 controller : VimController,
-buffer : EditorBuffer
+buffer : EditorBuffer,
+completion : CompletionModel
 ) : EditorAction {
     val control : bool = controlDown()
     var action : EditorAction = EditorAction.None
@@ -395,12 +396,23 @@ buffer : EditorBuffer
     while codepoint != 0 {
         if !control && codepoint >= 32 && codepoint != 127 {
             val value : char = char(codepoint)
+            val completionCharacter : bool =
+            (value >= 'a' && value <= 'z') ||
+            (value >= 'A' && value <= 'Z') ||
+            (value >= '0' && value <= '9') || value == '_'
             if controller.mode() == EditorMode.Insert {
                 controller.handleInsert(value, buffer)
-                action = if value == '.' {
-                    EditorAction.Complete
+                if value == '.' {
+                    action = EditorAction.Complete
+                } else if completion.isFiltering() && completionCharacter {
+                    completion.refine(value)
+                    action = EditorAction.None
+                } else if value == char(40) || value == char(44) {
+                    action = EditorAction.SignatureHelp
+                } else if value == char(41) {
+                    action = EditorAction.DismissSignatureHelp
                 } else {
-                    EditorAction.DismissCompletion
+                    action = EditorAction.DismissCompletion
                 }
             } else if controller.mode() == EditorMode.Command {
                 controller.handleCommand(value)
@@ -415,7 +427,8 @@ buffer : EditorBuffer
 
 def handleCompletionKeys(
 completion : CompletionModel,
-buffer : EditorBuffer
+buffer : EditorBuffer,
+pendingSignature : TextBuilder
 ) : bool {
     if !completion.isVisible() {
         return false
@@ -433,6 +446,7 @@ buffer : EditorBuffer
         return true
     }
     if isKeyPressed(Key.Enter) || isKeyPressed(Key.Tab) {
+        completion.appendDisplayItem(completion.selected(), pendingSignature)
         completion.accept(buffer)
         return true
     }
@@ -470,6 +484,26 @@ status : TextBuilder
             "Aucune proposition à cette position."
         }
         )
+    }
+}
+
+def refreshSignatureHelp(
+lsp : LspClient,
+path : string,
+buffer : EditorBuffer,
+signature : TextBuilder,
+fallback : TextBuilder,
+error : TextBuilder
+) : Unit {
+    if !lsp.requestSignatureHelp(
+    path,
+    buffer,
+    buffer.line(),
+    buffer.column(),
+    signature,
+    error
+    ) && fallback.size() > usize(0) {
+        signature.append(fallback.view())
     }
 }
 
@@ -847,6 +881,7 @@ syntaxSpans : Array[SyntaxSpan],
 glyph : TextBuilder,
 completion : CompletionModel,
 completionText : TextBuilder,
+signatureText : TextBuilder,
 pathPrompt : PathPrompt,
 statusLine : TextBuilder,
 status : TextBuilder,
@@ -972,23 +1007,76 @@ maximumLines : usize
         }
         val popupHeight : int = truncatingCast[int](shown) * 24 + 10
         val requestedX : int = cursorX
-        val popupX : int = if requestedX + 330 < screenWidth() {
+        val availablePopupWidth : int = screenWidth() - editorLeft - 16
+        val popupWidth : int = if availablePopupWidth < 620 {
+            availablePopupWidth
+        } else {
+            620
+        }
+        val fittedPopupX : int = if requestedX + popupWidth + 10 < screenWidth() {
             requestedX
         } else {
-            screenWidth() - 330
+            screenWidth() - popupWidth - 10
         }
+        val popupX : int = if fittedPopupX < editorLeft {
+            editorLeft
+        } else { fittedPopupX }
         val popupY : int = if cursorY + 27 + popupHeight < editorBottom {
             cursorY + 27
         } else {
             cursorY - popupHeight
         }
-        drawRectangle(popupX, popupY, 320, popupHeight, rgb(31, 43, 57))
+        drawRectangle(
+        popupX,
+        popupY,
+        popupWidth,
+        popupHeight,
+        rgb(31, 43, 57)
+        )
         completion.appendVisible(completionText, usize(8))
         drawCodeText(
         codeFont,
         completionText.view(),
         popupX + 8,
         popupY + 5,
+        17.0f,
+        rgb(220, 223, 228)
+        )
+    }
+
+    if signatureText.size() > usize(0) && cursorVisible {
+        val availableSignatureWidth : int = screenWidth() - editorLeft - 16
+        val signatureWidth : int = if availableSignatureWidth < 620 {
+            availableSignatureWidth
+        } else {
+            620
+        }
+        val fittedSignatureX : int =
+        if cursorX + signatureWidth + 10 < screenWidth() {
+            cursorX
+        } else {
+            screenWidth() - signatureWidth - 10
+        }
+        val signatureX : int = if fittedSignatureX < editorLeft {
+            editorLeft
+        } else { fittedSignatureX }
+        val signatureY : int = if cursorY - 38 >= editorTop {
+            cursorY - 38
+        } else {
+            cursorY + 27
+        }
+        drawRectangle(
+        signatureX,
+        signatureY,
+        signatureWidth,
+        32,
+        rgb(31, 43, 57)
+        )
+        drawCodeText(
+        codeFont,
+        signatureText.view(),
+        signatureX + 8,
+        signatureY + 5,
         17.0f,
         rgb(220, 223, 228)
         )
@@ -1193,6 +1281,10 @@ def main() : int {
     defer delete languageServer
     val completionText : TextBuilder = new TextBuilder()
     defer delete completionText
+    val signatureText : TextBuilder = new TextBuilder()
+    defer delete signatureText
+    val pendingSignature : TextBuilder = new TextBuilder()
+    defer delete pendingSignature
     val filePrompt : PathPrompt = pathPrompt()
     defer delete filePrompt
     val statusLine : TextBuilder = new TextBuilder()
@@ -1476,12 +1568,20 @@ def main() : int {
         }
 
         val completionConsumed : bool =
-        if fileInputConsumed { true } else { handleCompletionKeys(completion, buffer) }
+        if fileInputConsumed {
+            true
+        } else {
+            handleCompletionKeys(completion, buffer, pendingSignature)
+        }
         var keyAction : EditorAction = EditorAction.None
         var characterAction : EditorAction = EditorAction.None
         if !completionConsumed {
             keyAction = handleModeKeys(controller, buffer)
-            characterAction = handlePrintableKeys(controller, buffer)
+            characterAction = handlePrintableKeys(controller, buffer, completion)
+        }
+        if !completionConsumed && isKeyPressed(Key.Backspace) &&
+        completion.isFiltering() {
+            completion.broaden()
         }
         val manualCompletion : bool =
         controller.mode() == EditorMode.Insert && control &&
@@ -1497,14 +1597,38 @@ def main() : int {
             status
             )
             characterAction = EditorAction.None
+        } else if characterAction == EditorAction.SignatureHelp {
+            completion.dismiss()
+            refreshSignatureHelp(
+            languageServer,
+            activePath.view(),
+            buffer,
+            signatureText,
+            pendingSignature,
+            completionError
+            )
+            characterAction = EditorAction.None
+        } else if characterAction == EditorAction.DismissSignatureHelp {
+            completion.dismiss()
+            signatureText.clear()
+            pendingSignature.clear()
+            characterAction = EditorAction.None
         } else if characterAction == EditorAction.DismissCompletion {
             completion.dismiss()
             characterAction = EditorAction.None
-        } else if !completionConsumed && completion.isVisible() &&
+        } else if !completionConsumed && completion.isFiltering() &&
         (isKeyPressed(Key.Left) || isKeyPressed(Key.Right) ||
         isKeyPressed(Key.Home) || isKeyPressed(Key.End) ||
-        isKeyPressed(Key.Backspace) || isKeyPressed(Key.Delete)) {
+        isKeyPressed(Key.Delete) || isKeyPressed(Key.Enter) ||
+        isKeyPressed(Key.Tab)) {
             completion.dismiss()
+        }
+        if controller.mode() != EditorMode.Insert ||
+        isKeyPressed(Key.Escape) || isKeyPressed(Key.Backspace) ||
+        isKeyPressed(Key.Delete) || isKeyPressed(Key.Left) ||
+        isKeyPressed(Key.Right) || isKeyPressed(Key.Home) ||
+        isKeyPressed(Key.End) {
+            signatureText.clear()
         }
         quitRequested = applyEditorAction(
         if keyAction != EditorAction.None { keyAction } else { characterAction },
@@ -1531,6 +1655,7 @@ def main() : int {
         glyph,
         completion,
         completionText,
+        signatureText,
         filePrompt,
         statusLine,
         status,
