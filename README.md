@@ -4,6 +4,8 @@ Prototype d'IDE natif écrit en Janus pour développer des programmes Janus.
 
 Cette première version fournit :
 
+- une interface sombre modernisée avec onglet actif, panneaux hiérarchisés,
+  états de survol et dialogues visuellement distincts ;
 - un buffer éditable avec curseur et défilement vertical automatique ;
 - une gouttière avec numéros de ligne et marqueurs de diagnostics précis après
   vérification du fichier ;

@@ -13,22 +13,22 @@ import std.array
 import std.graphics
 import std.text
 
-var editorLeft : int = 236
-const editorTop : int = 54
+var editorLeft : int = 260
+const editorTop : int = 62
 var editorBottom : int = 590
 const codeFontSize : float = 20.0f
 const codeFontSpacing : float = 1.0f
 const statusBarHeight : int = 28
 const commandLineHeight : int = 28
-const explorerTreeTop : int = 104
-const explorerRowHeight : int = 22
-const explorerIndentWidth : int = 14
+const explorerTreeTop : int = 120
+const explorerRowHeight : int = 28
+const explorerIndentWidth : int = 16
 const doubleClickDelayMilliseconds : usize = usize(500)
-const fileMenuX : int = 188
+const fileMenuX : int = 172
 const fileMenuWidth : int = 250
-const fileMenuButtonWidth : int = 86
-const fileMenuTop : int = 46
-const fileMenuRowHeight : int = 36
+const fileMenuButtonWidth : int = 78
+const fileMenuTop : int = 54
+const fileMenuRowHeight : int = 42
 const separatorHitWidth : int = 5
 const minimumExplorerWidth : int = 150
 const minimumEditorWidth : int = 360
@@ -244,7 +244,7 @@ path : string,
 buffer : EditorBuffer
 ) : Unit {
     output.clear()
-    output.append(path)
+    output.append(if path == "" { "Nouveau fichier" } else { path })
     output.append(if buffer.isModified() { "  • modifié" } else { "  • enregistré" })
     output.append("    ligne ")
     output.appendUSize(buffer.line() + usize(1))
@@ -286,39 +286,83 @@ color : Color
     )
 }
 
+def drawRoundedRectangle(
+x : int,
+y : int,
+width : int,
+height : int,
+roundness : float,
+color : Color
+) : Unit {
+    drawRectangleRounded(
+    rectangle(
+    numericCast[float](x),
+    numericCast[float](y),
+    numericCast[float](width),
+    numericCast[float](height)
+    ),
+    roundness,
+    8,
+    color
+    )
+}
+
+def drawRoundedOutline(
+x : int,
+y : int,
+width : int,
+height : int,
+roundness : float,
+thickness : float,
+color : Color
+) : Unit {
+    drawRectangleRoundedLines(
+    rectangle(
+    numericCast[float](x),
+    numericCast[float](y),
+    numericCast[float](width),
+    numericCast[float](height)
+    ),
+    roundness,
+    8,
+    thickness,
+    color
+    )
+}
+
 def syntaxColor(kind : SyntaxKind) : Color {
     if kind == SyntaxKind.Keyword {
-        return rgb(198, 120, 221)
+        return rgb(198, 160, 246)
     }
     if kind == SyntaxKind.Type {
-        return rgb(97, 175, 239)
+        return rgb(126, 200, 227)
     }
     if kind == SyntaxKind.String {
-        return rgb(152, 195, 121)
+        return rgb(166, 218, 149)
     }
     if kind == SyntaxKind.Character {
-        return rgb(86, 182, 194)
+        return rgb(139, 213, 202)
     }
     if kind == SyntaxKind.Number {
-        return rgb(209, 154, 102)
+        return rgb(245, 194, 231)
     }
     if kind == SyntaxKind.Comment {
-        return rgb(92, 110, 124)
+        return rgb(108, 117, 145)
     }
     if kind == SyntaxKind.Operator {
-        return rgb(229, 192, 123)
+        return rgb(238, 212, 159)
     }
-    return rgb(220, 223, 228)
+    return rgb(205, 214, 244)
 }
 
 def modeColor(mode : EditorMode) : Color {
     if mode == EditorMode.Insert {
-        return rgb(82, 183, 136)
+        return rgb(166, 218, 149)
     }
     if mode == EditorMode.Command || mode == EditorMode.Search {
-        return rgb(229, 192, 123)
+        return rgb(249, 226, 175)
     }
-    return rgb(97, 175, 239)
+    return rgb(137, 180, 250)
 }
 
 def drawHighlightedCode(
@@ -414,9 +458,9 @@ lineAdvance : float
             numericCast[float](truncatingCast[int](row)) * lineAdvance
             )
             val color : Color = if diagnostics.isError(index) {
-                rgb(224, 108, 117)
+                rgb(243, 139, 168)
             } else {
-                rgb(229, 192, 123)
+                rgb(249, 226, 175)
             }
             drawRectangle(editorCodeLeft() - 12, diagnosticY + 7, 5, 12, color)
             drawRectangle(
@@ -462,9 +506,9 @@ lineAdvance : float
             ),
             23,
             if index == search.selected() {
-                rgb(92, 112, 71)
+                rgb(74, 83, 117)
             } else {
-                rgb(54, 72, 65)
+                rgb(48, 55, 76)
             }
             )
         }
@@ -514,7 +558,7 @@ lineAdvance : float
                 )) * glyphAdvance
                 ),
                 23,
-                rgb(55, 79, 105)
+                rgb(54, 66, 96)
                 )
             }
         }
@@ -535,37 +579,67 @@ muted : Color
     while index < explorer.size() && row < visibleRows {
         val y : int = explorerTreeTop +
         truncatingCast[int](row) * explorerRowHeight
+        val rowHovered : bool = pointInArea(
+        8,
+        y - 2,
+        editorLeft - 28,
+        explorerRowHeight
+        )
         if explorer.selected() == index {
-            drawRectangle(
-            0,
+            drawRoundedRectangle(
+            8,
             y - 1,
-            editorLeft - 12,
-            explorerRowHeight,
-            rgb(46, 59, 75)
+            editorLeft - 28,
+            explorerRowHeight - 2,
+            0.22f,
+            rgb(49, 55, 75)
+            )
+            drawRoundedRectangle(8, y + 4, 3, 14, 0.8f, rgb(137, 180, 250))
+        } else if rowHovered {
+            drawRoundedRectangle(
+            8,
+            y - 1,
+            editorLeft - 28,
+            explorerRowHeight - 2,
+            0.22f,
+            rgb(37, 42, 56)
             )
         }
-        val x : int = 12 + truncatingCast[int](explorer.depth(index)) *
+        val x : int = 16 + truncatingCast[int](explorer.depth(index)) *
         explorerIndentWidth
         if explorer.isDirectory(index) {
-            drawUiText(
-            font,
-            if explorer.isExpanded(index) { "v" } else { ">" },
-            x,
-            y + 2,
-            14.0f,
-            White
-            )
+            val icon : Color = if explorer.selected() == index {
+                rgb(137, 180, 250)
+            } else {
+                rgb(166, 173, 200)
+            }
+            drawRectangle(x + 2, y + 7, 11, 9, icon)
+            drawRectangle(x + 3, y + 5, 5, 3, icon)
+            if explorer.isExpanded(index) {
+                drawLine(x - 6, y + 9, x - 3, y + 12, muted)
+                drawLine(x - 3, y + 12, x, y + 9, muted)
+            } else {
+                drawLine(x - 5, y + 8, x - 2, y + 11, muted)
+                drawLine(x - 2, y + 11, x - 5, y + 14, muted)
+            }
         } else {
-            drawUiText(font, "-", x, y + 2, 14.0f, muted)
+            drawRoundedOutline(x + 3, y + 5, 9, 12, 0.18f, 1.0f, muted)
         }
         explorer.appendLabel(index, label)
+        var labelColor : Color = muted
+        if explorer.isDirectory(index) {
+            labelColor = rgb(205, 214, 244)
+        }
+        if explorer.selected() == index {
+            labelColor = rgb(239, 241, 245)
+        }
         drawUiText(
         font,
         label.view(),
-        x + 16,
-        y + 2,
-        14.0f,
-        if explorer.isDirectory(index) { White } else { muted }
+        x + 19,
+        y + 4,
+        15.0f,
+        labelColor
         )
         index = index + usize(1)
         row = row + usize(1)
@@ -608,42 +682,112 @@ maximumLines : usize
     buildStatusLine(statusLine, path, buffer)
     diagnostics.appendForLine(buffer.line(), diagnosticText)
 
-    val background : Color = rgb(18, 24, 33)
-    val sidebar : Color = rgb(25, 34, 46)
-    val header : Color = rgb(31, 43, 57)
-    val panel : Color = rgb(13, 18, 25)
-    val accent : Color = rgb(82, 183, 136)
-    val muted : Color = rgb(151, 166, 181)
+    val background : Color = rgb(17, 19, 27)
+    val sidebar : Color = rgb(24, 27, 37)
+    val header : Color = rgb(20, 23, 32)
+    val panel : Color = rgb(14, 16, 23)
+    val surface : Color = rgb(30, 34, 46)
+    val surfaceHover : Color = rgb(43, 48, 65)
+    val border : Color = rgb(45, 51, 68)
+    val accent : Color = rgb(137, 180, 250)
+    val text : Color = rgb(205, 214, 244)
+    val muted : Color = rgb(127, 132, 156)
     val bottomStatusY : int = screenHeight() - statusBarHeight - commandLineHeight
     val commandLineY : int = screenHeight() - commandLineHeight
 
     beginDrawing()
     clearBackground(background)
     drawRectangle(0, 0, screenWidth(), editorTop, header)
-    drawRectangle(0, editorTop, editorLeft - 12, screenHeight() - editorTop, sidebar)
-    drawRectangle(editorLeft - 12, editorBottom, screenWidth() - editorLeft + 12, screenHeight() - editorBottom, panel)
+    drawRectangle(0, editorTop - 1, screenWidth(), 1, border)
     drawRectangle(
-    editorLeft - 14,
+    0,
     editorTop,
-    4,
+    editorLeft - 12,
+    screenHeight() - editorTop,
+    sidebar
+    )
+    drawRectangle(editorLeft - 12, editorTop, 1, editorBottom - editorTop, border)
+    drawRectangle(
+    editorLeft - 11,
+    editorTop,
+    editorGutterWidth + 11,
+    editorBottom - editorTop,
+    rgb(20, 23, 32)
+    )
+    drawRectangle(editorCodeLeft() - 1, editorTop, 1, editorBottom - editorTop, border)
+    drawRectangle(
+    editorLeft - 12,
+    editorBottom,
+    screenWidth() - editorLeft + 12,
+    screenHeight() - editorBottom,
+    panel
+    )
+    drawRectangle(
+    editorLeft - 13,
+    editorTop,
+    2,
     screenHeight() - editorTop - statusBarHeight - commandLineHeight,
-    if explorerSeparatorHovered() { accent } else { header }
+    if explorerSeparatorHovered() { accent } else { border }
     )
     drawRectangle(
     editorLeft - 12,
-    editorBottom - 2,
+    editorBottom - 1,
     screenWidth() - editorLeft + 12,
-    4,
-    if outputSeparatorHovered() { accent } else { header }
+    2,
+    if outputSeparatorHovered() { accent } else { border }
     )
 
-    drawUiText(uiFont, "JANUS STUDIO", 18, 13, 23.0f, accent)
-    if fileMenuOpen {
-        drawRectangle(fileMenuX, 0, fileMenuButtonWidth, editorTop, rgb(46, 59, 75))
+    drawRoundedRectangle(14, 13, 34, 34, 0.28f, accent)
+    drawUiText(uiFont, "J", 24, 16, 22.0f, header)
+    drawUiText(uiFont, "Janus", 58, 13, 22.0f, text)
+    drawUiText(uiFont, "STUDIO", 58, 36, 11.0f, muted)
+    val fileMenuHovered : bool = pointInArea(
+    fileMenuX,
+    10,
+    fileMenuButtonWidth,
+    40
+    )
+    if fileMenuOpen || fileMenuHovered {
+        drawRoundedRectangle(
+        fileMenuX,
+        10,
+        fileMenuButtonWidth,
+        40,
+        0.25f,
+        if fileMenuOpen { surfaceHover } else { surface }
+        )
     }
-    drawUiText(uiFont, "FICHIER", fileMenuX + 10, 18, 14.0f, White)
+    drawUiText(uiFont, "Fichier", fileMenuX + 11, 19, 16.0f, text)
 
-    drawUiText(uiFont, "EXPLORATEUR", 18, 72, 16.0f, muted)
+    val availableTabWidth : int = screenWidth() - editorLeft - 24
+    val activeTabWidth : int = if availableTabWidth > 380 {
+        380
+    } else {
+        availableTabWidth
+    }
+    if activeTabWidth > 100 {
+        drawRoundedRectangle(
+        editorLeft,
+        10,
+        activeTabWidth,
+        42,
+        0.18f,
+        surface
+        )
+        drawRoundedRectangle(editorLeft, 18, 3, 26, 0.8f, accent)
+        drawCircle(editorLeft + 19, 31, 4.0f, rgb(166, 218, 149))
+        drawUiText(
+        uiFont,
+        if path == "" { "Nouveau fichier" } else { path },
+        editorLeft + 31,
+        23,
+        16.0f,
+        text
+        )
+    }
+
+    drawUiText(uiFont, "PROJET", 16, 78, 15.0f, muted)
+    drawRectangle(16, 105, editorLeft - 44, 1, border)
     drawExplorer(
     explorer,
     firstExplorerEntry,
@@ -652,6 +796,20 @@ maximumLines : usize
     uiFont,
     muted
     )
+
+    if buffer.line() >= firstLine &&
+    buffer.line() < firstLine + maximumLines {
+        val activeRow : int = truncatingCast[int](buffer.line() - firstLine)
+        drawRectangle(
+        editorLeft - 10,
+        editorTop + 10 + truncatingCast[int](
+        numericCast[float](activeRow) * lineAdvance
+        ),
+        screenWidth() - editorLeft + 2,
+        25,
+        rgb(23, 27, 38)
+        )
+    }
 
     drawLineNumbers(
     codeFont,
@@ -738,8 +896,15 @@ maximumLines : usize
         val thumbY : int = editorTop +
         (trackHeight - thumbHeight) * truncatingCast[int](firstLine) /
         maximumFirst
-        drawRectangle(screenWidth() - 8, editorTop, 8, trackHeight, panel)
-        drawRectangle(screenWidth() - 7, thumbY, 6, thumbHeight, muted)
+        drawRectangle(screenWidth() - 6, editorTop, 6, trackHeight, panel)
+        drawRoundedRectangle(
+        screenWidth() - 5,
+        thumbY,
+        4,
+        thumbHeight,
+        0.8f,
+        rgb(89, 96, 120)
+        )
     }
 
     if completion.isVisible() && cursorVisible {
@@ -769,12 +934,30 @@ maximumLines : usize
         } else {
             cursorY - popupHeight
         }
-        drawRectangle(
+        drawRoundedRectangle(
+        popupX + 5,
+        popupY + 6,
+        popupWidth,
+        popupHeight,
+        0.08f,
+        rgba(5, 7, 12, 150)
+        )
+        drawRoundedRectangle(
         popupX,
         popupY,
         popupWidth,
         popupHeight,
-        rgb(31, 43, 57)
+        0.08f,
+        surface
+        )
+        drawRoundedOutline(
+        popupX,
+        popupY,
+        popupWidth,
+        popupHeight,
+        0.08f,
+        1.0f,
+        border
         )
         completion.appendVisible(completionText, usize(8))
         drawCodeText(
@@ -783,7 +966,7 @@ maximumLines : usize
         popupX + 8,
         popupY + 5,
         17.0f,
-        rgb(220, 223, 228)
+        text
         )
     }
 
@@ -809,12 +992,30 @@ maximumLines : usize
         } else {
             cursorY + 27
         }
-        drawRectangle(
+        drawRoundedRectangle(
+        signatureX + 4,
+        signatureY + 5,
+        signatureWidth,
+        32,
+        0.18f,
+        rgba(5, 7, 12, 150)
+        )
+        drawRoundedRectangle(
         signatureX,
         signatureY,
         signatureWidth,
         32,
-        rgb(31, 43, 57)
+        0.18f,
+        surface
+        )
+        drawRoundedOutline(
+        signatureX,
+        signatureY,
+        signatureWidth,
+        32,
+        0.18f,
+        1.0f,
+        border
         )
         drawCodeText(
         codeFont,
@@ -822,25 +1023,44 @@ maximumLines : usize
         signatureX + 8,
         signatureY + 5,
         17.0f,
-        rgb(220, 223, 228)
+        text
         )
     }
 
     if fileMenuOpen {
-        drawRectangle(
+        drawRoundedRectangle(
+        fileMenuX + 5,
+        fileMenuTop + 6,
+        fileMenuWidth,
+        fileMenuRowHeight * 2 + 10,
+        0.08f,
+        rgba(5, 7, 12, 160)
+        )
+        drawRoundedRectangle(
         fileMenuX,
         fileMenuTop,
         fileMenuWidth,
-        fileMenuRowHeight * 2 + 8,
-        rgb(31, 43, 57)
+        fileMenuRowHeight * 2 + 10,
+        0.08f,
+        surface
+        )
+        drawRoundedOutline(
+        fileMenuX,
+        fileMenuTop,
+        fileMenuWidth,
+        fileMenuRowHeight * 2 + 10,
+        0.08f,
+        1.0f,
+        border
         )
         if pointInArea(fileMenuX, fileMenuTop, fileMenuWidth, fileMenuRowHeight) {
-            drawRectangle(
-            fileMenuX,
-            fileMenuTop,
-            fileMenuWidth,
-            fileMenuRowHeight,
-            rgb(46, 59, 75)
+            drawRoundedRectangle(
+            fileMenuX + 5,
+            fileMenuTop + 4,
+            fileMenuWidth - 10,
+            fileMenuRowHeight - 4,
+            0.16f,
+            surfaceHover
             )
         }
         if pointInArea(
@@ -849,29 +1069,30 @@ maximumLines : usize
         fileMenuWidth,
         fileMenuRowHeight
         ) {
-            drawRectangle(
-            fileMenuX,
+            drawRoundedRectangle(
+            fileMenuX + 5,
             fileMenuTop + fileMenuRowHeight,
-            fileMenuWidth,
-            fileMenuRowHeight,
-            rgb(46, 59, 75)
+            fileMenuWidth - 10,
+            fileMenuRowHeight - 4,
+            0.16f,
+            surfaceHover
             )
         }
         drawUiText(
         uiFont,
         "Ouvrir un dossier...",
-        fileMenuX + 14,
-        fileMenuTop + 9,
-        15.0f,
-        White
+        fileMenuX + 18,
+        fileMenuTop + 11,
+        16.0f,
+        text
         )
         drawUiText(
         uiFont,
         "Fermer le dossier",
-        fileMenuX + 14,
-        fileMenuTop + fileMenuRowHeight + 9,
-        15.0f,
-        if explorer.size() > usize(0) { White } else { muted }
+        fileMenuX + 18,
+        fileMenuTop + fileMenuRowHeight + 11,
+        16.0f,
+        if explorer.size() > usize(0) { text } else { muted }
         )
     }
 
@@ -879,21 +1100,56 @@ maximumLines : usize
         val dialogX : int = (screenWidth() - 720) / 2
         val dialogY : int = 230
         val dialogWidth : int = 720
-        drawRectangle(dialogX, dialogY, dialogWidth, 154, rgb(31, 43, 57))
+        drawRectangle(0, 0, screenWidth(), screenHeight(), rgba(6, 8, 13, 170))
+        drawRoundedRectangle(
+        dialogX + 8,
+        dialogY + 10,
+        dialogWidth,
+        164,
+        0.06f,
+        rgba(5, 7, 12, 180)
+        )
+        drawRoundedRectangle(
+        dialogX,
+        dialogY,
+        dialogWidth,
+        164,
+        0.06f,
+        surface
+        )
+        drawRoundedOutline(
+        dialogX,
+        dialogY,
+        dialogWidth,
+        164,
+        0.06f,
+        1.0f,
+        border
+        )
         drawUiText(
         uiFont,
         pathPromptTitle(pathPrompt.action()),
         dialogX + 20,
-        dialogY + 18,
-        18.0f,
+        dialogY + 16,
+        21.0f,
         accent
         )
-        drawRectangle(
+        drawRoundedRectangle(
         dialogX + 20,
         dialogY + 55,
         dialogWidth - 40,
         42,
-        rgb(18, 24, 33)
+        0.14f,
+        background
+        )
+        drawRoundedOutline(
+        dialogX + 20,
+        dialogY + 55,
+        dialogWidth - 40,
+        42,
+        0.14f,
+        1.0f,
+        rgb(74, 84, 112)
         )
         drawCodeText(
         codeFont,
@@ -901,7 +1157,7 @@ maximumLines : usize
         dialogX + 30,
         dialogY + 64,
         17.0f,
-        White
+        text
         )
         val promptGlyph : Vector2 = codeFont.measure(
         "M",
@@ -927,55 +1183,70 @@ maximumLines : usize
         uiFont,
         "Tab : compléter    Entrée : valider    Esc : annuler",
         dialogX + 20,
-        dialogY + 116,
+        dialogY + 122,
         15.0f,
         muted
         )
     }
 
+    drawRoundedRectangle(
+    editorLeft,
+    editorBottom + 12,
+    82,
+    24,
+    0.5f,
+    surface
+    )
+    drawCircle(editorLeft + 12, editorBottom + 24, 3.0f, accent)
     drawUiText(
     uiFont,
-    "SORTIE JANUS",
-    editorLeft,
-    editorBottom + 16,
-    15.0f,
-    accent
+    "SORTIE",
+    editorLeft + 21,
+    editorBottom + 15,
+    14.0f,
+    text
     )
+    drawRectangle(editorLeft, editorBottom + 43, screenWidth() - editorLeft, 1, border)
     drawCodeText(
     codeFont,
     toolOutput.view(),
     editorLeft,
-    editorBottom + 42,
+    editorBottom + 53,
     15.0f,
     muted
     )
 
-    drawRectangle(0, bottomStatusY, screenWidth(), statusBarHeight, header)
-    drawRectangle(
-    0,
-    bottomStatusY,
-    editorLeft - 12,
-    statusBarHeight,
+    drawRectangle(0, bottomStatusY, screenWidth(), statusBarHeight, surface)
+    drawRectangle(0, bottomStatusY, screenWidth(), 1, border)
+    drawRoundedRectangle(
+    10,
+    bottomStatusY + 4,
+    96,
+    20,
+    0.5f,
     modeColor(mode)
     )
-    drawUiText(uiFont, modeLine.view(), 14, bottomStatusY + 5, 15.0f, background)
+    drawCircle(22, bottomStatusY + 14, 3.0f, header)
+    drawUiText(uiFont, modeLine.view(), 32, bottomStatusY + 7, 14.0f, header)
     drawUiText(
     uiFont,
     statusLine.view(),
-    editorLeft,
+    120,
     bottomStatusY + 5,
-    15.0f,
-    White
+    14.0f,
+    text
     )
     drawRectangle(0, commandLineY, screenWidth(), commandLineHeight, panel)
+    drawRectangle(0, commandLineY, screenWidth(), 1, border)
     if mode == EditorMode.Command || mode == EditorMode.Search {
+        drawRoundedRectangle(8, commandLineY + 4, 4, 20, 0.8f, accent)
         drawCodeText(
         codeFont,
         commandLine.view(),
-        12,
-        commandLineY + 3,
+        20,
+        commandLineY + 4,
         17.0f,
-        White
+        text
         )
     } else {
         drawUiText(
@@ -993,4 +1264,3 @@ maximumLines : usize
     }
     endDrawing()
 }
-
