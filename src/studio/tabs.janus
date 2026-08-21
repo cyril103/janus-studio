@@ -130,16 +130,9 @@ private val scratch : TextBuilder
         val state : DocumentState = states.get(active)
         val requestedArchive : BufferArchive = archives.replace(
         active,
-        buffer.archive()
+        emptyBufferArchive()
         )
-        val restoredArchive : BufferArchive = buffer.restoreArchive(
-        move requestedArchive
-        )
-        val placeholder : BufferArchive = archives.replace(
-        active,
-        move restoredArchive
-        )
-        delete placeholder
+        buffer.restoreArchive(move requestedArchive)
         this.appendRange(
         paths,
         state.pathStart,
@@ -260,7 +253,7 @@ private val scratch : TextBuilder
         activePath.clear()
         activePath.append(path)
         states.push(this.appendPathState(path))
-        archives.push(buffer.archive())
+        archives.push(emptyBufferArchive())
         active = states.size() - usize(1)
         return true
     }
@@ -284,7 +277,7 @@ private val scratch : TextBuilder
         activePath.clear()
         activePath.append(path)
         states.push(this.appendPathState(path))
-        archives.push(buffer.archive())
+        archives.push(emptyBufferArchive())
         active = states.size() - usize(1)
         return true
     }
@@ -370,7 +363,7 @@ def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
         usize(0),
         usize(0)
         ))
-        archives.push(buffer.archive())
+        archives.push(emptyBufferArchive())
     }
     return new DocumentTabs(
     move states,

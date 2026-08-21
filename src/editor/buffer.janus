@@ -8,6 +8,7 @@ import std.array
 import std.text
 
 const historyLimit : usize = usize(100)
+const historyCharacterLimit : usize = usize(4000000)
 
 private def decodeUtf8(text : string, output : Array[char]) : Unit {
     var index : usize = usize(0)
@@ -93,12 +94,16 @@ private val selecting : bool
     borrow def anchor() : usize { return selectionAnchor }
     borrow def hasSelection() : bool { return selecting }
 
-    def appendUndoCopies(output : Array[BufferSnapshot]) : Unit {
-        copySnapshotArray(undoStates, output)
+    def moveUndoStates(output : Array[BufferSnapshot]) : Unit {
+        while !undoStates.isEmpty() {
+            output.push(undoStates.remove(usize(0)))
+        }
     }
 
-    def appendRedoCopies(output : Array[BufferSnapshot]) : Unit {
-        copySnapshotArray(redoStates, output)
+    def moveRedoStates(output : Array[BufferSnapshot]) : Unit {
+        while !redoStates.isEmpty() {
+            output.push(redoStates.remove(usize(0)))
+        }
     }
 
     destructor {
@@ -122,6 +127,39 @@ output : Array[BufferSnapshot]
     while !retained.isEmpty() {
         source.push(retained.remove(usize(0)))
     }
+}
+
+private def trimSnapshotArray(states : Array[BufferSnapshot]) : Unit {
+    var characters : usize = usize(0)
+    val retained : Array[BufferSnapshot] = new Array[BufferSnapshot](states.size())
+    defer delete retained
+    while !states.isEmpty() {
+        val state : BufferSnapshot = states.remove(usize(0))
+        characters = characters + state.size()
+        retained.push(move state)
+    }
+    while !retained.isEmpty() {
+        states.push(retained.remove(usize(0)))
+    }
+    while characters > historyCharacterLimit && states.size() > usize(1) {
+        val oldest : BufferSnapshot = states.remove(usize(0))
+        characters = characters - oldest.size()
+        delete oldest
+    }
+}
+
+def emptyBufferArchive() : BufferArchive {
+    return new BufferArchive(
+    new Array[char](usize(0)),
+    new Array[BufferSnapshot](usize(0)),
+    new Array[BufferSnapshot](usize(0)),
+    usize(0),
+    usize(0),
+    usize(0),
+    usize(1),
+    usize(0),
+    false
+    )
 }
 
 class EditorBuffer(
@@ -164,20 +202,20 @@ private val redoStates : Array[BufferSnapshot]
         )
     }
 
-    def restoreArchive(archive : BufferArchive) : BufferArchive {
+    def restoreArchive(archive : BufferArchive) : Unit {
         characters.clear()
         archive.appendCharacters(characters)
         undoStates.clear()
-        archive.appendUndoCopies(undoStates)
+        archive.moveUndoStates(undoStates)
         redoStates.clear()
-        archive.appendRedoCopies(redoStates)
+        archive.moveRedoStates(redoStates)
         cursorPosition = archive.cursor()
         currentRevision = archive.revision()
         savedRevision = archive.saved()
         nextRevision = archive.next()
         selectionAnchor = archive.anchor()
         selecting = archive.hasSelection()
-        return move archive
+        delete archive
     }
 
     borrow def hasSelection() : bool {
@@ -249,6 +287,7 @@ private val redoStates : Array[BufferSnapshot]
             val oldest : BufferSnapshot = undoStates.remove(usize(0))
             delete oldest
         }
+        trimSnapshotArray(undoStates)
         redoStates.clear()
         currentRevision = nextRevision
         nextRevision = nextRevision + usize(1)
@@ -339,6 +378,7 @@ private val redoStates : Array[BufferSnapshot]
         }
         val current : BufferSnapshot = this.snapshot()
         redoStates.push(move current)
+        trimSnapshotArray(redoStates)
         val previous : BufferSnapshot = undoStates.remove(
         undoStates.size() - usize(1)
         )
@@ -352,6 +392,7 @@ private val redoStates : Array[BufferSnapshot]
         }
         val current : BufferSnapshot = this.snapshot()
         undoStates.push(move current)
+        trimSnapshotArray(undoStates)
         val next : BufferSnapshot = redoStates.remove(
         redoStates.size() - usize(1)
         )

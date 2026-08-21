@@ -356,3 +356,22 @@ def tracksTheSavedRevisionAcrossUndoAndRedo() : Unit {
     assertTrue(buffer.redo())
     assertFalse(buffer.isModified())
 }
+
+/// @test
+def boundsHistoryForLargeDocuments() : Unit {
+    val content : TextBuilder = new TextBuilder()
+    defer delete content
+    var index : usize = usize(0)
+    while index < usize(2100000) {
+        content.append("x")
+        index = index + usize(1)
+    }
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load(content.view())
+    buffer.insert('a')
+    buffer.insert('b')
+
+    assertTrue(buffer.undo())
+    assertFalse(buffer.undo())
+}
