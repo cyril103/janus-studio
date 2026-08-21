@@ -37,9 +37,9 @@ Cette première version fournit :
   courant ;
 - un historique local de 100 états avec annulation et rétablissement ;
 - la saisie Unicode respectant la disposition active du clavier, notamment AZERTY ;
-- DejaVu Sans pour l'interface et Consolas pour le code lorsque la police est
-  disponible sous Windows ou WSL ; DejaVu Sans Mono est embarquée comme police
-  de repli portable ;
+- DejaVu Sans pour l'interface et DejaVu Sans Mono pour le code, toutes deux
+  embarquées afin de conserver le même rendu et la même couverture Unicode sur
+  les plateformes prises en charge ;
 - des tests natifs pour les opérations essentielles du buffer.
 
 ## Prérequis
@@ -187,7 +187,7 @@ non enregistrées, afin d'éviter toute perte de travail.
 | `Ctrl+O` | saisir le chemin d'un fichier à ouvrir |
 | `Ctrl+N` | saisir le chemin d'un nouveau fichier |
 | `Ctrl+Shift+S` | enregistrer le fichier sous un nouveau chemin |
-| `F5` | enregistrer puis lancer `janus check` |
+| `F5` | enregistrer puis lancer `janus check` sans bloquer l'interface |
 | `Backspace`, `Delete`, `Tab` | éditer en mode INSERT |
 | `.` ou `Ctrl+Espace` | ouvrir les propositions d'autocomplétion |
 | `↑`, `↓` | sélectionner une proposition |
@@ -213,9 +213,16 @@ leur préfixe commun.
 
 ## Limites connues du MVP
 
-Le chargement des fichiers et la saisie interactive prennent en charge Unicode.
-Les séquences UTF-8 invalides sont remplacées par U+FFFD. Les prochaines étapes
-prévues sont :
+Le chargement des fichiers et la saisie interactive prennent en charge Unicode ;
+les séquences UTF-8 invalides sont remplacées par U+FFFD. Les fins de ligne sont
+normalisées en `LF` lors du chargement.
 
-1. implémenter la sélection de texte ;
-2. ajouter plusieurs onglets et la recherche dans le projet.
+L'historique conserve au plus 100 états et limite aussi le volume cumulé des
+instantanés. Sur un document très volumineux, les états les plus anciens peuvent
+donc être abandonnés plus tôt. Une modification externe du fichier est détectée
+avant l'enregistrement : Studio refuse alors l'écrasement, mais ne propose pas
+encore d'outil de comparaison ou de fusion.
+
+La recherche porte actuellement sur le document actif. La recherche dans tout
+le projet, le débogage et les configurations personnalisées de construction ou
+d'exécution restent à ajouter.
