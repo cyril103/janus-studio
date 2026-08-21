@@ -4,16 +4,11 @@ module studio.tabs
 import editor.buffer
 import studio.files
 import std.array
-import std.slice
 import std.text
 
 private struct DocumentState(
 val pathStart : usize,
 val pathLength : usize,
-val contentStart : usize,
-val contentLength : usize,
-val contentCapacity : usize,
-val cursor : usize,
 val modified : bool,
 val firstLine : usize,
 val firstColumn : usize
@@ -84,8 +79,6 @@ class DocumentTabs(
 private val states : Array[DocumentState],
 private val archives : Array[BufferArchive],
 private val paths : Array[char],
-private val contents : Array[char],
-private val scratchCharacters : Array[char],
 private val scratch : TextBuilder
 ) {
     private var active : usize = usize(0)
@@ -107,28 +100,12 @@ private val scratch : TextBuilder
         }
     }
 
-    private borrow def appendSlice(
-    borrow source : Slice[char],
-    output : TextBuilder
-    ) : Unit {
-        output.clear()
-        var index : usize = usize(0)
-        while index < source.size() {
-            output.appendChar(source.get(index))
-            index = index + usize(1)
-        }
-    }
-
     private def appendPathState(path : string) : DocumentState {
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8(path, paths)
         return new DocumentState(
         pathStart,
         pathLength,
-        usize(0),
-        usize(0),
-        usize(0),
-        usize(0),
         false,
         usize(0),
         usize(0)
@@ -137,18 +114,41 @@ private val scratch : TextBuilder
 
     private def pathEquals(state : DocumentState, path : string) : bool {
         scratch.clear()
-        val storedPath : Slice[char] = new Slice[char](
-        paths,
-        state.pathStart,
-        state.pathLength
-        )
         var index : usize = usize(0)
-        while index < storedPath.size() {
-            scratch.appendChar(storedPath.get(index))
+        while index < state.pathLength {
+            scratch.appendChar(paths.get(state.pathStart + index))
             index = index + usize(1)
         }
-        delete storedPath
         return scratch.view() == path
+    }
+
+    private def compactPaths() : Unit {
+        val compacted : Array[char] = new Array[char](paths.size())
+        defer delete compacted
+        var stateIndex : usize = usize(0)
+        while stateIndex < states.size() {
+            val previous : DocumentState = states.get(stateIndex)
+            val nextStart : usize = compacted.size()
+            var pathIndex : usize = usize(0)
+            while pathIndex < previous.pathLength {
+                compacted.push(paths.get(previous.pathStart + pathIndex))
+                pathIndex = pathIndex + usize(1)
+            }
+            states.set(stateIndex, new DocumentState(
+            nextStart,
+            previous.pathLength,
+            previous.modified,
+            previous.firstLine,
+            previous.firstColumn
+            ))
+            stateIndex = stateIndex + usize(1)
+        }
+        paths.clear()
+        var compactedIndex : usize = usize(0)
+        while compactedIndex < compacted.size() {
+            paths.push(compacted.get(compactedIndex))
+            compactedIndex = compactedIndex + usize(1)
+        }
     }
 
     private def find(path : string) : usize {
@@ -173,37 +173,9 @@ private val scratch : TextBuilder
     firstColumn : usize
     ) : Unit {
         val previous : DocumentState = states.get(active)
-        buffer.appendCharacters(scratchCharacters)
-        var contentStart : usize = previous.contentStart
-        var contentCapacity : usize = previous.contentCapacity
-        if scratchCharacters.size() > contentCapacity {
-            contentStart = contents.size()
-            contentCapacity = scratchCharacters.size()
-            var appended : usize = usize(0)
-            while appended < scratchCharacters.size() {
-                contents.push(scratchCharacters.get(appended))
-                appended = appended + usize(1)
-            }
-        } else {
-            val replacement : MutableSlice[char] = new MutableSlice[char](
-            contents,
-            contentStart,
-            scratchCharacters.size()
-            )
-            var replaced : usize = usize(0)
-            while replaced < scratchCharacters.size() {
-                replacement.set(replaced, scratchCharacters.get(replaced))
-                replaced = replaced + usize(1)
-            }
-            delete replacement
-        }
         states.set(active, new DocumentState(
         previous.pathStart,
         previous.pathLength,
-        contentStart,
-        scratchCharacters.size(),
-        contentCapacity,
-        buffer.cursor(),
         buffer.isModified(),
         firstLine,
         firstColumn
@@ -216,13 +188,6 @@ private val scratch : TextBuilder
     activePath : TextBuilder
     ) : Unit {
         val state : DocumentState = states.get(active)
-        val savedContent : Slice[char] = new Slice[char](
-        contents,
-        state.contentStart,
-        state.contentLength
-        )
-        this.appendSlice(savedContent, scratch)
-        delete savedContent
         val requestedArchive : BufferArchive = archives.replace(
         active,
         buffer.archive()
@@ -235,13 +200,12 @@ private val scratch : TextBuilder
         move restoredArchive
         )
         delete placeholder
-        val savedPath : Slice[char] = new Slice[char](
+        this.appendRange(
         paths,
         state.pathStart,
-        state.pathLength
+        state.pathLength,
+        activePath
         )
-        this.appendSlice(savedPath, activePath)
-        delete savedPath
     }
 
     borrow def firstLine() : usize {
@@ -393,14 +357,11 @@ private val scratch : TextBuilder
         states.set(active, new DocumentState(
         pathStart,
         pathLength,
-        previous.contentStart,
-        previous.contentLength,
-        previous.contentCapacity,
-        previous.cursor,
         previous.modified,
         previous.firstLine,
         previous.firstColumn
         ))
+        this.compactPaths()
         return true
     }
 
@@ -421,6 +382,7 @@ private val scratch : TextBuilder
             val _removed : DocumentState = states.remove(index)
             val removedArchive : BufferArchive = archives.remove(index)
             delete removedArchive
+            this.compactPaths()
             if index < active { active = active - usize(1) }
             setStatus(status, "Onglet fermé.")
             return true
@@ -428,6 +390,7 @@ private val scratch : TextBuilder
         val _removed : DocumentState = states.remove(index)
         val removedArchive : BufferArchive = archives.remove(index)
         delete removedArchive
+        this.compactPaths()
         if states.size() == usize(0) {
             buffer.clear()
             activePath.clear()
@@ -448,8 +411,6 @@ private val scratch : TextBuilder
         delete states
         delete archives
         delete paths
-        delete contents
-        delete scratchCharacters
         delete scratch
     }
 }
@@ -458,27 +419,13 @@ def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
     val states : Array[DocumentState] = new Array[DocumentState](usize(8))
     val archives : Array[BufferArchive] = new Array[BufferArchive](usize(8))
     val paths : Array[char] = new Array[char](usize(256))
-    val contents : Array[char] = new Array[char](usize(2048))
-    val scratchCharacters : Array[char] = new Array[char](usize(2048))
     val scratch : TextBuilder = new TextBuilder()
     if path != "" {
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8(path, paths)
-        buffer.appendCharacters(scratchCharacters)
-        val contentStart : usize = contents.size()
-        var contentIndex : usize = usize(0)
-        while contentIndex < scratchCharacters.size() {
-            contents.push(scratchCharacters.get(contentIndex))
-            contentIndex = contentIndex + usize(1)
-        }
-        val contentLength : usize = scratchCharacters.size()
         states.push(new DocumentState(
         pathStart,
         pathLength,
-        contentStart,
-        contentLength,
-        contentLength,
-        buffer.cursor(),
         buffer.isModified(),
         usize(0),
         usize(0)
@@ -489,8 +436,6 @@ def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
     move states,
     move archives,
     move paths,
-    move contents,
-    move scratchCharacters,
     move scratch
     )
 }
