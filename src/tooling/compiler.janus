@@ -3,10 +3,286 @@ module tooling.compiler
 
 import tooling.diagnostics
 import std.array
+import std.io
+import std.option
 import std.process
 import std.result
 import std.system
 import std.text
+
+enum CompilerCheckState derives Copy, Equality, Debug {
+    Idle,
+    Running,
+    Completed,
+    Failed
+}
+
+private def emitWorkerResult(process : ProcessResult) : int {
+    val exitCode : int = process.exitCode()
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    if process.stdoutSize() > usize(0) {
+        output.append(stringView(process.stdoutData(), process.stdoutSize()))
+    }
+    if process.stderrSize() > usize(0) {
+        output.append(stringView(process.stderrData(), process.stderrSize()))
+    }
+    println(output.view())
+    delete process
+    return exitCode
+}
+
+def runCompilerWorker(path : string) : int {
+    val arguments : Array[string] = new Array[string](usize(4))
+    defer delete arguments
+    arguments.push("check")
+    arguments.push(path)
+    arguments.push("--diagnostic-format")
+    arguments.push("json")
+    val result : Result[ProcessResult, SystemError] =
+    runProcess("janus", arguments, "", true, true)
+    return match move result {
+        Ok(process) => emitWorkerResult(move process),
+        Error(error) => 1
+    }
+}
+
+private def argumentEqualsWorker(argument : Option[string]) : bool {
+    return match argument {
+        Some(value) => value == "--check-worker",
+        None => false
+    }
+}
+
+def compilerWorkerRequested() : bool {
+    return argumentEqualsWorker(programArgument(usize(1)))
+}
+
+private def runWorkerArgument(argument : Option[string]) : int {
+    return match argument {
+        Some(path) => runCompilerWorker(path),
+        None => 2
+    }
+}
+
+def runRequestedCompilerWorker() : int {
+    return runWorkerArgument(programArgument(usize(2)))
+}
+
+class CompilerJob(
+private var process : Option[ChildProcess],
+private val executable : TextBuilder,
+private val received : ByteBuffer
+) {
+    private def takeProcess() : Option[ChildProcess] {
+        val previous : Option[ChildProcess] = move process
+        process = Option.None[ChildProcess]()
+        return move previous
+    }
+
+    private def acceptProcess(child : ChildProcess) : bool {
+        delete process
+        process = Option.Some[ChildProcess](move child)
+        return true
+    }
+
+    private def acceptStart(result : Result[ChildProcess, SystemError]) : bool {
+        return match move result {
+            Ok(child) => this.acceptProcess(move child),
+            Error(error) => false
+        }
+    }
+
+    def start(
+    path : string,
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
+    ) : bool {
+        if this.isRunning() { return false }
+        received.clear()
+        output.clear()
+        output.append("Vérification en cours…")
+        diagnostics.clear()
+        val arguments : Array[string] = new Array[string](usize(2))
+        defer delete arguments
+        arguments.push("--check-worker")
+        arguments.push(path)
+        if !this.acceptStart(spawnProcess(executable.view(), arguments, "")) {
+            output.clear()
+            output.append("Impossible de lancer la vérification Janus.")
+            return false
+        }
+        return true
+    }
+
+    borrow def isRunning() : bool {
+        return match process {
+            Some(child) => true,
+            None => false
+        }
+    }
+
+    private def keepRunning(child : ChildProcess) : CompilerCheckState {
+        delete process
+        process = Option.Some[ChildProcess](move child)
+        return CompilerCheckState.Running
+    }
+
+    private def finish(
+    child : ChildProcess,
+    exitCode : int,
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
+    ) : CompilerCheckState {
+        delete child
+        val decoded : Result[string, TextDecodeError] = received.asText()
+        val loaded : bool = match decoded {
+            Ok(json) => this.loadDiagnostics(json, output, diagnostics),
+            Error(error) => false
+        }
+        if !loaded {
+            output.clear()
+            output.append(if exitCode == 0 {
+                "Aucun diagnostic."
+            } else {
+                "La commande a échoué sans diagnostic structuré."
+            })
+        }
+        return if exitCode == 0 {
+            CompilerCheckState.Completed
+        } else {
+            CompilerCheckState.Failed
+        }
+    }
+
+    private def loadDiagnostics(
+    json : string,
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
+    ) : bool {
+        diagnostics.load(json)
+        diagnostics.appendAll(output)
+        return output.size() > usize(0)
+    }
+
+    private def exitOptionState(code : Option[int]) : int {
+        return match code {
+            Some(value) => value,
+            None => -2
+        }
+    }
+
+    private def waitState(result : Result[Option[int], SystemError]) : int {
+        return match result {
+            Ok(code) => this.exitOptionState(code),
+            Error(error) => -1
+        }
+    }
+
+    private def handleWait(
+    child : ChildProcess,
+    result : Result[Option[int], SystemError],
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
+    ) : CompilerCheckState {
+        val state : int = this.waitState(result)
+        if state == -2 { return this.keepRunning(move child) }
+        if state == -1 { return this.failChild(move child, output) }
+        return this.finish(move child, state, output, diagnostics)
+    }
+
+    private def failChild(
+    child : ChildProcess,
+    output : TextBuilder
+    ) : CompilerCheckState {
+        delete child
+        output.clear()
+        output.append("La vérification Janus a été interrompue.")
+        return CompilerCheckState.Failed
+    }
+
+    private def pollChild(
+    child : ChildProcess,
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
+    ) : CompilerCheckState {
+        val chunk : Ptr[byte] = alloc[byte](usize(4096))
+        defer free(chunk)
+        var attempts : usize = usize(0)
+        var reading : bool = true
+        var failed : bool = false
+        while reading && attempts < usize(8) {
+            val read : Result[usize, SystemError] = child.tryRead(chunk, usize(4096))
+            val count : isize = match read {
+                Ok(value) => truncatingCast[isize](value),
+                Error(error) => if error.category == SystemErrorCategory.WouldBlock {
+                    isize(-2)
+                } else {
+                    isize(-1)
+                }
+            }
+            if count > isize(0) {
+                if !received.append(chunk, numericCast[usize](count)) {
+                    failed = true
+                    reading = false
+                }
+            } else if count == isize(-1) {
+                failed = true
+                reading = false
+            } else {
+                reading = false
+            }
+            attempts = attempts + usize(1)
+        }
+        if failed { return this.failChild(move child, output) }
+        if reading { return this.keepRunning(move child) }
+        val wait : Result[Option[int], SystemError] = child.tryWait()
+        return this.handleWait(
+        move child,
+        wait,
+        output,
+        diagnostics
+        )
+    }
+
+    def poll(
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
+    ) : CompilerCheckState {
+        val previous : Option[ChildProcess] = this.takeProcess()
+        return match move previous {
+            Some(child) => this.pollChild(move child, output, diagnostics),
+            None => CompilerCheckState.Idle
+        }
+    }
+
+    destructor {
+        delete process
+        delete executable
+        delete received
+    }
+}
+
+def compilerJob(executablePath : string) : CompilerJob {
+    val executable : TextBuilder = new TextBuilder()
+    executable.append(executablePath)
+    return new CompilerJob(
+    Option.None[ChildProcess](),
+    move executable,
+    new ByteBuffer(usize(4096))
+    )
+}
+
+private def jobForExecutable(executable : Option[string]) : CompilerJob {
+    return match executable {
+        Some(path) => compilerJob(path),
+        None => compilerJob("janus-studio")
+    }
+}
+
+def compilerJobForProgram() : CompilerJob {
+    return jobForExecutable(programArgument(usize(0)))
+}
 
 private def collectProcessResult(
 process : ProcessResult,

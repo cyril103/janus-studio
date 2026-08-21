@@ -18,6 +18,7 @@ import std.text
 import std.wall_time
 
 def main() : int {
+    if compilerWorkerRequested() { return runRequestedCompilerWorker() }
     val projectRoot : TextBuilder = new TextBuilder()
     defer delete projectRoot
     if !captureProjectRoot(projectRoot) {
@@ -81,6 +82,8 @@ def main() : int {
     defer delete statusLine
     val toolOutput : TextBuilder = new TextBuilder()
     defer delete toolOutput
+    val compiler : CompilerJob = compilerJobForProgram()
+    defer delete compiler
     val modeLine : TextBuilder = new TextBuilder()
     defer delete modeLine
     val commandLine : TextBuilder = new TextBuilder()
@@ -842,7 +845,7 @@ def main() : int {
         if !fileInputConsumed && tabs.size() > usize(0) &&
         isKeyPressed(Key.F5) {
             if saveFile(activePath.view(), buffer, status) {
-                checkFileWithDiagnostics(
+                compiler.start(
                 activePath.view(),
                 toolOutput,
                 diagnostics
@@ -927,6 +930,15 @@ def main() : int {
         completionError,
         status
         )
+        val compilerState : CompilerCheckState = compiler.poll(
+        toolOutput,
+        diagnostics
+        )
+        if compilerState == CompilerCheckState.Completed ||
+        compilerState == CompilerCheckState.Failed {
+            firstOutputLine = usize(0)
+            firstOutputColumn = usize(0)
+        }
         if keyAction == EditorAction.Search {
             search.begin(buffer, controller.commandView())
             search.appendStatus(status)
