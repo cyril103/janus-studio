@@ -49,33 +49,58 @@ end : usize
     return false
 }
 
+private def appendCompletionItem(
+json : string,
+item : usize,
+output : TextBuilder
+) : Unit {
+    val data : Ptr[byte] = stringData(json)
+    val size : usize = stringLength(json)
+    val label : usize = findJsonObjectProperty(json, "label", item)
+    val detail : usize = findJsonObjectProperty(json, "detail", item)
+    if label < size && data.load(label) == byte(34) {
+        val _labelEnd : usize = appendDecodedJsonString(
+        json,
+        label + usize(1),
+        output
+        )
+        if detail < size && data.load(detail) == byte(34) {
+            output.append("\t")
+            val _detailEnd : usize = appendDecodedJsonString(
+            json,
+            detail + usize(1),
+            output
+            )
+        }
+        output.append("\n")
+    }
+}
+
+private def completionArray(json : string) : usize {
+    val size : usize = stringLength(json)
+    val data : Ptr[byte] = stringData(json)
+    val result : usize = findJsonObjectProperty(json, "result", usize(0))
+    if result >= size {
+        return findJsonObjectProperty(json, "items", usize(0))
+    }
+    if data.load(result) == byte(91) { return result }
+    return findJsonObjectProperty(json, "items", result)
+}
+
 def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
     output.clear()
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
-    var cursor : usize = usize(0)
-    while cursor < size {
-        val label : usize = findJsonProperty(json, "label", cursor)
-        if label == size { return }
-        val detail : usize = findJsonProperty(json, "detail", cursor)
-        if data.load(label) == byte(34) {
-            val labelEnd : usize = appendDecodedJsonString(
-            json,
-            label + usize(1),
-            output
-            )
-            if detail < label && data.load(detail) == byte(34) {
-                output.append("\t")
-                val _detailEnd : usize = appendDecodedJsonString(
-                json,
-                detail + usize(1),
-                output
-                )
-            }
-            output.append("\n")
-            cursor = labelEnd + usize(1)
-        } else {
-            cursor = label + usize(1)
+    val items : usize = completionArray(json)
+    if items >= size || data.load(items) != byte(91) { return }
+    var cursor : usize = skipJsonWhitespace(json, items + usize(1))
+    while cursor < size && data.load(cursor) != byte(93) {
+        if data.load(cursor) == byte(123) {
+            appendCompletionItem(json, cursor, output)
+        }
+        cursor = skipJsonWhitespace(json, jsonValueEnd(json, cursor))
+        if cursor < size && data.load(cursor) == byte(44) {
+            cursor = skipJsonWhitespace(json, cursor + usize(1))
         }
     }
 }
@@ -84,7 +109,15 @@ def extractSignatureLabel(json : string, output : TextBuilder) : Unit {
     output.clear()
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
-    val label : usize = findJsonProperty(json, "label", usize(0))
+    val result : usize = findJsonObjectProperty(json, "result", usize(0))
+    val signatures : usize = if result < size {
+        findJsonObjectProperty(json, "signatures", result)
+    } else {
+        findJsonObjectProperty(json, "signatures", usize(0))
+    }
+    if signatures >= size || data.load(signatures) != byte(91) { return }
+    val signature : usize = skipJsonWhitespace(json, signatures + usize(1))
+    val label : usize = findJsonObjectProperty(json, "label", signature)
     if label < size && data.load(label) == byte(34) {
         val _labelEnd : usize = appendDecodedJsonString(
         json,
@@ -179,32 +212,20 @@ def parseContentLength(header : string) : usize {
 }
 
 def messageHasId(json : string, requested : usize) : bool {
-    val marker : string = "\"id\":"
     val data : Ptr[byte] = stringData(json)
-    var start : usize = usize(0)
-    while start + stringLength(marker) <= stringLength(json) {
-        if textMatchesAt(json, marker, start) {
-            var index : usize = start + stringLength(marker)
-            while index < stringLength(json) && data.load(index) == byte(32) {
-                index = index + usize(1)
-            }
-            var value : usize = usize(0)
-            var found : bool = false
-            while index < stringLength(json) &&
-            data.load(index) >= byte(48) && data.load(index) <= byte(57) {
-                value = value * usize(10) +
-                numericCast[usize](int(data.load(index)) - 48)
-                found = true
-                index = index + usize(1)
-            }
-            if found && value == requested && index < stringLength(json) &&
-            (data.load(index) == byte(44) || data.load(index) == byte(125)) {
-                return true
-            }
-        }
-        start = start + usize(1)
+    var index : usize = findJsonObjectProperty(json, "id", usize(0))
+    var value : usize = usize(0)
+    var found : bool = false
+    while index < stringLength(json) && data.load(index) >= byte(48) &&
+    data.load(index) <= byte(57) {
+        value = value * usize(10) +
+        numericCast[usize](int(data.load(index)) - 48)
+        found = true
+        index = index + usize(1)
     }
-    return false
+    index = skipJsonWhitespace(json, index)
+    return found && value == requested && index < stringLength(json) &&
+    (data.load(index) == byte(44) || data.load(index) == byte(125))
 }
 
 enum LspResponseKind derives Copy, Equality, Debug {

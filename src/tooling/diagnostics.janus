@@ -74,52 +74,54 @@ private val messages : TextBuilder
 
     def load(json : string) : Unit {
         this.clear()
-        var cursor : usize = usize(0)
-        while cursor < stringLength(json) {
-            val severity : usize = findJsonProperty(json, "severity", cursor)
-            if severity == stringLength(json) { return }
-            val severityStart : usize = severity + usize(1)
-            val afterSeverity : usize = jsonStringEnd(json, severity) + usize(1)
-            val message : usize = findJsonProperty(json, "message", afterSeverity)
-            val primary : usize = findJsonProperty(
+        val data : Ptr[byte] = stringData(json)
+        val size : usize = stringLength(json)
+        val diagnostics : usize = findJsonObjectProperty(
+        json,
+        "diagnostics",
+        usize(0)
+        )
+        if diagnostics >= size || data.load(diagnostics) != byte(91) { return }
+        var cursor : usize = skipJsonWhitespace(json, diagnostics + usize(1))
+        while cursor < size && data.load(cursor) != byte(93) {
+            val severity : usize = findJsonObjectProperty(json, "severity", cursor)
+            val message : usize = findJsonObjectProperty(json, "message", cursor)
+            val primary : usize = findJsonObjectProperty(
             json,
             "primaryLocation",
-            afterSeverity
+            cursor
             )
-            if message == stringLength(json) || primary == stringLength(json) {
-                return
+            val position : usize = findJsonObjectProperty(json, "position", primary)
+            val line : usize = findJsonObjectProperty(json, "line", position)
+            val column : usize = findJsonObjectProperty(json, "column", position)
+            if severity < size && message < size && primary < size &&
+            position < size && line < size && column < size &&
+            data.load(severity) == byte(34) && data.load(message) == byte(34) {
+                val start : usize = messages.size()
+                val _messageEnd : usize = appendDecodedJsonString(
+                json,
+                message + usize(1),
+                messages
+                )
+                val parsedLine : usize = parseNumber(json, line)
+                val parsedColumn : usize = parseNumber(json, column)
+                lines.push(
+                if parsedLine > usize(0) { parsedLine - usize(1) } else { usize(0) }
+                )
+                columns.push(
+                if parsedColumn > usize(0) { parsedColumn - usize(1) } else { usize(0) }
+                )
+                severities.push(
+                if matchesAt(json, "error", severity + usize(1)) { 2 } else { 1 }
+                )
+                messageStarts.push(start)
+                messageLengths.push(messages.size() - start)
+                messages.append("\n")
             }
-            val line : usize = findJsonProperty(json, "line", primary)
-            val column : usize = findJsonProperty(json, "column", primary)
-            if line == stringLength(json) || column == stringLength(json) {
-                return
+            cursor = skipJsonWhitespace(json, jsonValueEnd(json, cursor))
+            if cursor < size && data.load(cursor) == byte(44) {
+                cursor = skipJsonWhitespace(json, cursor + usize(1))
             }
-
-            val start : usize = messages.size()
-            val messageEnd : usize = appendDecodedJsonString(
-            json,
-            message + usize(1),
-            messages
-            )
-            val parsedLine : usize = parseNumber(
-            json,
-            line
-            )
-            val parsedColumn : usize = parseNumber(
-            json,
-            column
-            )
-            lines.push(if parsedLine > usize(0) { parsedLine - usize(1) } else { usize(0) })
-            columns.push(
-            if parsedColumn > usize(0) { parsedColumn - usize(1) } else { usize(0) }
-            )
-            severities.push(
-            if matchesAt(json, "error", severityStart) { 2 } else { 1 }
-            )
-            messageStarts.push(start)
-            messageLengths.push(messages.size() - start)
-            messages.append("\n")
-            cursor = messageEnd + usize(1)
         }
     }
 

@@ -45,3 +45,16 @@ def preservesUnicodeAndEscapedDiagnosticMessages() : Unit {
     "erreur ligne 1:1 — échec 😀 avec \"severity\":\"warning\"\n"
     )
 }
+
+/// @test
+def acceptsReorderedDiagnosticFields() : Unit {
+    val diagnostics : EditorDiagnostics = editorDiagnostics()
+    defer delete diagnostics
+    diagnostics.load(
+    "{\"diagnostics\":[{\"primaryLocation\":{\"position\":{\"column\":7,\"line\":4}},\"message\":\"reordered\",\"severity\":\"error\"}]}"
+    )
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    diagnostics.appendAll(output)
+    assertEqual[string](output.view(), "erreur ligne 4:7 — reordered\n")
+}

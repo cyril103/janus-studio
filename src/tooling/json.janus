@@ -54,7 +54,11 @@ output : TextBuilder
             else if escaped == byte(116) { output.appendChar('\t') }
             else if escaped == byte(117) {
                 val first : int = unicodeEscape(source, index + usize(1))
-                var codepoint : int = first
+                var codepoint : int = if first >= 55296 && first <= 57343 {
+                    65533
+                } else {
+                    first
+                }
                 if first >= 55296 && first <= 56319 &&
                 index + usize(11) < stringLength(source) &&
                 data.load(index + usize(5)) == byte(92) &&
@@ -91,6 +95,50 @@ def jsonStringEnd(source : string, quote : usize) : usize {
     return stringLength(source)
 }
 
+def skipJsonWhitespace(source : string, start : usize) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = start
+    while index < stringLength(source) &&
+    (data.load(index) == byte(32) || data.load(index) == byte(9) ||
+    data.load(index) == byte(10) || data.load(index) == byte(13)) {
+        index = index + usize(1)
+    }
+    return index
+}
+
+def jsonValueEnd(source : string, start : usize) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = skipJsonWhitespace(source, start)
+    if index >= stringLength(source) { return stringLength(source) }
+    if data.load(index) == byte(34) {
+        val end : usize = jsonStringEnd(source, index)
+        return if end < stringLength(source) { end + usize(1) } else { end }
+    }
+    if data.load(index) == byte(123) || data.load(index) == byte(91) {
+        var depth : usize = usize(0)
+        while index < stringLength(source) {
+            val current : byte = data.load(index)
+            if current == byte(34) {
+                index = jsonStringEnd(source, index)
+            } else if current == byte(123) || current == byte(91) {
+                depth = depth + usize(1)
+            } else if current == byte(125) || current == byte(93) {
+                depth = depth - usize(1)
+                if depth == usize(0) { return index + usize(1) }
+            }
+            index = index + usize(1)
+        }
+        return stringLength(source)
+    }
+    while index < stringLength(source) && data.load(index) != byte(44) &&
+    data.load(index) != byte(125) && data.load(index) != byte(93) &&
+    data.load(index) != byte(32) && data.load(index) != byte(9) &&
+    data.load(index) != byte(10) && data.load(index) != byte(13) {
+        index = index + usize(1)
+    }
+    return index
+}
+
 private def keyMatches(source : string, start : usize, end : usize, key : string) : bool {
     if end - start != stringLength(key) { return false }
     val data : Ptr[byte] = stringData(source)
@@ -101,6 +149,37 @@ private def keyMatches(source : string, start : usize, end : usize, key : string
         index = index + usize(1)
     }
     return true
+}
+
+def findJsonObjectProperty(
+source : string,
+key : string,
+objectStart : usize
+) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = skipJsonWhitespace(source, objectStart)
+    if index >= stringLength(source) || data.load(index) != byte(123) {
+        return stringLength(source)
+    }
+    index = skipJsonWhitespace(source, index + usize(1))
+    while index < stringLength(source) && data.load(index) != byte(125) {
+        if data.load(index) != byte(34) { return stringLength(source) }
+        val keyEnd : usize = jsonStringEnd(source, index)
+        if keyEnd >= stringLength(source) { return stringLength(source) }
+        val separator : usize = skipJsonWhitespace(source, keyEnd + usize(1))
+        if separator >= stringLength(source) || data.load(separator) != byte(58) {
+            return stringLength(source)
+        }
+        val value : usize = skipJsonWhitespace(source, separator + usize(1))
+        if keyMatches(source, index + usize(1), keyEnd, key) { return value }
+        index = skipJsonWhitespace(source, jsonValueEnd(source, value))
+        if index < stringLength(source) && data.load(index) == byte(44) {
+            index = skipJsonWhitespace(source, index + usize(1))
+        } else if index < stringLength(source) && data.load(index) != byte(125) {
+            return stringLength(source)
+        }
+    }
+    return stringLength(source)
 }
 
 def findJsonProperty(source : string, key : string, start : usize) : usize {
