@@ -62,7 +62,7 @@ def escapesJsonStringsAsUtf8() : Unit {
 def reusesPersistentLspSession() : Unit {
     val error : TextBuilder = new TextBuilder()
     defer delete error
-    val client : LspClient = lspClient(error)
+    val client : LspClient = lspClient(".", error)
     defer delete client
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer

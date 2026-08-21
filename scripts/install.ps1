@@ -45,12 +45,9 @@ if not "%~2"=="" (
   exit /b 2
 )
 set "target=%~f1"
+if "%~1"=="" set "target=%CD%"
 pushd "%~dp0..\share\janus-studio"
-if "%~1"=="" (
-  "%~dp0..\lib\janus-studio\janus-studio.exe"
-) else (
-  "%~dp0..\lib\janus-studio\janus-studio.exe" "%target%"
-)
+"%~dp0..\lib\janus-studio\janus-studio.exe" "%target%"
 set "status=%ERRORLEVEL%"
 popd
 exit /b %status%

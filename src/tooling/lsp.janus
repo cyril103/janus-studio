@@ -283,25 +283,6 @@ private def appendFileUri(path : string, output : TextBuilder) : Unit {
     }
 }
 
-private def useWorkingDirectory(
-directory : WorkingDirectory,
-output : TextBuilder
-) : bool {
-    output.append(directory.view())
-    delete directory
-    return true
-}
-
-private def captureWorkingDirectory(
-result : Result[WorkingDirectory, SystemError],
-output : TextBuilder
-) : bool {
-    return match move result {
-        Ok(directory) => useWorkingDirectory(move directory, output),
-        Error(error) => false
-    }
-}
-
 private def useDocumentPath(path : Path, output : TextBuilder) : bool {
     appendFileUri(path.view(), output)
     delete path
@@ -676,10 +657,12 @@ workspace : TextBuilder
     )
 }
 
-def lspClient(error : TextBuilder) : LspClient {
+def lspClient(workspacePath : string, error : TextBuilder) : LspClient {
     val workspace : TextBuilder = new TextBuilder()
-    if !captureWorkingDirectory(currentWorkingDirectory(), workspace) {
+    if workspacePath == "" {
         workspace.append(".")
+    } else {
+        workspace.append(workspacePath)
     }
     val arguments : Array[string] = new Array[string](usize(0))
     defer delete arguments

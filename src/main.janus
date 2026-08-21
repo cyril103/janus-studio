@@ -64,7 +64,10 @@ def main() : int {
     defer delete completionLabels
     val completionError : TextBuilder = new TextBuilder()
     defer delete completionError
-    val languageServer : LspClient = lspClient(completionError)
+    val languageServer : LspClient = lspClient(
+    projectRoot.view(),
+    completionError
+    )
     defer delete languageServer
     val completionText : TextBuilder = new TextBuilder()
     defer delete completionText

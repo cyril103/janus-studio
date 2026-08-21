@@ -17,6 +17,8 @@ if [ "$#" -eq 1 ]; then
     *) target=$PWD/$1 ;;
   esac
   set -- "$target"
+else
+  set -- "$PWD"
 fi
 
 cd "$SHARE_DIR"
