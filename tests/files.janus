@@ -46,3 +46,18 @@ def resolvesEquivalentDocumentPathsToOneIdentity() : Unit {
     ))
     assertEqual[string](direct.view(), equivalent.view())
 }
+
+/// @test
+def derivesProjectRootFromDocumentParent() : Unit {
+    val document : TextBuilder = new TextBuilder()
+    defer delete document
+    val expected : TextBuilder = new TextBuilder()
+    defer delete expected
+    val parent : TextBuilder = new TextBuilder()
+    defer delete parent
+
+    assertTrue(captureDocumentPath("samples/welcome.janus", document))
+    assertTrue(captureDocumentPath("samples", expected))
+    assertTrue(captureParentDirectory(document.view(), parent))
+    assertEqual[string](parent.view(), expected.view())
+}

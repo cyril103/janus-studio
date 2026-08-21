@@ -157,12 +157,37 @@ def captureDocumentPath(path : string, output : TextBuilder) : bool {
     return captureProjectDirectory(path, output)
 }
 
+def captureParentDirectory(path : string, output : TextBuilder) : bool {
+    val normalized : TextBuilder = new TextBuilder()
+    defer delete normalized
+    if !captureProjectDirectory(path, normalized) { return false }
+    val value : string = normalized.view()
+    val data : Ptr[byte] = stringData(value)
+    var separator : usize = usize(-1)
+    var index : usize = usize(0)
+    while index < stringLength(value) {
+        if data.load(index) == byte(47) || data.load(index) == byte(92) {
+            separator = index
+        }
+        index = index + usize(1)
+    }
+    if separator == usize(-1) { return captureWorkingDirectory(output) }
+    var length : usize = separator
+    if separator == usize(0) ||
+    (separator == usize(2) && data.load(usize(1)) == byte(58)) {
+        length = separator + usize(1)
+    }
+    output.clear()
+    output.append(stringView(data, length))
+    return true
+}
+
 def captureProjectRoot(output : TextBuilder) : bool {
     return match programArgument(usize(1)) {
         Some(path) => if isDirectory(path) {
             captureProjectDirectory(path, output)
         } else {
-            captureWorkingDirectory(output)
+            captureParentDirectory(path, output)
         },
         None => captureWorkingDirectory(output)
     }
