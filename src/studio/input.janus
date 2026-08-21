@@ -233,10 +233,8 @@ status : TextBuilder
     labels,
     error
     ) {
-        completion.load(labels.view())
         status.clear()
-        status.appendUSize(completion.size())
-        status.append(" propositions — flèches puis Entrée")
+        status.append("Complétion en cours…")
     } else {
         completion.dismiss()
         setStatus(
@@ -267,6 +265,35 @@ error : TextBuilder
     error
     ) && fallback.size() > usize(0) {
         signature.append(fallback.view())
+    }
+}
+
+def pollLanguageServer(
+lsp : LspClient,
+completion : CompletionModel,
+labels : TextBuilder,
+signature : TextBuilder,
+fallback : TextBuilder,
+error : TextBuilder,
+status : TextBuilder
+) : Unit {
+    val response : LspResponseKind = lsp.poll(labels, signature, error)
+    if response == LspResponseKind.Completion {
+        if labels.size() > usize(0) {
+            completion.load(labels.view())
+            status.clear()
+            status.appendUSize(completion.size())
+            status.append(" propositions — flèches puis Entrée")
+        } else {
+            completion.dismiss()
+            setStatus(status, "Aucune proposition à cette position.")
+        }
+    } else if response == LspResponseKind.Signature &&
+    signature.size() == usize(0) && fallback.size() > usize(0) {
+        signature.append(fallback.view())
+    } else if response == LspResponseKind.Failure {
+        completion.dismiss()
+        setStatus(status, error.view())
     }
 }
 

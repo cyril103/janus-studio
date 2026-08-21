@@ -895,6 +895,15 @@ def main() : int {
         isKeyPressed(Key.End) {
             signatureText.clear()
         }
+        pollLanguageServer(
+        languageServer,
+        completion,
+        completionLabels,
+        signatureText,
+        pendingSignature,
+        completionError,
+        status
+        )
         if keyAction == EditorAction.Search {
             search.begin(buffer, controller.commandView())
             search.appendStatus(status)
@@ -1003,5 +1012,6 @@ def main() : int {
         )
     }
 
+    val _languageServerStopped : bool = languageServer.shutdown(completionError)
     return 0
 }
