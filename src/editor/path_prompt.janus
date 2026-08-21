@@ -1,6 +1,7 @@
 /// Saisie modale d'un chemin pour les opérations de fichier de Janus Studio.
 module editor.path_prompt
 
+import text.utf8
 import std.array
 import std.fs
 import std.option
@@ -15,65 +16,6 @@ enum PathPromptAction derives Copy, Equality, Debug {
     OpenFolder,
     Create,
     SaveAs
-}
-
-private def unsignedByte(value : byte) : int {
-    val numeric : int = int(value)
-    return if numeric < 0 { numeric + 256 } else { numeric }
-}
-
-private def isContinuationByte(value : int) : bool {
-    return value >= 128 && value <= 191
-}
-
-private def appendUtf8Characters(value : string, output : Array[char]) : Unit {
-    val data : Ptr[byte] = stringData(value)
-    val length : usize = stringLength(value)
-    var index : usize = usize(0)
-    while index < length {
-        val first : int = unsignedByte(data.load(index))
-        var codepoint : int = 65533
-        var width : usize = usize(1)
-        if first <= 127 {
-            codepoint = first
-        } else if first >= 194 && first <= 223 &&
-        index + usize(1) < length {
-            val second : int = unsignedByte(data.load(index + usize(1)))
-            if isContinuationByte(second) {
-                codepoint = (first - 192) * 64 + second - 128
-                width = usize(2)
-            }
-        } else if first >= 224 && first <= 239 &&
-        index + usize(2) < length {
-            val second : int = unsignedByte(data.load(index + usize(1)))
-            val third : int = unsignedByte(data.load(index + usize(2)))
-            if isContinuationByte(second) && isContinuationByte(third) {
-                val candidate : int = (first - 224) * 4096 +
-                (second - 128) * 64 + third - 128
-                if candidate >= 2048 &&
-                !(candidate >= 55296 && candidate <= 57343) {
-                    codepoint = candidate
-                    width = usize(3)
-                }
-            }
-        } else if first >= 240 && first <= 244 &&
-        index + usize(3) < length {
-            val second : int = unsignedByte(data.load(index + usize(1)))
-            val third : int = unsignedByte(data.load(index + usize(2)))
-            val fourth : int = unsignedByte(data.load(index + usize(3)))
-            if isContinuationByte(second) && isContinuationByte(third) &&
-            isContinuationByte(fourth) {
-                val candidate : int = (first - 240) * 262144 +
-                (second - 128) * 4096 + (third - 128) * 64 + fourth - 128
-                if candidate >= 65536 && candidate <= 1114111 {
-                    codepoint = candidate
-                    width = usize(4)
-                }
-            }
-        }
-        output.push(char(codepoint))
-        index = index + width
-    }
 }
 
 private def startsWithCharacters(
@@ -136,7 +78,7 @@ private val candidate : Array[char]
 
     def consumeName(name : Path) : bool {
         candidate.clear()
-        appendUtf8Characters(name.view(), candidate)
+        appendUtf8Characters(name.view(), usize(0), candidate)
         if startsWithCharacters(candidate, partial) {
             if matches == usize(0) {
                 var index : usize = usize(0)
@@ -186,7 +128,7 @@ directory : string,
 partialText : string
 ) : PathCompletionState {
     val partial : Array[char] = new Array[char](usize(32))
-    appendUtf8Characters(partialText, partial)
+    appendUtf8Characters(partialText, usize(0), partial)
     return new PathCompletionState(
     directory,
     move partial,
@@ -203,7 +145,7 @@ private val characters : Array[char]
     private var cursorIndex : usize = usize(0)
 
     private def loadCharacters(value : string) : Unit {
-        appendUtf8Characters(value, characters)
+        appendUtf8Characters(value, usize(0), characters)
     }
 
     private def rebuildText() : Unit {

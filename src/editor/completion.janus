@@ -2,6 +2,7 @@
 module editor.completion
 
 import editor.buffer
+import text.utf8
 import std.array
 import std.text
 
@@ -10,7 +11,8 @@ private val allLabels : TextBuilder,
 private val labels : TextBuilder,
 private val selectedLabel : TextBuilder,
 private val insertionLabel : TextBuilder,
-private val prefix : Array[char]
+private val prefix : Array[char],
+private val candidate : Array[char]
 ) {
     private var itemCount : usize = usize(0)
     private var selectedIndex : usize = usize(0)
@@ -45,11 +47,17 @@ private val prefix : Array[char]
             data.load(labelEnd) != byte(9) && data.load(labelEnd) != byte(10) {
                 labelEnd = labelEnd + usize(1)
             }
-            var matches : bool = prefix.size() <= labelEnd - lineStart
+            candidate.clear()
+            val _decoded : usize = appendUtf8CharacterRange(
+            source,
+            lineStart,
+            labelEnd,
+            candidate
+            )
+            var matches : bool = prefix.size() <= candidate.size()
             var prefixIndex : usize = usize(0)
             while matches && prefixIndex < prefix.size() {
-                if int(data.load(lineStart + prefixIndex)) !=
-                int(prefix.get(prefixIndex)) {
+                if candidate.get(prefixIndex) != prefix.get(prefixIndex) {
                     matches = false
                 }
                 prefixIndex = prefixIndex + usize(1)
@@ -63,11 +71,7 @@ private val prefix : Array[char]
                 lineEnd = lineEnd + usize(1)
             }
             if matches {
-                var index : usize = lineStart
-                while index < lineEnd {
-                    labels.appendChar(char(data.load(index)))
-                    index = index + usize(1)
-                }
+                appendUtf8TextRange(source, lineStart, lineEnd, labels)
                 itemCount = itemCount + usize(1)
             }
             lineStart = lineEnd
@@ -138,11 +142,12 @@ private val prefix : Array[char]
             }
             position = position + usize(1)
         }
+        val itemStart : usize = position
         while position < stringLength(source) && data.load(position) != byte(9) &&
         data.load(position) != byte(10) {
-            output.appendChar(char(data.load(position)))
             position = position + usize(1)
         }
+        appendUtf8TextRange(source, itemStart, position, output)
     }
 
     def appendDisplayItem(index : usize, output : TextBuilder) : Unit {
@@ -170,10 +175,11 @@ private val prefix : Array[char]
         } else {
             position = lineStart
         }
+        val displayStart : usize = position
         while position < stringLength(source) && data.load(position) != byte(10) {
-            output.appendChar(char(data.load(position)))
             position = position + usize(1)
         }
+        appendUtf8TextRange(source, displayStart, position, output)
     }
 
     def appendVisible(output : TextBuilder, maximumItems : usize) : Unit {
@@ -200,12 +206,12 @@ private val prefix : Array[char]
         this.appendItem(selectedIndex, selectedLabel)
         insertionLabel.clear()
         val selected : string = selectedLabel.view()
-        val data : Ptr[byte] = stringData(selected)
-        var index : usize = prefix.size()
-        while index < stringLength(selected) {
-            insertionLabel.appendChar(char(data.load(index)))
-            index = index + usize(1)
-        }
+        appendUtf8TextRange(
+        selected,
+        utf8ByteOffset(selected, prefix.size()),
+        stringLength(selected),
+        insertionLabel
+        )
         buffer.insertText(insertionLabel.view())
         visible = false
         filtering = false
@@ -218,6 +224,7 @@ private val prefix : Array[char]
         delete selectedLabel
         delete insertionLabel
         delete prefix
+        delete candidate
     }
 }
 
@@ -227,6 +234,7 @@ def completionModel() : CompletionModel {
     new TextBuilder(),
     new TextBuilder(),
     new TextBuilder(),
-    new Array[char](usize(8))
+    new Array[char](usize(8)),
+    new Array[char](usize(64))
     )
 }

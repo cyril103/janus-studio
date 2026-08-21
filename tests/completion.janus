@@ -224,3 +224,26 @@ def filtersCompletionWhileTyping() : Unit {
     completion.broaden()
     assertTrue(!completion.isFiltering())
 }
+
+/// @test
+def filtersAndAcceptsUnicodeCompletionLabels() : Unit {
+    val completion : CompletionModel = completionModel()
+    defer delete completion
+    completion.load("élément\tdéfinit élément\néclair\ndelta\n")
+    completion.refine('é')
+    assertEqual[usize](completion.size(), usize(2))
+
+    val selected : TextBuilder = new TextBuilder()
+    defer delete selected
+    completion.appendDisplayItem(usize(0), selected)
+    assertEqual[string](selected.view(), "définit élément")
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("é")
+    assertTrue(completion.accept(buffer))
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+    assertEqual[string](output.view(), "élément")
+}

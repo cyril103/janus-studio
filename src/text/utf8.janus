@@ -1,0 +1,109 @@
+/// Décodage UTF-8 partagé par les modèles de texte de Janus Studio.
+module text.utf8
+
+import std.array
+import std.text
+
+struct Utf8Codepoint(
+val value : char,
+val width : usize
+) derives Copy, Equality, Debug {}
+
+def unsignedUtf8Byte(value : byte) : int {
+    val numeric : int = int(value)
+    return if numeric < 0 { numeric + 256 } else { numeric }
+}
+
+private def isContinuation(value : int) : bool {
+    return value >= 128 && value <= 191
+}
+
+def decodeUtf8At(text : string, index : usize) : Utf8Codepoint {
+    val data : Ptr[byte] = stringData(text)
+    val length : usize = stringLength(text)
+    val first : int = unsignedUtf8Byte(data.load(index))
+    var codepoint : int = 65533
+    var width : usize = usize(1)
+    if first <= 127 {
+        codepoint = first
+    } else if first >= 194 && first <= 223 && index + usize(1) < length {
+        val second : int = unsignedUtf8Byte(data.load(index + usize(1)))
+        if isContinuation(second) {
+            codepoint = (first - 192) * 64 + second - 128
+            width = usize(2)
+        }
+    } else if first >= 224 && first <= 239 && index + usize(2) < length {
+        val second : int = unsignedUtf8Byte(data.load(index + usize(1)))
+        val third : int = unsignedUtf8Byte(data.load(index + usize(2)))
+        if isContinuation(second) && isContinuation(third) {
+            val candidate : int = (first - 224) * 4096 +
+            (second - 128) * 64 + third - 128
+            if candidate >= 2048 && !(candidate >= 55296 && candidate <= 57343) {
+                codepoint = candidate
+                width = usize(3)
+            }
+        }
+    } else if first >= 240 && first <= 244 && index + usize(3) < length {
+        val second : int = unsignedUtf8Byte(data.load(index + usize(1)))
+        val third : int = unsignedUtf8Byte(data.load(index + usize(2)))
+        val fourth : int = unsignedUtf8Byte(data.load(index + usize(3)))
+        if isContinuation(second) && isContinuation(third) &&
+        isContinuation(fourth) {
+            val candidate : int = (first - 240) * 262144 +
+            (second - 128) * 4096 + (third - 128) * 64 + fourth - 128
+            if candidate >= 65536 && candidate <= 1114111 {
+                codepoint = candidate
+                width = usize(4)
+            }
+        }
+    }
+    return new Utf8Codepoint(char(codepoint), width)
+}
+
+def appendUtf8Characters(
+text : string,
+start : usize,
+output : Array[char]
+) : usize {
+    return appendUtf8CharacterRange(text, start, stringLength(text), output)
+}
+
+def appendUtf8CharacterRange(
+text : string,
+start : usize,
+end : usize,
+output : Array[char]
+) : usize {
+    val firstOutput : usize = output.size()
+    var index : usize = start
+    while index < end {
+        val decoded : Utf8Codepoint = decodeUtf8At(text, index)
+        output.push(decoded.value)
+        index = index + decoded.width
+    }
+    return output.size() - firstOutput
+}
+
+def appendUtf8TextRange(
+text : string,
+start : usize,
+end : usize,
+output : TextBuilder
+) : Unit {
+    var index : usize = start
+    while index < end {
+        val decoded : Utf8Codepoint = decodeUtf8At(text, index)
+        output.appendChar(decoded.value)
+        index = index + decoded.width
+    }
+}
+
+def utf8ByteOffset(text : string, characterCount : usize) : usize {
+    var index : usize = usize(0)
+    var characters : usize = usize(0)
+    while index < stringLength(text) && characters < characterCount {
+        index = index + decodeUtf8At(text, index).width
+        characters = characters + usize(1)
+    }
+    return index
+}

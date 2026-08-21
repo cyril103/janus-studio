@@ -1,58 +1,13 @@
 /// Lecture minimale mais structurelle des valeurs JSON utilisées par Studio.
 module tooling.json
 
+import text.utf8
 import std.text
 
-private def unsignedByte(value : byte) : int {
-    val numeric : int = int(value)
-    return if numeric < 0 { numeric + 256 } else { numeric }
-}
-
-private def isContinuation(value : int) : bool {
-    return value >= 128 && value <= 191
-}
-
 private def appendUtf8At(source : string, index : usize, output : TextBuilder) : usize {
-    val data : Ptr[byte] = stringData(source)
-    val size : usize = stringLength(source)
-    val first : int = unsignedByte(data.load(index))
-    var codepoint : int = 65533
-    var width : usize = usize(1)
-    if first <= 127 {
-        codepoint = first
-    } else if first >= 194 && first <= 223 && index + usize(1) < size {
-        val second : int = unsignedByte(data.load(index + usize(1)))
-        if isContinuation(second) {
-            codepoint = (first - 192) * 64 + second - 128
-            width = usize(2)
-        }
-    } else if first >= 224 && first <= 239 && index + usize(2) < size {
-        val second : int = unsignedByte(data.load(index + usize(1)))
-        val third : int = unsignedByte(data.load(index + usize(2)))
-        if isContinuation(second) && isContinuation(third) {
-            val candidate : int = (first - 224) * 4096 +
-            (second - 128) * 64 + third - 128
-            if candidate >= 2048 && !(candidate >= 55296 && candidate <= 57343) {
-                codepoint = candidate
-                width = usize(3)
-            }
-        }
-    } else if first >= 240 && first <= 244 && index + usize(3) < size {
-        val second : int = unsignedByte(data.load(index + usize(1)))
-        val third : int = unsignedByte(data.load(index + usize(2)))
-        val fourth : int = unsignedByte(data.load(index + usize(3)))
-        if isContinuation(second) && isContinuation(third) &&
-        isContinuation(fourth) {
-            val candidate : int = (first - 240) * 262144 +
-            (second - 128) * 4096 + (third - 128) * 64 + fourth - 128
-            if candidate >= 65536 && candidate <= 1114111 {
-                codepoint = candidate
-                width = usize(4)
-            }
-        }
-    }
-    output.appendChar(char(codepoint))
-    return index + width
+    val decoded : Utf8Codepoint = decodeUtf8At(source, index)
+    output.appendChar(decoded.value)
+    return index + decoded.width
 }
 
 private def hexValue(value : byte) : int {
