@@ -521,7 +521,18 @@ def main() : int {
                 projectRoot.clear()
                 firstExplorerEntry = usize(0)
                 explorerHorizontalOffset = 0
-                setStatus(status, "Dossier fermé.")
+                promptedPath.clear()
+                if activePath.view() != "" {
+                    val _capturedParent : bool = captureParentDirectory(
+                    activePath.view(),
+                    promptedPath
+                    )
+                }
+                if languageServer.restart(promptedPath.view(), completionError) {
+                    setStatus(status, "Dossier fermé.")
+                } else {
+                    setStatus(status, completionError.view())
+                }
             }
             fileMenuOpen = false
             fileInputConsumed = true
@@ -647,6 +658,12 @@ def main() : int {
                         filePrompt.dismiss()
                         firstExplorerEntry = usize(0)
                         explorerHorizontalOffset = 0
+                        if !languageServer.restart(
+                        projectRoot.view(),
+                        completionError
+                        ) {
+                            setStatus(status, completionError.view())
+                        }
                     }
                 } else {
                     val action : PathPromptAction = filePrompt.action()

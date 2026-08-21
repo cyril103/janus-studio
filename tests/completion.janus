@@ -117,9 +117,10 @@ def reusesPersistentLspSession() : Unit {
     )
     assertTrue(containsLabel(labels.view(), "get", usize(0), usize(3)))
 
+    assertTrue(client.restart("samples", error))
     labels.clear()
     assertTrue(client.requestCompletion(
-    "samples/persistent-completion.janus",
+    "persistent-completion.janus",
     buffer,
     usize(4),
     usize(7),

@@ -292,6 +292,49 @@ private val responseJson : TextBuilder
         process = Option.None[ChildProcess]()
     }
 
+    private def resetSession(workspacePath : string) : Unit {
+        this.disable()
+        workspace.clear()
+        workspace.append(if workspacePath == "" { "." } else { workspacePath })
+        body.clear()
+        response.clear()
+        incoming.clear()
+        header.clear()
+        activeUri.clear()
+        requestedUri.clear()
+        snapshot.clear()
+        responseJson.clear()
+        requestId = usize(1)
+        documentVersion = usize(0)
+        incomingStart = usize(0)
+        pendingId = usize(0)
+        pendingResponse = PendingResponse.None
+    }
+
+    private def acceptRestartedProcess(child : ChildProcess) : bool {
+        process = Option.Some[ChildProcess](move child)
+        return true
+    }
+
+    private def useRestartedProcess(
+    started : Result[ChildProcess, SystemError]
+    ) : bool {
+        return match move started {
+            Ok(child) => this.acceptRestartedProcess(move child),
+            Error(systemError) => false
+        }
+    }
+
+    def restart(workspacePath : string, error : TextBuilder) : bool {
+        this.resetSession(workspacePath)
+        val arguments : Array[string] = new Array[string](usize(0))
+        defer delete arguments
+        if !this.useRestartedProcess(
+        spawnProcess("janus-lsp", arguments, workspace.view())
+        ) { return this.reportUnavailable(error) }
+        return this.initialize(error)
+    }
+
     private def takeProcess() : Option[ChildProcess] {
         val previous : Option[ChildProcess] = move process
         process = Option.None[ChildProcess]()
