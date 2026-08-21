@@ -26,3 +26,22 @@ def parsesStructuredDiagnostics() : Unit {
     assertEqual[string](output.view(), "Erreur : type mismatch")
     assertTrue(!diagnostics.appendForLine(usize(0), output))
 }
+
+/// @test
+def preservesUnicodeAndEscapedDiagnosticMessages() : Unit {
+    val diagnostics : EditorDiagnostics = editorDiagnostics()
+    defer delete diagnostics
+    diagnostics.load(
+    "{\"diagnostics\":[{\"severity\":\"error\",\"message\":\"échec \\uD83D\\uDE00 avec \\\"severity\\\":\\\"warning\\\"\",\"primaryLocation\":{\"position\":{\"line\":1,\"column\":1}}}]}"
+    )
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    diagnostics.appendAll(output)
+
+    assertEqual[usize](diagnostics.size(), usize(1))
+    assertTrue(diagnostics.isError(usize(0)))
+    assertEqual[string](
+    output.view(),
+    "erreur ligne 1:1 — échec 😀 avec \"severity\":\"warning\"\n"
+    )
+}

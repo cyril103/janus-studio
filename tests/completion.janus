@@ -36,6 +36,20 @@ def extractsCompletionLabels() : Unit {
 }
 
 /// @test
+def decodesStructuredUnicodeCompletionFields() : Unit {
+    val labels : TextBuilder = new TextBuilder()
+    defer delete labels
+    extractCompletionLabels(
+    "{\"items\":[{\"detail\":\"café \\\"label\\\":\\\"piège\\\"\",\"label\":\"élément \\uD83D\\uDE00\"}]}",
+    labels
+    )
+    assertEqual[string](
+    labels.view(),
+    "élément 😀\tcafé \"label\":\"piège\"\n"
+    )
+}
+
+/// @test
 def extractsSignatureLabel() : Unit {
     val signature : TextBuilder = new TextBuilder()
     defer delete signature

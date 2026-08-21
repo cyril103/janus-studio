@@ -1,0 +1,193 @@
+/// Lecture minimale mais structurelle des valeurs JSON utilisées par Studio.
+module tooling.json
+
+import std.text
+
+private def unsignedByte(value : byte) : int {
+    val numeric : int = int(value)
+    return if numeric < 0 { numeric + 256 } else { numeric }
+}
+
+private def isContinuation(value : int) : bool {
+    return value >= 128 && value <= 191
+}
+
+private def appendUtf8At(source : string, index : usize, output : TextBuilder) : usize {
+    val data : Ptr[byte] = stringData(source)
+    val size : usize = stringLength(source)
+    val first : int = unsignedByte(data.load(index))
+    var codepoint : int = 65533
+    var width : usize = usize(1)
+    if first <= 127 {
+        codepoint = first
+    } else if first >= 194 && first <= 223 && index + usize(1) < size {
+        val second : int = unsignedByte(data.load(index + usize(1)))
+        if isContinuation(second) {
+            codepoint = (first - 192) * 64 + second - 128
+            width = usize(2)
+        }
+    } else if first >= 224 && first <= 239 && index + usize(2) < size {
+        val second : int = unsignedByte(data.load(index + usize(1)))
+        val third : int = unsignedByte(data.load(index + usize(2)))
+        if isContinuation(second) && isContinuation(third) {
+            val candidate : int = (first - 224) * 4096 +
+            (second - 128) * 64 + third - 128
+            if candidate >= 2048 && !(candidate >= 55296 && candidate <= 57343) {
+                codepoint = candidate
+                width = usize(3)
+            }
+        }
+    } else if first >= 240 && first <= 244 && index + usize(3) < size {
+        val second : int = unsignedByte(data.load(index + usize(1)))
+        val third : int = unsignedByte(data.load(index + usize(2)))
+        val fourth : int = unsignedByte(data.load(index + usize(3)))
+        if isContinuation(second) && isContinuation(third) &&
+        isContinuation(fourth) {
+            val candidate : int = (first - 240) * 262144 +
+            (second - 128) * 4096 + (third - 128) * 64 + fourth - 128
+            if candidate >= 65536 && candidate <= 1114111 {
+                codepoint = candidate
+                width = usize(4)
+            }
+        }
+    }
+    output.appendChar(char(codepoint))
+    return index + width
+}
+
+private def hexValue(value : byte) : int {
+    if value >= byte(48) && value <= byte(57) { return int(value) - 48 }
+    if value >= byte(65) && value <= byte(70) { return int(value) - 55 }
+    if value >= byte(97) && value <= byte(102) { return int(value) - 87 }
+    return -1
+}
+
+private def unicodeEscape(source : string, start : usize) : int {
+    if start + usize(4) > stringLength(source) { return -1 }
+    val data : Ptr[byte] = stringData(source)
+    var value : int = 0
+    var index : usize = usize(0)
+    while index < usize(4) {
+        val digit : int = hexValue(data.load(start + index))
+        if digit < 0 { return -1 }
+        value = value * 16 + digit
+        index = index + usize(1)
+    }
+    return value
+}
+
+def appendDecodedJsonString(
+source : string,
+start : usize,
+output : TextBuilder
+) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = start
+    while index < stringLength(source) && data.load(index) != byte(34) {
+        if data.load(index) != byte(92) {
+            index = appendUtf8At(source, index, output)
+        } else if index + usize(1) >= stringLength(source) {
+            output.appendChar(char(65533))
+            return stringLength(source)
+        } else {
+            index = index + usize(1)
+            val escaped : byte = data.load(index)
+            if escaped == byte(98) { output.appendChar(char(8)) }
+            else if escaped == byte(102) { output.appendChar(char(12)) }
+            else if escaped == byte(110) { output.appendChar('\n') }
+            else if escaped == byte(114) { output.appendChar('\r') }
+            else if escaped == byte(116) { output.appendChar('\t') }
+            else if escaped == byte(117) {
+                val first : int = unicodeEscape(source, index + usize(1))
+                var codepoint : int = first
+                if first >= 55296 && first <= 56319 &&
+                index + usize(11) < stringLength(source) &&
+                data.load(index + usize(5)) == byte(92) &&
+                data.load(index + usize(6)) == byte(117) {
+                    val second : int = unicodeEscape(source, index + usize(7))
+                    if second >= 56320 && second <= 57343 {
+                        codepoint = 65536 + (first - 55296) * 1024 + second - 56320
+                        index = index + usize(6)
+                    }
+                }
+                output.appendChar(char(if codepoint >= 0 { codepoint } else { 65533 }))
+                index = index + usize(4)
+            } else {
+                output.appendChar(char(escaped))
+            }
+            index = index + usize(1)
+        }
+    }
+    return index
+}
+
+def jsonStringEnd(source : string, quote : usize) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = quote + usize(1)
+    while index < stringLength(source) {
+        if data.load(index) == byte(92) {
+            index = index + usize(2)
+        } else if data.load(index) == byte(34) {
+            return index
+        } else {
+            index = index + usize(1)
+        }
+    }
+    return stringLength(source)
+}
+
+private def keyMatches(source : string, start : usize, end : usize, key : string) : bool {
+    if end - start != stringLength(key) { return false }
+    val data : Ptr[byte] = stringData(source)
+    val expected : Ptr[byte] = stringData(key)
+    var index : usize = usize(0)
+    while index < stringLength(key) {
+        if data.load(start + index) != expected.load(index) { return false }
+        index = index + usize(1)
+    }
+    return true
+}
+
+def findJsonProperty(source : string, key : string, start : usize) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = start
+    while index < stringLength(source) {
+        if data.load(index) != byte(34) {
+            index = index + usize(1)
+        } else {
+            val end : usize = jsonStringEnd(source, index)
+            if end == stringLength(source) { return end }
+            var separator : usize = end + usize(1)
+            while separator < stringLength(source) &&
+            (data.load(separator) == byte(32) || data.load(separator) == byte(9) ||
+            data.load(separator) == byte(10) || data.load(separator) == byte(13)) {
+                separator = separator + usize(1)
+            }
+            if keyMatches(source, index + usize(1), end, key) &&
+            separator < stringLength(source) && data.load(separator) == byte(58) {
+                var value : usize = separator + usize(1)
+                while value < stringLength(source) &&
+                (data.load(value) == byte(32) || data.load(value) == byte(9) ||
+                data.load(value) == byte(10) || data.load(value) == byte(13)) {
+                    value = value + usize(1)
+                }
+                return value
+            }
+            index = end + usize(1)
+        }
+    }
+    return stringLength(source)
+}
+
+def appendDecodedUtf8Range(
+source : string,
+start : usize,
+length : usize,
+output : TextBuilder
+) : Unit {
+    var index : usize = start
+    val end : usize = start + length
+    while index < end {
+        index = appendUtf8At(source, index, output)
+    }
+}

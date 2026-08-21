@@ -2,6 +2,7 @@
 module tooling.lsp
 
 import editor.buffer
+import tooling.json
 import std.array
 import std.io
 import std.option
@@ -10,35 +11,6 @@ import std.process
 import std.result
 import std.system
 import std.text
-
-def hasLabelMarker(source : string, size : usize, index : usize) : bool {
-    val data : Ptr[byte] = stringData(source)
-    return index + usize(9) <= size &&
-    data.load(index) == byte(34) &&
-    data.load(index + usize(1)) == byte(108) &&
-    data.load(index + usize(2)) == byte(97) &&
-    data.load(index + usize(3)) == byte(98) &&
-    data.load(index + usize(4)) == byte(101) &&
-    data.load(index + usize(5)) == byte(108) &&
-    data.load(index + usize(6)) == byte(34) &&
-    data.load(index + usize(7)) == byte(58) &&
-    data.load(index + usize(8)) == byte(34)
-}
-
-def hasDetailMarker(source : string, size : usize, index : usize) : bool {
-    val data : Ptr[byte] = stringData(source)
-    return index + usize(10) <= size &&
-    data.load(index) == byte(34) &&
-    data.load(index + usize(1)) == byte(100) &&
-    data.load(index + usize(2)) == byte(101) &&
-    data.load(index + usize(3)) == byte(116) &&
-    data.load(index + usize(4)) == byte(97) &&
-    data.load(index + usize(5)) == byte(105) &&
-    data.load(index + usize(6)) == byte(108) &&
-    data.load(index + usize(7)) == byte(34) &&
-    data.load(index + usize(8)) == byte(58) &&
-    data.load(index + usize(9)) == byte(34)
-}
 
 def containsLabel(
 labels : string,
@@ -81,43 +53,29 @@ def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
     output.clear()
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
-    var index : usize = usize(0)
-    var itemStart : usize = usize(0)
-    while index < size {
-        if data.load(index) == byte(123) {
-            itemStart = index
-            index = index + usize(1)
-        } else if hasLabelMarker(json, size, index) {
-            index = index + usize(9)
-            val start : usize = index
-            while index < size && data.load(index) != byte(34) {
-                index = index + usize(1)
-            }
-            var labelIndex : usize = start
-            while labelIndex < index {
-                output.appendChar(char(data.load(labelIndex)))
-                labelIndex = labelIndex + usize(1)
-            }
-
-            var detailMarker : usize = itemStart
-            var detailStart : usize = usize(0)
-            while detailMarker < start {
-                if hasDetailMarker(json, size, detailMarker) {
-                    detailStart = detailMarker + usize(10)
-                }
-                detailMarker = detailMarker + usize(1)
-            }
-            if detailStart > usize(0) {
+    var cursor : usize = usize(0)
+    while cursor < size {
+        val label : usize = findJsonProperty(json, "label", cursor)
+        if label == size { return }
+        val detail : usize = findJsonProperty(json, "detail", cursor)
+        if data.load(label) == byte(34) {
+            val labelEnd : usize = appendDecodedJsonString(
+            json,
+            label + usize(1),
+            output
+            )
+            if detail < label && data.load(detail) == byte(34) {
                 output.append("\t")
-                var detailIndex : usize = detailStart
-                while detailIndex < start && data.load(detailIndex) != byte(34) {
-                    output.appendChar(char(data.load(detailIndex)))
-                    detailIndex = detailIndex + usize(1)
-                }
+                val _detailEnd : usize = appendDecodedJsonString(
+                json,
+                detail + usize(1),
+                output
+                )
             }
             output.append("\n")
+            cursor = labelEnd + usize(1)
         } else {
-            index = index + usize(1)
+            cursor = label + usize(1)
         }
     }
 }
@@ -126,17 +84,13 @@ def extractSignatureLabel(json : string, output : TextBuilder) : Unit {
     output.clear()
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
-    var index : usize = usize(0)
-    while index < size {
-        if hasLabelMarker(json, size, index) {
-            index = index + usize(9)
-            while index < size && data.load(index) != byte(34) {
-                output.appendChar(char(data.load(index)))
-                index = index + usize(1)
-            }
-            return
-        }
-        index = index + usize(1)
+    val label : usize = findJsonProperty(json, "label", usize(0))
+    if label < size && data.load(label) == byte(34) {
+        val _labelEnd : usize = appendDecodedJsonString(
+        json,
+        label + usize(1),
+        output
+        )
     }
 }
 
