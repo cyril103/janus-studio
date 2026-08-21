@@ -30,6 +30,10 @@ def rejectsExistingPathsForCreationAndSaveAs() : Unit {
 /// @test
 def usesTheBundledUnicodeCodeFont() : Unit {
     assertEqual[string](codeFontPath(), "assets/fonts/DejaVuSansMono.ttf")
+    val path : TextBuilder = new TextBuilder()
+    defer delete path
+    assertTrue(captureAssetPath(codeFontPath(), path))
+    assertTrue(isFile(path.view()))
     val characters : TextBuilder = studioFontCharacters()
     defer delete characters
     assertTrue(characters.view() != "")

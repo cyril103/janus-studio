@@ -46,10 +46,9 @@ if not "%~2"=="" (
 )
 set "target=%~f1"
 if "%~1"=="" set "target=%CD%"
-pushd "%~dp0..\share\janus-studio"
+set "JANUS_STUDIO_RESOURCE_DIR=%~dp0..\share\janus-studio"
 "%~dp0..\lib\janus-studio\janus-studio.exe" "%target%"
 set "status=%ERRORLEVEL%"
-popd
 exit /b %status%
 "@
 Set-Content -Encoding ASCII -LiteralPath (Join-Path $Bin "janus-studio.cmd") -Value $Launcher

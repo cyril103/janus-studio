@@ -116,14 +116,26 @@ def main() : int {
 
     val fontCharacters : TextBuilder = studioFontCharacters()
     defer delete fontCharacters
-    val uiFont : Font = loadFontUtf8(
+    val uiFontPath : TextBuilder = new TextBuilder()
+    defer delete uiFontPath
+    val codeFontFile : TextBuilder = new TextBuilder()
+    defer delete codeFontFile
+    val _uiFontPathCaptured : bool = captureAssetPath(
     "assets/fonts/DejaVuSans.ttf",
+    uiFontPath
+    )
+    val _codeFontPathCaptured : bool = captureAssetPath(
+    codeFontPath(),
+    codeFontFile
+    )
+    val uiFont : Font = loadFontUtf8(
+    uiFontPath.view(),
     32,
     fontCharacters.view()
     )
     defer delete uiFont
     val codeFont : Font = loadFontUtf8(
-    codeFontPath(),
+    codeFontFile.view(),
     32,
     fontCharacters.view()
     )

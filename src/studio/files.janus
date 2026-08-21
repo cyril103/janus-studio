@@ -59,6 +59,59 @@ def codeFontPath() : string {
     return "assets/fonts/DejaVuSansMono.ttf"
 }
 
+private def useAssetRoot(
+root : string,
+relativePath : string,
+output : TextBuilder
+) : bool {
+    val joined : Result[Path, SystemError] = joinPath(root, relativePath)
+    return match move joined {
+        Ok(path) => useNormalizedProjectDirectory(move path, output),
+        Error(error) => false
+    }
+}
+
+private def captureConfiguredAssetPath(
+root : Option[EnvironmentValue],
+relativePath : string,
+output : TextBuilder
+) : bool {
+    return match move root {
+        Some(path) => useConfiguredAssetRoot(move path, relativePath, output),
+        None => captureProjectDirectory(relativePath, output)
+    }
+}
+
+private def useConfiguredAssetRoot(
+root : EnvironmentValue,
+relativePath : string,
+output : TextBuilder
+) : bool {
+    val captured : bool = useAssetRoot(root.view(), relativePath, output)
+    delete root
+    return captured
+}
+
+private def captureAssetEnvironment(
+result : Result[Option[EnvironmentValue], SystemError],
+relativePath : string,
+output : TextBuilder
+) : bool {
+    return match move result {
+        Ok(root) => captureConfiguredAssetPath(move root, relativePath, output),
+        Error(error) => captureProjectDirectory(relativePath, output)
+    }
+}
+
+def captureAssetPath(relativePath : string, output : TextBuilder) : bool {
+    output.clear()
+    return captureAssetEnvironment(
+    environmentVariable("JANUS_STUDIO_RESOURCE_DIR"),
+    relativePath,
+    output
+    )
+}
+
 private def appendCharacterRange(
 first : int,
 last : int,
