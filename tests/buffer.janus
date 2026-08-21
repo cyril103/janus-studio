@@ -326,3 +326,19 @@ def deletesLinesAndRestoresHistory() : Unit {
     buffer.appendText(output)
     assertEqual[string](output.view(), "second\nthird")
 }
+
+/// @test
+def tracksTheSavedRevisionAcrossUndoAndRedo() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("A")
+    buffer.insert('B')
+    buffer.markSaved()
+    assertFalse(buffer.isModified())
+
+    assertTrue(buffer.undo())
+    assertTrue(buffer.isModified())
+
+    assertTrue(buffer.redo())
+    assertFalse(buffer.isModified())
+}
