@@ -327,6 +327,8 @@ private val redoStates : Array[BufferSnapshot]
         return currentRevision != savedRevision
     }
 
+    borrow def revision() : usize { return currentRevision }
+
     def markSaved() : Unit {
         savedRevision = currentRevision
     }

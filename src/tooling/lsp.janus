@@ -211,6 +211,7 @@ enum LspResponseKind derives Copy, Equality, Debug {
     None,
     Completion,
     Signature,
+    Discarded,
     Failure
 }
 
@@ -278,6 +279,7 @@ private val header : TextBuilder,
 private val number : TextBuilder,
 private val activeUri : TextBuilder,
 private val requestedUri : TextBuilder,
+private val pendingUri : TextBuilder,
 private val snapshot : TextBuilder,
 private val responseJson : TextBuilder
 ) {
@@ -285,6 +287,7 @@ private val responseJson : TextBuilder
     private var documentVersion : usize = usize(0)
     private var incomingStart : usize = usize(0)
     private var pendingId : usize = usize(0)
+    private var pendingRevision : usize = usize(0)
     private var pendingResponse : PendingResponse = PendingResponse.None
 
     private def disable() : Unit {
@@ -302,12 +305,14 @@ private val responseJson : TextBuilder
         header.clear()
         activeUri.clear()
         requestedUri.clear()
+        pendingUri.clear()
         snapshot.clear()
         responseJson.clear()
         requestId = usize(1)
         documentVersion = usize(0)
         incomingStart = usize(0)
         pendingId = usize(0)
+        pendingRevision = usize(0)
         pendingResponse = PendingResponse.None
     }
 
@@ -696,6 +701,21 @@ private val responseJson : TextBuilder
         return this.sendChange(buffer, error)
     }
 
+    private def rememberPendingDocument(buffer : EditorBuffer) : Unit {
+        pendingUri.clear()
+        pendingUri.append(activeUri.view())
+        pendingRevision = buffer.revision()
+    }
+
+    private def pendingDocumentMatches(
+    path : string,
+    buffer : EditorBuffer
+    ) : bool {
+        if !documentUri(workspace.view(), path, requestedUri) { return false }
+        return requestedUri.view() == pendingUri.view() &&
+        buffer.revision() == pendingRevision
+    }
+
     def requestCompletion(
     path : string,
     buffer : EditorBuffer,
@@ -721,6 +741,7 @@ private val responseJson : TextBuilder
         !this.sendBody(error) { return false }
         pendingId = id
         pendingResponse = PendingResponse.Completion
+        this.rememberPendingDocument(buffer)
         return true
     }
 
@@ -749,10 +770,13 @@ private val responseJson : TextBuilder
         !this.sendBody(error) { return false }
         pendingId = id
         pendingResponse = PendingResponse.Signature
+        this.rememberPendingDocument(buffer)
         return true
     }
 
     def poll(
+    path : string,
+    buffer : EditorBuffer,
     labels : TextBuilder,
     signature : TextBuilder,
     error : TextBuilder
@@ -765,6 +789,9 @@ private val responseJson : TextBuilder
         }
         val completed : PendingResponse = pendingResponse
         pendingResponse = PendingResponse.None
+        if !this.pendingDocumentMatches(path, buffer) {
+            return LspResponseKind.Discarded
+        }
         if completed == PendingResponse.Completion {
             extractCompletionLabels(responseJson.view(), labels)
             return LspResponseKind.Completion
@@ -805,6 +832,7 @@ private val responseJson : TextBuilder
         delete number
         delete activeUri
         delete requestedUri
+        delete pendingUri
         delete snapshot
         delete responseJson
     }
@@ -824,6 +852,7 @@ workspace : TextBuilder
     new ByteBuffer(usize(4096)),
     new ByteBuffer(usize(4096)),
     new ByteBuffer(usize(4096)),
+    new TextBuilder(),
     new TextBuilder(),
     new TextBuilder(),
     new TextBuilder(),

@@ -270,6 +270,8 @@ error : TextBuilder
 
 def pollLanguageServer(
 lsp : LspClient,
+path : string,
+buffer : EditorBuffer,
 completion : CompletionModel,
 labels : TextBuilder,
 signature : TextBuilder,
@@ -277,7 +279,13 @@ fallback : TextBuilder,
 error : TextBuilder,
 status : TextBuilder
 ) : Unit {
-    val response : LspResponseKind = lsp.poll(labels, signature, error)
+    val response : LspResponseKind = lsp.poll(
+    path,
+    buffer,
+    labels,
+    signature,
+    error
+    )
     if response == LspResponseKind.Completion {
         if labels.size() > usize(0) {
             completion.load(labels.view())
@@ -294,6 +302,8 @@ status : TextBuilder
     } else if response == LspResponseKind.Failure {
         completion.dismiss()
         setStatus(status, error.view())
+    } else if response == LspResponseKind.Discarded {
+        completion.dismiss()
     }
 }
 

@@ -915,6 +915,8 @@ def main() : int {
         }
         pollLanguageServer(
         languageServer,
+        activePath.view(),
+        buffer,
         completion,
         completionLabels,
         signatureText,
