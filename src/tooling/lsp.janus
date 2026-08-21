@@ -298,6 +298,7 @@ private val workspace : TextBuilder,
 private val body : ByteBuffer,
 private val response : ByteBuffer,
 private val incoming : ByteBuffer,
+private val outgoing : ByteBuffer,
 private val header : TextBuilder,
 private val number : TextBuilder,
 private val activeUri : TextBuilder,
@@ -309,6 +310,7 @@ private val responseJson : TextBuilder
     private var requestId : usize = usize(1)
     private var documentVersion : usize = usize(0)
     private var incomingStart : usize = usize(0)
+    private var outgoingStart : usize = usize(0)
     private var pendingId : usize = usize(0)
     private var pendingRevision : usize = usize(0)
     private var pendingResponse : PendingResponse = PendingResponse.None
@@ -327,6 +329,7 @@ private val responseJson : TextBuilder
         body.clear()
         response.clear()
         incoming.clear()
+        outgoing.clear()
         header.clear()
         activeUri.clear()
         requestedUri.clear()
@@ -336,6 +339,7 @@ private val responseJson : TextBuilder
         requestId = usize(1)
         documentVersion = usize(0)
         incomingStart = usize(0)
+        outgoingStart = usize(0)
         pendingId = usize(0)
         pendingRevision = usize(0)
         pendingResponse = PendingResponse.None
@@ -343,6 +347,7 @@ private val responseJson : TextBuilder
     }
 
     private def acceptRestartedProcess(child : ChildProcess) : bool {
+        delete process
         process = Option.Some[ChildProcess](move child)
         return true
     }
@@ -384,31 +389,83 @@ private val responseJson : TextBuilder
         return false
     }
 
-    private def writeBytes(
-    data : Ptr[byte],
-    size : usize,
-    error : TextBuilder
+    private def restoreProcess(child : ChildProcess) : bool {
+        delete process
+        process = Option.Some[ChildProcess](move child)
+        return true
+    }
+
+    private def retainAvailableProcess(
+    previous : Option[ChildProcess]
     ) : bool {
-        val previous : Option[ChildProcess] = this.takeProcess()
         return match move previous {
-            Some(child) => this.writeChild(move child, data, size, error),
-            None => this.reportUnavailable(error)
+            Some(child) => this.restoreProcess(move child),
+            None => false
         }
     }
 
-    private def writeChild(
+    private def processAvailable() : bool {
+        val previous : Option[ChildProcess] = this.takeProcess()
+        return this.retainAvailableProcess(move previous)
+    }
+
+    private def flushChild(
     child : ChildProcess,
-    data : Ptr[byte],
-    size : usize,
     error : TextBuilder
     ) : bool {
-        val result : bool = match child.write(data, size) {
-            Ok(count) => count == size,
-            Error(systemError) => this.reportTransportFailure(error)
+        val chunk : Ptr[byte] = alloc[byte](usize(4096))
+        defer free(chunk)
+        var attempts : usize = usize(0)
+        var failed : bool = false
+        var waiting : bool = false
+        while outgoingStart < outgoing.size() && attempts < usize(8) &&
+        !failed && !waiting {
+            val remaining : usize = outgoing.size() - outgoingStart
+            val requested : usize = if remaining < usize(4096) {
+                remaining
+            } else {
+                usize(4096)
+            }
+            var index : usize = usize(0)
+            while index < requested {
+                chunk.store(index, outgoing.data().load(outgoingStart + index))
+                index = index + usize(1)
+            }
+            val written : Result[usize, SystemError] = child.tryWrite(chunk, requested)
+            val count : isize = match written {
+                Ok(value) => truncatingCast[isize](value),
+                Error(systemError) => if systemError.category ==
+                SystemErrorCategory.WouldBlock {
+                    isize(-2)
+                } else {
+                    isize(-1)
+                }
+            }
+            if count > isize(0) {
+                outgoingStart = outgoingStart + numericCast[usize](count)
+            } else if count == isize(-2) {
+                waiting = true
+            } else {
+                failed = true
+            }
+            attempts = attempts + usize(1)
         }
-        delete process
-        process = Option.Some[ChildProcess](move child)
-        return result
+        if outgoingStart == outgoing.size() {
+            outgoing.clear()
+            outgoingStart = usize(0)
+        }
+        val _restored : bool = this.restoreProcess(move child)
+        if failed { return this.reportTransportFailure(error) }
+        return true
+    }
+
+    private def flushOutgoing(error : TextBuilder) : bool {
+        if outgoingStart >= outgoing.size() { return true }
+        val previous : Option[ChildProcess] = this.takeProcess()
+        return match move previous {
+            Some(child) => this.flushChild(move child, error),
+            None => this.reportUnavailable(error)
+        }
     }
 
     private def reportReadFailure(error : TextBuilder) : isize {
@@ -453,7 +510,27 @@ private val responseJson : TextBuilder
         }
     }
 
+    private def compactIncoming() : bool {
+        if incomingStart == usize(0) { return true }
+        val compacted : ByteBuffer = new ByteBuffer(incoming.size() - incomingStart)
+        defer delete compacted
+        var index : usize = incomingStart
+        while index < incoming.size() {
+            if !compacted.appendByte(incoming.data().load(index)) { return false }
+            index = index + usize(1)
+        }
+        incoming.clear()
+        if !incoming.append(compacted.data(), compacted.size()) { return false }
+        incomingStart = usize(0)
+        return true
+    }
+
     private def collectAvailable(error : TextBuilder) : bool {
+        if !this.compactIncoming() {
+            error.clear()
+            error.append("Mémoire insuffisante pour compacter les réponses LSP.")
+            return false
+        }
         val chunk : Ptr[byte] = alloc[byte](usize(4096))
         defer free(chunk)
         var attempts : usize = usize(0)
@@ -523,6 +600,7 @@ private val responseJson : TextBuilder
 
     private def pollPendingResponse(error : TextBuilder) : int {
         if pendingResponse == PendingResponse.None { return 0 }
+        if !this.flushOutgoing(error) { return -1 }
         if !this.collectAvailable(error) { return -1 }
         var attempts : usize = usize(0)
         while attempts < usize(64) {
@@ -535,15 +613,15 @@ private val responseJson : TextBuilder
     }
 
     private def sendBody(error : TextBuilder) : bool {
+        if !this.processAvailable() { return this.reportUnavailable(error) }
         header.clear()
         header.append("Content-Length: ")
         header.appendUSize(body.size())
         header.append("\r\n\r\n")
-        return this.writeBytes(
+        return outgoing.append(
         stringData(header.view()),
-        stringLength(header.view()),
-        error
-        ) && this.writeBytes(body.data(), body.size(), error)
+        stringLength(header.view())
+        ) && outgoing.append(body.data(), body.size())
     }
 
     private def inspectResponse(
@@ -773,7 +851,7 @@ private val responseJson : TextBuilder
         body.clear()
         val sent : bool = body.appendText(
         "{\"jsonrpc\":\"2.0\",\"method\":\"exit\",\"params\":null}"
-        ) && this.sendBody(error)
+        ) && this.sendBody(error) && this.flushOutgoing(error)
         this.disable()
         return sent
     }
@@ -784,6 +862,7 @@ private val responseJson : TextBuilder
         delete body
         delete response
         delete incoming
+        delete outgoing
         delete header
         delete number
         delete activeUri
@@ -805,6 +884,7 @@ workspace : TextBuilder
     return new LspClient(
     move state,
     move workspace,
+    new ByteBuffer(usize(4096)),
     new ByteBuffer(usize(4096)),
     new ByteBuffer(usize(4096)),
     new ByteBuffer(usize(4096)),
