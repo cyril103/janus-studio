@@ -44,11 +44,7 @@ Cette première version fournit :
 
 ## Prérequis
 
-- la version de développement de Janus contenant `characterPressed`,
-  `setMouseCursor` et `setWindowResizable` (présente dans le dépôt frère
-  `../janus`) ;
-- la version de développement de `janus-lsp` contenant la complétion typée des
-  membres ;
+- Janus 0.18.0 ou plus récent, avec `janus-lsp` ;
 - raylib 6 disponible pour l'exécution de l'interface graphique.
 
 Le compilateur peut construire l'application sans raylib. Le backend graphique

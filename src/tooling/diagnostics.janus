@@ -83,10 +83,10 @@ private val messages : TextBuilder
         messages.clear()
     }
 
-    def size() : usize { return lines.size() }
-    def line(index : usize) : usize { return lines.get(index) }
-    def column(index : usize) : usize { return columns.get(index) }
-    def isError(index : usize) : bool { return severities.get(index) == 2 }
+    borrow def size() : usize { return lines.size() }
+    borrow def line(index : usize) : usize { return lines.get(index) }
+    borrow def column(index : usize) : usize { return columns.get(index) }
+    borrow def isError(index : usize) : bool { return severities.get(index) == 2 }
 
     def appendForLine(requestedLine : usize, output : TextBuilder) : bool {
         output.clear()

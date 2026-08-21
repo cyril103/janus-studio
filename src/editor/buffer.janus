@@ -74,19 +74,19 @@ private val characters : Array[char],
 private val cursorPosition : usize,
 private val modified : bool
 ) {
-    def size() : usize {
+    borrow def size() : usize {
         return characters.size()
     }
 
-    def get(index : usize) : char {
+    borrow def get(index : usize) : char {
         return characters.get(index)
     }
 
-    def cursor() : usize {
+    borrow def cursor() : usize {
         return cursorPosition
     }
 
-    def wasModified() : bool {
+    borrow def wasModified() : bool {
         return modified
     }
 
@@ -105,11 +105,11 @@ private val redoStates : Array[BufferSnapshot]
     private var selectionAnchor : usize = usize(0)
     private var selecting : bool = false
 
-    def hasSelection() : bool {
+    borrow def hasSelection() : bool {
         return selecting && selectionAnchor != cursorPosition
     }
 
-    def selectionStart() : usize {
+    borrow def selectionStart() : usize {
         return if selectionAnchor < cursorPosition {
             selectionAnchor
         } else {
@@ -117,7 +117,7 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
-    def selectionEnd() : usize {
+    borrow def selectionEnd() : usize {
         return if selectionAnchor > cursorPosition {
             selectionAnchor
         } else {
@@ -144,7 +144,7 @@ private val redoStates : Array[BufferSnapshot]
         return true
     }
 
-    private def snapshot() : BufferSnapshot {
+    private borrow def snapshot() : BufferSnapshot {
         val copied : Array[char] = new Array[char](characters.size())
         var index : usize = usize(0)
         while index < characters.size() {
@@ -206,15 +206,15 @@ private val redoStates : Array[BufferSnapshot]
         this.insertAt(position + line.size(), '\n')
     }
 
-    def size() : usize {
+    borrow def size() : usize {
         return characters.size()
     }
 
-    def cursor() : usize {
+    borrow def cursor() : usize {
         return cursorPosition
     }
 
-    def isModified() : bool {
+    borrow def isModified() : bool {
         return modified
     }
 
@@ -285,7 +285,7 @@ private val redoStates : Array[BufferSnapshot]
         modified = true
     }
 
-    private def matchingClosing(value : char) : char {
+    private borrow def matchingClosing(value : char) : char {
         if value == char(40) { return char(41) }
         if value == char(91) { return char(93) }
         if value == char(123) { return char(125) }
@@ -294,7 +294,7 @@ private val redoStates : Array[BufferSnapshot]
         return '\0'
     }
 
-    private def isAutomaticClosing(value : char) : bool {
+    private borrow def isAutomaticClosing(value : char) : bool {
         return value == char(41) || value == char(93) ||
         value == char(125) || value == char(34) || value == char(39)
     }
@@ -503,7 +503,7 @@ private val redoStates : Array[BufferSnapshot]
         cursorPosition = if requested < end { requested } else { end }
     }
 
-    def line() : usize {
+    borrow def line() : usize {
         var result : usize = usize(0)
         var index : usize = usize(0)
         while index < cursorPosition {
@@ -515,7 +515,7 @@ private val redoStates : Array[BufferSnapshot]
         return result
     }
 
-    def lineCount() : usize {
+    borrow def lineCount() : usize {
         var result : usize = usize(1)
         var index : usize = usize(0)
         while index < characters.size() {
@@ -527,7 +527,7 @@ private val redoStates : Array[BufferSnapshot]
         return result
     }
 
-    def maximumLineLength() : usize {
+    borrow def maximumLineLength() : usize {
         var maximum : usize = usize(0)
         var current : usize = usize(0)
         var index : usize = usize(0)
@@ -545,7 +545,7 @@ private val redoStates : Array[BufferSnapshot]
         return if current > maximum { current } else { maximum }
     }
 
-    def column() : usize {
+    borrow def column() : usize {
         var result : usize = usize(0)
         var index : usize = cursorPosition
         while index > usize(0) && characters.get(index - usize(1)) != '\n' {
@@ -555,7 +555,7 @@ private val redoStates : Array[BufferSnapshot]
         return result
     }
 
-    private def lineStart(position : usize) : usize {
+    private borrow def lineStart(position : usize) : usize {
         var result : usize = position
         while result > usize(0) && characters.get(result - usize(1)) != '\n' {
             result = result - usize(1)
@@ -563,7 +563,7 @@ private val redoStates : Array[BufferSnapshot]
         return result
     }
 
-    private def lineEnd(start : usize) : usize {
+    private borrow def lineEnd(start : usize) : usize {
         var result : usize = start
         while result < characters.size() && characters.get(result) != '\n' {
             result = result + usize(1)
@@ -571,11 +571,11 @@ private val redoStates : Array[BufferSnapshot]
         return result
     }
 
-    private def isWhitespace(value : char) : bool {
+    private borrow def isWhitespace(value : char) : bool {
         return value == ' ' || value == '\t' || value == '\n' || value == '\r'
     }
 
-    private def isWord(value : char) : bool {
+    private borrow def isWord(value : char) : bool {
         return value == '_' ||
         (value >= 'a' && value <= 'z') ||
         (value >= 'A' && value <= 'Z') ||
@@ -638,7 +638,7 @@ private val redoStates : Array[BufferSnapshot]
         this.eraseRange(start, end)
     }
 
-    def copyCurrentLine(output : Array[char]) : bool {
+    borrow def copyCurrentLine(output : Array[char]) : bool {
         output.clear()
         if characters.isEmpty() {
             return false
@@ -728,7 +728,7 @@ private val redoStates : Array[BufferSnapshot]
         if requestedColumn < nextLength { requestedColumn } else { nextLength }
     }
 
-    def appendText(output : TextBuilder) : Unit {
+    borrow def appendText(output : TextBuilder) : Unit {
         var index : usize = usize(0)
         while index < characters.size() {
             output.appendChar(characters.get(index))
@@ -736,7 +736,7 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
-    def appendCharacters(output : Array[char]) : Unit {
+    borrow def appendCharacters(output : Array[char]) : Unit {
         output.clear()
         var index : usize = usize(0)
         while index < characters.size() {
@@ -745,7 +745,7 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
-    def findMatches(query : string, output : Array[usize]) : usize {
+    borrow def findMatches(query : string, output : Array[usize]) : usize {
         output.clear()
         val requested : Array[char] = new Array[char](stringLength(query))
         defer delete requested
@@ -775,7 +775,7 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
-    def lineLength(requestedLine : usize) : usize {
+    borrow def lineLength(requestedLine : usize) : usize {
         var line : usize = usize(0)
         var start : usize = usize(0)
         while line < requestedLine && start < characters.size() {
@@ -786,7 +786,7 @@ private val redoStates : Array[BufferSnapshot]
         return this.lineEnd(start) - start
     }
 
-    def appendSelection(output : TextBuilder) : bool {
+    borrow def appendSelection(output : TextBuilder) : bool {
         output.clear()
         if !this.hasSelection() { return false }
         var index : usize = this.selectionStart()
@@ -803,7 +803,7 @@ private val redoStates : Array[BufferSnapshot]
         return this.removeSelection()
     }
 
-    def lineAtOffset(position : usize) : usize {
+    borrow def lineAtOffset(position : usize) : usize {
         var line : usize = usize(0)
         var index : usize = usize(0)
         val end : usize = if position < characters.size() {
@@ -818,7 +818,7 @@ private val redoStates : Array[BufferSnapshot]
         return line
     }
 
-    def columnAtOffset(position : usize) : usize {
+    borrow def columnAtOffset(position : usize) : usize {
         var column : usize = usize(0)
         var index : usize = if position < characters.size() {
             position
@@ -832,7 +832,7 @@ private val redoStates : Array[BufferSnapshot]
         return column
     }
 
-    def appendVisibleText(
+    borrow def appendVisibleText(
     output : TextBuilder,
     firstLine : usize,
     maximumLines : usize
@@ -857,7 +857,7 @@ private val redoStates : Array[BufferSnapshot]
         }
     }
 
-    def appendVisibleCharacters(
+    borrow def appendVisibleCharacters(
     output : Array[char],
     firstLine : usize,
     maximumLines : usize

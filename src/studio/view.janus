@@ -1626,9 +1626,6 @@ maximumLines : usize
     var cursorX : int = editorCodeLeft()
     var cursorY : int = editorTop + 12
     if cursorVisible {
-        val cursorColumn : float = numericCast[float](
-        truncatingCast[int](buffer.column())
-        )
         val cursorLine : float = numericCast[float](
         truncatingCast[int](buffer.line() - firstLine)
         )

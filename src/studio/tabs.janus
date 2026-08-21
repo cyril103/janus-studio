@@ -88,11 +88,11 @@ private val scratch : TextBuilder
 ) {
     private var active : usize = usize(0)
 
-    def size() : usize { return states.size() }
-    def selected() : usize { return active }
+    borrow def size() : usize { return states.size() }
+    borrow def selected() : usize { return active }
 
-    private def appendRange(
-    source : Array[char],
+    private borrow def appendRange(
+    borrow source : Array[char],
     start : usize,
     length : usize,
     output : TextBuilder
@@ -197,7 +197,7 @@ private val scratch : TextBuilder
         this.appendRange(paths, state.pathStart, state.pathLength, activePath)
     }
 
-    def firstLine() : usize {
+    borrow def firstLine() : usize {
         return if states.size() > usize(0) {
             states.get(active).firstLine
         } else {
@@ -205,7 +205,7 @@ private val scratch : TextBuilder
         }
     }
 
-    def firstColumn() : usize {
+    borrow def firstColumn() : usize {
         return if states.size() > usize(0) {
             states.get(active).firstColumn
         } else {
@@ -213,12 +213,12 @@ private val scratch : TextBuilder
         }
     }
 
-    def appendPath(index : usize, output : TextBuilder) : Unit {
+    borrow def appendPath(index : usize, output : TextBuilder) : Unit {
         val state : DocumentState = states.get(index)
         this.appendRange(paths, state.pathStart, state.pathLength, output)
     }
 
-    def appendLabel(index : usize, output : TextBuilder) : Unit {
+    borrow def appendLabel(index : usize, output : TextBuilder) : Unit {
         val state : DocumentState = states.get(index)
         var start : usize = state.pathStart
         var cursor : usize = usize(0)
@@ -238,7 +238,7 @@ private val scratch : TextBuilder
         }
     }
 
-    def isModified(index : usize, buffer : EditorBuffer) : bool {
+    borrow def isModified(index : usize, buffer : EditorBuffer) : bool {
         return if index == active {
             buffer.isModified()
         } else {
@@ -246,7 +246,7 @@ private val scratch : TextBuilder
         }
     }
 
-    def anyModified(buffer : EditorBuffer) : bool {
+    borrow def anyModified(buffer : EditorBuffer) : bool {
         var index : usize = usize(0)
         while index < states.size() {
             if this.isModified(index, buffer) { return true }

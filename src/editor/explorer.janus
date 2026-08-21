@@ -155,8 +155,8 @@ private val paths : Array[char]
         selectedIndex = usize(0)
     }
 
-    private def appendCharacters(
-    source : Array[char],
+    private borrow def appendCharacters(
+    borrow source : Array[char],
     start : usize,
     length : usize,
     output : TextBuilder
@@ -169,7 +169,7 @@ private val paths : Array[char]
         }
     }
 
-    private def entryLess(
+    private borrow def entryLess(
     left : ExplorerEntry,
     right : ExplorerEntry
     ) : bool {
@@ -359,7 +359,7 @@ private val paths : Array[char]
         return true
     }
 
-    def size() : usize {
+    borrow def size() : usize {
         return entries.size()
     }
 
@@ -381,7 +381,7 @@ private val paths : Array[char]
         selectedIndex = usize(-1)
     }
 
-    def selected() : usize {
+    borrow def selected() : usize {
         return selectedIndex
     }
 
@@ -391,24 +391,24 @@ private val paths : Array[char]
         }
     }
 
-    def depth(index : usize) : usize {
+    borrow def depth(index : usize) : usize {
         return entries.get(index).depth
     }
 
-    def isDirectory(index : usize) : bool {
+    borrow def isDirectory(index : usize) : bool {
         return entries.get(index).kind == ExplorerEntryKind.Directory
     }
 
-    def isExpanded(index : usize) : bool {
+    borrow def isExpanded(index : usize) : bool {
         return entries.get(index).expanded
     }
 
-    def appendLabel(index : usize, output : TextBuilder) : Unit {
+    borrow def appendLabel(index : usize, output : TextBuilder) : Unit {
         val entry : ExplorerEntry = entries.get(index)
         this.appendCharacters(names, entry.nameStart, entry.nameLength, output)
     }
 
-    def appendPath(index : usize, output : TextBuilder) : Unit {
+    borrow def appendPath(index : usize, output : TextBuilder) : Unit {
         val entry : ExplorerEntry = entries.get(index)
         this.appendCharacters(paths, entry.pathStart, entry.pathLength, output)
     }
