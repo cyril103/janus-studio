@@ -117,12 +117,21 @@ output : TextBuilder
 }
 
 def captureProjectDirectory(path : string, output : TextBuilder) : bool {
+    output.clear()
     val directory : Result[WorkingDirectory, SystemError] =
     currentWorkingDirectory()
     return match move directory {
         Ok(value) => joinProjectDirectory(move value, path, output),
         Error(error) => useProjectDirectory(path, output)
     }
+}
+
+def captureDocumentPath(path : string, output : TextBuilder) : bool {
+    if path == "" {
+        output.clear()
+        return false
+    }
+    return captureProjectDirectory(path, output)
 }
 
 def captureProjectRoot(output : TextBuilder) : bool {
@@ -245,27 +254,28 @@ status : TextBuilder
 
 def applyPathPrompt(
 prompt : PathPrompt,
+path : string,
 activePath : TextBuilder,
 buffer : EditorBuffer,
 diagnostics : EditorDiagnostics,
 search : SearchModel,
 status : TextBuilder
 ) : bool {
-    if prompt.value() == "" {
+    if path == "" {
         setStatus(status, "Saisissez un chemin de fichier.")
         return false
     }
     val action : PathPromptAction = prompt.action()
     if action == PathPromptAction.Open &&
-    !openExistingFile(prompt.value(), buffer, status) {
+    !openExistingFile(path, buffer, status) {
         return false
     }
     if action == PathPromptAction.SaveAs &&
-    !validateSaveAsPath(prompt.value(), activePath.view(), status) {
+    !validateSaveAsPath(path, activePath.view(), status) {
         return false
     }
     if action == PathPromptAction.SaveAs &&
-    !saveFile(prompt.value(), buffer, status) {
+    !saveFile(path, buffer, status) {
         return false
     }
     if action == PathPromptAction.Create {
@@ -273,7 +283,7 @@ status : TextBuilder
         setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
     }
     activePath.clear()
-    activePath.append(prompt.value())
+    activePath.append(path)
     diagnostics.clear()
     search.clear()
     prompt.dismiss()

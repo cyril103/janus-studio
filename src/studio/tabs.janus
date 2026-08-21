@@ -161,6 +161,11 @@ private val scratch : TextBuilder
         return usize(-1)
     }
 
+    def pathAvailableForActive(path : string) : bool {
+        val existing : usize = this.find(path)
+        return existing == usize(-1) || existing == active
+    }
+
     private def snapshot(
     buffer : EditorBuffer,
     firstLine : usize,
@@ -347,8 +352,13 @@ private val scratch : TextBuilder
     buffer : EditorBuffer,
     activePath : TextBuilder,
     firstLine : usize,
-    firstColumn : usize
-    ) : Unit {
+    firstColumn : usize,
+    status : TextBuilder
+    ) : bool {
+        if this.find(path) != usize(-1) {
+            setStatus(status, "Ce fichier est déjà ouvert dans un onglet.")
+            return false
+        }
         if states.size() > usize(0) {
             this.snapshot(buffer, firstLine, firstColumn)
         }
@@ -357,9 +367,11 @@ private val scratch : TextBuilder
         activePath.append(path)
         states.push(this.appendPathState(path))
         active = states.size() - usize(1)
+        return true
     }
 
-    def updateActivePath(path : string) : Unit {
+    def updateActivePath(path : string) : bool {
+        if !this.pathAvailableForActive(path) { return false }
         val previous : DocumentState = states.get(active)
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8(path, paths)
@@ -374,6 +386,7 @@ private val scratch : TextBuilder
         previous.firstLine,
         previous.firstColumn
         ))
+        return true
     }
 
     def close(

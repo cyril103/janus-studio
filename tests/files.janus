@@ -31,3 +31,18 @@ def protectsNativeAndCommandQuitRequests() : Unit {
     assertTrue(resolveQuitRequest(false, false, true, false))
     assertTrue(resolveQuitRequest(true, true, false, true))
 }
+
+/// @test
+def resolvesEquivalentDocumentPathsToOneIdentity() : Unit {
+    val direct : TextBuilder = new TextBuilder()
+    defer delete direct
+    val equivalent : TextBuilder = new TextBuilder()
+    defer delete equivalent
+
+    assertTrue(captureDocumentPath("samples/welcome.janus", direct))
+    assertTrue(captureDocumentPath(
+    "./samples/../samples/welcome.janus",
+    equivalent
+    ))
+    assertEqual[string](direct.view(), equivalent.view())
+}

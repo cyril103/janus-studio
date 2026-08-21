@@ -33,7 +33,15 @@ def main() : int {
     defer delete explorerPath
     val activePath : TextBuilder = new TextBuilder()
     defer delete activePath
-    activePath.append(selectedPath())
+    val promptedPath : TextBuilder = new TextBuilder()
+    defer delete promptedPath
+    val startupPath : string = selectedPath()
+    if startupPath != "" {
+        val _capturedStartupPath : bool = captureDocumentPath(
+        startupPath,
+        activePath
+        )
+    }
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
     val status : TextBuilder = new TextBuilder()
@@ -641,9 +649,14 @@ def main() : int {
                     var applied : bool = false
                     if filePrompt.value() == "" {
                         setStatus(status, "Saisissez un chemin de fichier.")
+                    } else if !captureDocumentPath(
+                    filePrompt.value(),
+                    promptedPath
+                    ) {
+                        setStatus(status, "Chemin de fichier invalide.")
                     } else if action == PathPromptAction.Open {
                         applied = tabs.open(
-                        filePrompt.value(),
+                        promptedPath.view(),
                         buffer,
                         activePath,
                         status,
@@ -652,28 +665,34 @@ def main() : int {
                         )
                         if applied { filePrompt.dismiss() }
                     } else if action == PathPromptAction.Create {
-                        if validateNewPath(filePrompt.value(), status) {
-                            tabs.create(
-                            filePrompt.value(),
+                        if validateNewPath(promptedPath.view(), status) {
+                            applied = tabs.create(
+                            promptedPath.view(),
                             buffer,
                             activePath,
                             firstLine,
-                            firstColumn
+                            firstColumn,
+                            status
                             )
-                            setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
-                            filePrompt.dismiss()
-                            applied = true
+                            if applied {
+                                setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+                                filePrompt.dismiss()
+                            }
                         }
+                    } else if !tabs.pathAvailableForActive(
+                    promptedPath.view()
+                    ) {
+                        setStatus(status, "Ce fichier est déjà ouvert dans un autre onglet.")
                     } else if applyPathPrompt(
                     filePrompt,
+                    promptedPath.view(),
                     activePath,
                     buffer,
                     diagnostics,
                     search,
                     status
                     ) {
-                        tabs.updateActivePath(activePath.view())
-                        applied = true
+                        applied = tabs.updateActivePath(activePath.view())
                     }
                     if applied {
                         firstLine = tabs.firstLine()
