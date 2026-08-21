@@ -15,7 +15,7 @@ error : TextBuilder
 ) : LspResponseKind {
     var attempts : usize = usize(0)
     var response : LspResponseKind = LspResponseKind.None
-    while response == LspResponseKind.None && attempts < usize(200000) {
+    while response == LspResponseKind.None && attempts < usize(5000000) {
         response = client.poll(path, buffer, labels, signature, error)
         attempts = attempts + usize(1)
     }
@@ -142,6 +142,11 @@ def reusesPersistentLspSession() : Unit {
     val signature : TextBuilder = new TextBuilder()
     defer delete signature
 
+    assertEqual[LspResponseKind](
+    awaitLspResponse(client, ".", buffer, labels, signature, error),
+    LspResponseKind.Ready
+    )
+
     assertTrue(client.requestCompletion(
     "samples/persistent-completion.janus",
     buffer,
@@ -164,6 +169,10 @@ def reusesPersistentLspSession() : Unit {
     assertTrue(containsLabel(labels.view(), "get", usize(0), usize(3)))
 
     assertTrue(client.restart("samples", error))
+    assertEqual[LspResponseKind](
+    awaitLspResponse(client, "samples", buffer, labels, signature, error),
+    LspResponseKind.Ready
+    )
     labels.clear()
     assertTrue(client.requestCompletion(
     "persistent-completion.janus",

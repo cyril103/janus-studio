@@ -230,6 +230,7 @@ def messageHasId(json : string, requested : usize) : bool {
 
 enum LspResponseKind derives Copy, Equality, Debug {
     None,
+    Ready,
     Completion,
     Signature,
     Discarded,
@@ -238,6 +239,7 @@ enum LspResponseKind derives Copy, Equality, Debug {
 
 private enum PendingResponse derives Copy, Equality, Debug {
     None,
+    Initialize,
     Completion,
     Signature
 }
@@ -310,10 +312,12 @@ private val responseJson : TextBuilder
     private var pendingId : usize = usize(0)
     private var pendingRevision : usize = usize(0)
     private var pendingResponse : PendingResponse = PendingResponse.None
+    private var ready : bool = false
 
     private def disable() : Unit {
         delete process
         process = Option.None[ChildProcess]()
+        ready = false
     }
 
     private def resetSession(workspacePath : string) : Unit {
@@ -335,6 +339,7 @@ private val responseJson : TextBuilder
         pendingId = usize(0)
         pendingRevision = usize(0)
         pendingResponse = PendingResponse.None
+        ready = false
     }
 
     private def acceptRestartedProcess(child : ChildProcess) : bool {
@@ -414,33 +419,6 @@ private val responseJson : TextBuilder
     private def reportReadUnavailable(error : TextBuilder) : isize {
         this.reportUnavailable(error)
         return isize(-1)
-    }
-
-    private def readChunk(
-    target : Ptr[byte],
-    capacity : usize,
-    error : TextBuilder
-    ) : isize {
-        val previous : Option[ChildProcess] = this.takeProcess()
-        return match move previous {
-            Some(child) => this.readChild(move child, target, capacity, error),
-            None => this.reportReadUnavailable(error)
-        }
-    }
-
-    private def readChild(
-    child : ChildProcess,
-    target : Ptr[byte],
-    capacity : usize,
-    error : TextBuilder
-    ) : isize {
-        val result : isize = match child.read(target, capacity) {
-            Ok(count) => truncatingCast[isize](count),
-            Error(systemError) => this.reportReadFailure(error)
-        }
-        delete process
-        process = Option.Some[ChildProcess](move child)
-        return result
     }
 
     private def tryReadChild(
@@ -568,53 +546,6 @@ private val responseJson : TextBuilder
         ) && this.writeBytes(body.data(), body.size(), error)
     }
 
-    private def readMessage(error : TextBuilder) : bool {
-        header.clear()
-        var boundary : int = 0
-        val single : Ptr[byte] = alloc[byte](usize(1))
-        defer free(single)
-        while boundary < 4 && header.size() < usize(8192) {
-            val count : isize = this.readChunk(single, usize(1), error)
-            if count != isize(1) { return false }
-            val value : int = unsignedByte(single.load(usize(0)))
-            header.appendChar(char(value))
-            if boundary == 0 && value == 13 {
-                boundary = 1
-            } else if boundary == 1 && value == 10 {
-                boundary = 2
-            } else if boundary == 2 && value == 13 {
-                boundary = 3
-            } else if boundary == 3 && value == 10 {
-                boundary = 4
-            } else if value == 13 {
-                boundary = 1
-            } else {
-                boundary = 0
-            }
-        }
-        val length : usize = parseContentLength(header.view())
-        if boundary != 4 || length == usize(0) {
-            error.clear()
-            error.append("Réponse LSP invalide.")
-            return false
-        }
-        response.clear()
-        val chunk : Ptr[byte] = alloc[byte](usize(4096))
-        defer free(chunk)
-        while response.size() < length {
-            val remaining : usize = length - response.size()
-            val requested : usize = if remaining < usize(4096) {
-                remaining
-            } else {
-                usize(4096)
-            }
-            val count : isize = this.readChunk(chunk, requested, error)
-            if count <= isize(0) ||
-            !response.append(chunk, numericCast[usize](count)) { return false }
-        }
-        return true
-    }
-
     private def inspectResponse(
     result : Result[string, TextDecodeError],
     id : usize
@@ -632,18 +563,6 @@ private val responseJson : TextBuilder
         return true
     }
 
-    private def readResponse(id : usize, error : TextBuilder) : bool {
-        var attempts : usize = usize(0)
-        while attempts < usize(64) {
-            if !this.readMessage(error) { return false }
-            if this.inspectResponse(response.asText(), id) { return true }
-            attempts = attempts + usize(1)
-        }
-        error.clear()
-        error.append("janus-lsp n'a pas répondu à la requête attendue.")
-        return false
-    }
-
     private def appendNumber(value : usize) : bool {
         number.clear()
         number.appendUSize(value)
@@ -655,14 +574,17 @@ private val responseJson : TextBuilder
         if !body.appendText(
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootPath\":"
         ) || !appendJsonString(workspace.view(), body) ||
-        !body.appendText("}}") || !this.sendBody(error) ||
-        !this.readResponse(usize(1), error) {
+        !body.appendText("}}") || !this.sendBody(error) {
             this.disable()
             return false
         }
         requestId = usize(2)
+        pendingId = usize(1)
+        pendingResponse = PendingResponse.Initialize
         return true
     }
+
+    borrow def isReady() : bool { return ready }
 
     private def sendClose(error : TextBuilder) : bool {
         body.clear()
@@ -747,6 +669,10 @@ private val responseJson : TextBuilder
     ) : bool {
         labels.clear()
         error.clear()
+        if !ready {
+            error.append("Le serveur de langage est en cours d'initialisation.")
+            return false
+        }
         if !this.synchronizeDocument(path, buffer, error) { return false }
         val id : usize = requestId
         val utf16Column : usize = buffer.utf16Column(line, column)
@@ -776,6 +702,10 @@ private val responseJson : TextBuilder
     ) : bool {
         signature.clear()
         error.clear()
+        if !ready {
+            error.append("Le serveur de langage est en cours d'initialisation.")
+            return false
+        }
         if !this.synchronizeDocument(path, buffer, error) { return false }
         val id : usize = requestId
         val utf16Column : usize = buffer.utf16Column(line, column)
@@ -806,10 +736,15 @@ private val responseJson : TextBuilder
         if state == 0 { return LspResponseKind.None }
         if state < 0 {
             pendingResponse = PendingResponse.None
+            ready = false
             return LspResponseKind.Failure
         }
         val completed : PendingResponse = pendingResponse
         pendingResponse = PendingResponse.None
+        if completed == PendingResponse.Initialize {
+            ready = true
+            return LspResponseKind.Ready
+        }
         if !this.pendingDocumentMatches(path, buffer) {
             return LspResponseKind.Discarded
         }
@@ -831,7 +766,7 @@ private val responseJson : TextBuilder
         if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
         !this.appendNumber(id) ||
         !body.appendText(",\"method\":\"shutdown\",\"params\":null}") ||
-        !this.sendBody(error) || !this.readResponse(id, error) {
+        !this.sendBody(error) {
             this.disable()
             return false
         }
