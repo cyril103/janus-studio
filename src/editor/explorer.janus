@@ -61,8 +61,8 @@ result : Result[FileMetadata, SystemError]
 
 class ProjectExplorer(
 private val entries : Array[ExplorerEntry],
-private val names : Array[char],
-private val paths : Array[char]
+private var names : Array[char],
+private var paths : Array[char]
 ) {
     private var selectedIndex : usize = usize(0)
 
@@ -224,9 +224,26 @@ private val paths : Array[char]
     parentPath : string,
     depth : usize,
     output : Array[ExplorerEntry]
-    ) : bool {
+    ) : int {
         this.addDirectoryEntry(move name, parentPath, depth, output)
-        return true
+        return 1
+    }
+
+    private def consumeOptionalDirectoryEntry(
+    entry : Option[Path],
+    parentPath : string,
+    depth : usize,
+    output : Array[ExplorerEntry]
+    ) : int {
+        return match move entry {
+            Some(name) => this.continueDirectoryEntry(
+            move name,
+            parentPath,
+            depth,
+            output
+            ),
+            None => 0
+        }
     }
 
     private def consumeDirectoryEntry(
@@ -234,18 +251,15 @@ private val paths : Array[char]
     parentPath : string,
     depth : usize,
     output : Array[ExplorerEntry]
-    ) : bool {
+    ) : int {
         return match move result {
-            Ok(entry) => match move entry {
-                Some(name) => this.continueDirectoryEntry(
-                move name,
-                parentPath,
-                depth,
-                output
-                ),
-                None => false
-            },
-            Error(error) => false
+            Ok(entry) => this.consumeOptionalDirectoryEntry(
+            move entry,
+            parentPath,
+            depth,
+            output
+            ),
+            Error(error) => -1
         }
     }
 
@@ -255,12 +269,20 @@ private val paths : Array[char]
     depth : usize,
     output : Array[ExplorerEntry]
     ) : bool {
-        while this.consumeDirectoryEntry(
+        var state : int = this.consumeDirectoryEntry(
         iterator.next(),
         parentPath,
         depth,
         output
-        ) {}
+        )
+        while state == 1 {
+            state = this.consumeDirectoryEntry(
+            iterator.next(),
+            parentPath,
+            depth,
+            output
+            )
+        }
         val closed : bool = match iterator.close() {
             Ok(value) => value,
             Error(error) => false
@@ -268,7 +290,57 @@ private val paths : Array[char]
         delete iterator
         output.sortWith((left : ExplorerEntry, right : ExplorerEntry) =>
         this.entryLess(left, right))
-        return closed
+        return state == 0 && closed
+    }
+
+    private def copyStorageRange(
+    source : Array[char],
+    start : usize,
+    length : usize,
+    output : Array[char]
+    ) : Unit {
+        var index : usize = usize(0)
+        while index < length {
+            output.push(source.get(start + index))
+            index = index + usize(1)
+        }
+    }
+
+    private def compactStorage() : Unit {
+        val compactedNames : Array[char] = new Array[char](names.size())
+        val compactedPaths : Array[char] = new Array[char](paths.size())
+        var index : usize = usize(0)
+        while index < entries.size() {
+            val entry : ExplorerEntry = entries.get(index)
+            val nameStart : usize = compactedNames.size()
+            val pathStart : usize = compactedPaths.size()
+            this.copyStorageRange(
+            names,
+            entry.nameStart,
+            entry.nameLength,
+            compactedNames
+            )
+            this.copyStorageRange(
+            paths,
+            entry.pathStart,
+            entry.pathLength,
+            compactedPaths
+            )
+            entries.set(index, new ExplorerEntry(
+            nameStart,
+            entry.nameLength,
+            pathStart,
+            entry.pathLength,
+            entry.depth,
+            entry.kind,
+            entry.expanded
+            ))
+            index = index + usize(1)
+        }
+        delete names
+        names = move compactedNames
+        delete paths
+        paths = move compactedPaths
     }
 
     private def loadChildren(
@@ -298,6 +370,7 @@ private val paths : Array[char]
             Error(error) => false
         }
         if !loaded {
+            this.compactStorage()
             return false
         }
         var childIndex : usize = usize(0)
@@ -314,6 +387,8 @@ private val paths : Array[char]
     borrow def size() : usize {
         return entries.size()
     }
+
+    borrow def storageSize() : usize { return names.size() + paths.size() }
 
     def open(root : string) : bool {
         if explorerKindResult(metadata(root)) != int(ExplorerEntryKind.Directory) {
@@ -368,6 +443,7 @@ private val paths : Array[char]
             selectedIndex = previousSelection
             return false
         }
+        this.compactStorage()
         return true
     }
 
@@ -436,6 +512,7 @@ private val paths : Array[char]
             } else if selectedIndex > index + removed {
                 selectedIndex = selectedIndex - removed
             }
+            this.compactStorage()
             return true
         }
         if !this.loadChildren(index, entry) {

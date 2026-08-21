@@ -36,6 +36,7 @@ def loadsAndTogglesProjectDirectories() : Unit {
     assertEqual[usize](explorer.selected(), source)
     assertTrue(explorer.toggle(source))
     assertTrue(explorer.isExpanded(source))
+    val expandedStorage : usize = explorer.storageSize()
 
     val mainFile : usize = findExplorerEntry(explorer, "main.janus", scratch)
     assertTrue(mainFile != usize(-1))
@@ -45,6 +46,12 @@ def loadsAndTogglesProjectDirectories() : Unit {
 
     assertTrue(explorer.toggle(source))
     assertFalse(explorer.isExpanded(source))
+    assertTrue(explorer.storageSize() < expandedStorage)
+    val collapsedStorage : usize = explorer.storageSize()
+    assertTrue(explorer.toggle(source))
+    assertEqual[usize](explorer.storageSize(), expandedStorage)
+    assertTrue(explorer.toggle(source))
+    assertEqual[usize](explorer.storageSize(), collapsedStorage)
     assertEqual[usize](
     findExplorerEntry(explorer, "main.janus", scratch),
     usize(-1)
