@@ -18,6 +18,21 @@ def shiftDown() : bool {
     return isKeyDown(Key.LeftShift) || isKeyDown(Key.RightShift)
 }
 
+def resolveQuitRequest(
+requested : bool,
+forced : bool,
+nativeClose : bool,
+hasModifiedDocuments : bool
+) : bool {
+    if forced {
+        return requested
+    }
+    if (requested || nativeClose) && hasModifiedDocuments {
+        return false
+    }
+    return requested || nativeClose
+}
+
 def handlePathPromptKeys(prompt : PathPrompt) : bool {
     if isKeyPressed(Key.Escape) {
         prompt.dismiss()

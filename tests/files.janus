@@ -1,0 +1,33 @@
+import studio.files
+import studio.input
+import std.testing
+import std.text
+
+/// @test
+def rejectsExistingPathsForCreationAndSaveAs() : Unit {
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+
+    assertFalse(validateNewPath("samples/welcome.janus", status))
+    assertTrue(status.size() > usize(0))
+    assertTrue(validateNewPath("tests/fichier-absent-pour-test.janus", status))
+
+    assertFalse(validateSaveAsPath(
+    "samples/welcome.janus",
+    "src/main.janus",
+    status
+    ))
+    assertTrue(validateSaveAsPath(
+    "samples/welcome.janus",
+    "samples/welcome.janus",
+    status
+    ))
+}
+
+/// @test
+def protectsNativeAndCommandQuitRequests() : Unit {
+    assertFalse(resolveQuitRequest(false, false, true, true))
+    assertFalse(resolveQuitRequest(true, false, false, true))
+    assertTrue(resolveQuitRequest(false, false, true, false))
+    assertTrue(resolveQuitRequest(true, true, false, true))
+}

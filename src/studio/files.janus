@@ -28,6 +28,33 @@ def isDirectory(path : string) : bool {
     }
 }
 
+def pathExists(path : string) : bool {
+    return match metadata(path) {
+        Ok(value) => true,
+        Error(error) => false
+    }
+}
+
+def validateNewPath(path : string, status : TextBuilder) : bool {
+    if pathExists(path) {
+        setStatus(status, "Ce chemin existe déjà : utilisez Ouvrir ou Enregistrer sous.")
+        return false
+    }
+    return true
+}
+
+def validateSaveAsPath(
+path : string,
+currentPath : string,
+status : TextBuilder
+) : bool {
+    if path != currentPath && pathExists(path) {
+        setStatus(status, "Le fichier cible existe déjà ; écrasement refusé.")
+        return false
+    }
+    return true
+}
+
 def codeFontPath() : string {
     val windowsPath : string = "C:/Windows/Fonts/consola.ttf"
     if isFile(windowsPath) {
@@ -231,6 +258,10 @@ status : TextBuilder
     val action : PathPromptAction = prompt.action()
     if action == PathPromptAction.Open &&
     !openExistingFile(prompt.value(), buffer, status) {
+        return false
+    }
+    if action == PathPromptAction.SaveAs &&
+    !validateSaveAsPath(prompt.value(), activePath.view(), status) {
         return false
     }
     if action == PathPromptAction.SaveAs &&

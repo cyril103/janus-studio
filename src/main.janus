@@ -171,7 +171,8 @@ def main() : int {
     var explorerHorizontalScrollbarDragging : bool = false
     var documentTabScrollbarDragging : bool = false
     var mouseSelecting : bool = false
-    while !windowShouldClose() && !quitRequested {
+    while !quitRequested {
+        val nativeCloseRequested : bool = windowShouldClose()
         val control : bool = controlDown()
         val shift : bool = shiftDown()
         val cursorLineBeforeInput : usize = buffer.line()
@@ -651,16 +652,18 @@ def main() : int {
                         )
                         if applied { filePrompt.dismiss() }
                     } else if action == PathPromptAction.Create {
-                        tabs.create(
-                        filePrompt.value(),
-                        buffer,
-                        activePath,
-                        firstLine,
-                        firstColumn
-                        )
-                        setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
-                        filePrompt.dismiss()
-                        applied = true
+                        if validateNewPath(filePrompt.value(), status) {
+                            tabs.create(
+                            filePrompt.value(),
+                            buffer,
+                            activePath,
+                            firstLine,
+                            firstColumn
+                            )
+                            setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
+                            filePrompt.dismiss()
+                            applied = true
+                        }
                     } else if applyPathPrompt(
                     filePrompt,
                     activePath,
@@ -889,15 +892,21 @@ def main() : int {
         }
         val requestedAction : EditorAction =
         if keyAction != EditorAction.None { keyAction } else { characterAction }
-        quitRequested = applyEditorAction(
+        val editorQuitRequested : bool = applyEditorAction(
         requestedAction,
         activePath.view(),
         buffer,
         status
         )
-        if quitRequested && requestedAction != EditorAction.ForceQuit &&
-        tabs.anyModified(buffer) {
-            quitRequested = false
+        val hasModifiedDocuments : bool = tabs.anyModified(buffer)
+        quitRequested = resolveQuitRequest(
+        editorQuitRequested,
+        requestedAction == EditorAction.ForceQuit,
+        nativeCloseRequested,
+        hasModifiedDocuments
+        )
+        if (editorQuitRequested || nativeCloseRequested) &&
+        !quitRequested && hasModifiedDocuments {
             setStatus(status, "Des onglets contiennent des modifications non enregistrées.")
         }
         if buffer.isModified() {
