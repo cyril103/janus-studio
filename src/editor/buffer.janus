@@ -26,7 +26,13 @@ private def decodeUtf8(text : string, output : Array[char]) : Unit {
         var codepoint : int = 65533
         var width : usize = usize(1)
 
-        if first <= 127 {
+        if first == 13 {
+            codepoint = 10
+            if index + usize(1) < length &&
+            data.load(index + usize(1)) == byte(10) {
+                width = usize(2)
+            }
+        } else if first <= 127 {
             codepoint = first
         } else if first >= 194 && first <= 223 &&
         index + usize(1) < length {
@@ -554,6 +560,27 @@ private val redoStates : Array[BufferSnapshot]
         while index > usize(0) && characters.get(index - usize(1)) != '\n' {
             result = result + usize(1)
             index = index - usize(1)
+        }
+        return result
+    }
+
+    borrow def utf16Column(line : usize, column : usize) : usize {
+        var currentLine : usize = usize(0)
+        var index : usize = usize(0)
+        while currentLine < line && index < characters.size() {
+            if characters.get(index) == '\n' {
+                currentLine = currentLine + usize(1)
+            }
+            index = index + usize(1)
+        }
+        var consumed : usize = usize(0)
+        var result : usize = usize(0)
+        while consumed < column && index < characters.size() &&
+        characters.get(index) != '\n' {
+            val codepoint : int = int(characters.get(index))
+            result = result + if codepoint > 65535 { usize(2) } else { usize(1) }
+            consumed = consumed + usize(1)
+            index = index + usize(1)
         }
         return result
     }

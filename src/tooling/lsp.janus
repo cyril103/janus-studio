@@ -711,6 +711,7 @@ private val responseJson : TextBuilder
         error.clear()
         if !this.synchronizeDocument(path, buffer, error) { return false }
         val id : usize = requestId
+        val utf16Column : usize = buffer.utf16Column(line, column)
         requestId = requestId + usize(1)
         body.clear()
         if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
@@ -719,7 +720,7 @@ private val responseJson : TextBuilder
         ) || !appendJsonString(activeUri.view(), body) ||
         !body.appendText("},\"position\":{\"line\":") ||
         !this.appendNumber(line) || !body.appendText(",\"character\":") ||
-        !this.appendNumber(column) || !body.appendText("}}}") ||
+        !this.appendNumber(utf16Column) || !body.appendText("}}}") ||
         !this.sendBody(error) { return false }
         pendingId = id
         pendingResponse = PendingResponse.Completion
@@ -738,6 +739,7 @@ private val responseJson : TextBuilder
         error.clear()
         if !this.synchronizeDocument(path, buffer, error) { return false }
         val id : usize = requestId
+        val utf16Column : usize = buffer.utf16Column(line, column)
         requestId = requestId + usize(1)
         body.clear()
         if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
@@ -746,7 +748,7 @@ private val responseJson : TextBuilder
         ) || !appendJsonString(activeUri.view(), body) ||
         !body.appendText("},\"position\":{\"line\":") ||
         !this.appendNumber(line) || !body.appendText(",\"character\":") ||
-        !this.appendNumber(column) || !body.appendText("}}}") ||
+        !this.appendNumber(utf16Column) || !body.appendText("}}}") ||
         !this.sendBody(error) { return false }
         pendingId = id
         pendingResponse = PendingResponse.Signature

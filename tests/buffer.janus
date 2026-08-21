@@ -22,6 +22,20 @@ def insertsAndDeletesAtCursor() : Unit {
 }
 
 /// @test
+def normalizesLineEndingsAndCountsUtf16Columns() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("a\r\nb\rc😀d")
+    val output : TextBuilder = new TextBuilder()
+    defer delete output
+    buffer.appendText(output)
+
+    assertEqual[string](output.view(), "a\nb\nc😀d")
+    assertEqual[usize](buffer.lineCount(), usize(3))
+    assertEqual[usize](buffer.utf16Column(usize(2), usize(3)), usize(4))
+}
+
+/// @test
 def insertsAndSkipsAutomaticPairs() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
