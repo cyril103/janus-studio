@@ -108,18 +108,18 @@ def main() : int {
     setWindowResizable(true)
     disableExitKey()
 
-    val fontCharacters : string =
-    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~•€ÀÂÇÉÈÊËÎÏÔÙÛÜŸàâçéèêëîïôùûüÿŒœ"
+    val fontCharacters : TextBuilder = studioFontCharacters()
+    defer delete fontCharacters
     val uiFont : Font = loadFontUtf8(
     "assets/fonts/DejaVuSans.ttf",
     32,
-    fontCharacters
+    fontCharacters.view()
     )
     defer delete uiFont
     val codeFont : Font = loadFontUtf8(
     codeFontPath(),
     32,
-    fontCharacters
+    fontCharacters.view()
     )
     defer delete codeFont
     if !uiFont.isValid() || !codeFont.isValid() {
@@ -184,6 +184,7 @@ def main() : int {
     var mouseSelecting : bool = false
     while !quitRequested {
         val nativeCloseRequested : bool = windowShouldClose()
+        constrainStudioLayout()
         val control : bool = controlDown()
         val shift : bool = shiftDown()
         val cursorLineBeforeInput : usize = buffer.line()

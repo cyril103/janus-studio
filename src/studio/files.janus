@@ -67,6 +67,29 @@ def codeFontPath() : string {
     return "assets/fonts/DejaVuSansMono.ttf"
 }
 
+private def appendCharacterRange(
+first : int,
+last : int,
+output : TextBuilder
+) : Unit {
+    var value : int = first
+    while value <= last {
+        output.appendChar(char(value))
+        value = value + 1
+    }
+}
+
+def studioFontCharacters() : TextBuilder {
+    val characters : TextBuilder = new TextBuilder()
+    appendCharacterRange(32, 126, characters)
+    appendCharacterRange(160, 591, characters)
+    appendCharacterRange(880, 1279, characters)
+    appendCharacterRange(8192, 8303, characters)
+    appendCharacterRange(8352, 8399, characters)
+    appendCharacterRange(8592, 8959, characters)
+    return move characters
+}
+
 def selectedPath() : string {
     return match programArgument(usize(1)) {
         Some(path) => if isDirectory(path) { "" } else { path },

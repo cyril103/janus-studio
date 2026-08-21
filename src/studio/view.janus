@@ -38,6 +38,8 @@ const minimumOutputHeight : int = 80
 const editorGutterWidth : int = 56
 const documentTabWidth : int = 190
 const documentTabGap : int = 4
+const minimumWindowWidth : int = 720
+const minimumWindowHeight : int = 520
 
 def editorCodeLeft() : int {
     return editorLeft + editorGutterWidth
@@ -47,6 +49,37 @@ enum PaneResize derives Copy, Equality, Debug {
     None,
     Explorer,
     Output
+}
+
+def constrainStudioLayout() : Unit {
+    if screenWidth() < minimumWindowWidth || screenHeight() < minimumWindowHeight {
+        setWindowSize(
+        if screenWidth() < minimumWindowWidth {
+            minimumWindowWidth
+        } else {
+            screenWidth()
+        },
+        if screenHeight() < minimumWindowHeight {
+            minimumWindowHeight
+        } else {
+            screenHeight()
+        }
+        )
+    }
+    val maximumLeft : int = screenWidth() - minimumEditorWidth
+    if editorLeft < minimumExplorerWidth + 12 {
+        editorLeft = minimumExplorerWidth + 12
+    } else if editorLeft > maximumLeft {
+        editorLeft = maximumLeft
+    }
+    val minimumBottom : int = editorTop + minimumEditorHeight
+    val maximumBottom : int = screenHeight() - statusBarHeight -
+    commandLineHeight - minimumOutputHeight
+    if editorBottom < minimumBottom {
+        editorBottom = minimumBottom
+    } else if editorBottom > maximumBottom {
+        editorBottom = maximumBottom
+    }
 }
 
 def pathPromptTitle(action : PathPromptAction) : string {
