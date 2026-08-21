@@ -1,5 +1,8 @@
 import studio.files
 import studio.input
+import std.fs
+import std.path
+import std.result
 import std.testing
 import std.text
 
@@ -60,4 +63,76 @@ def derivesProjectRootFromDocumentParent() : Unit {
     assertTrue(captureDocumentPath("samples", expected))
     assertTrue(captureParentDirectory(document.view(), parent))
     assertEqual[string](parent.view(), expected.view())
+}
+
+private def writeSucceeded(result : Result[bool, SystemError]) : bool {
+    return match result {
+        Ok(written) => written,
+        Error(error) => false
+    }
+}
+
+private def fileContains(result : Result[FileData, SystemError], expected : string) : bool {
+    return match move result {
+        Ok(data) => acceptExpectedData(move data, expected),
+        Error(error) => false
+    }
+}
+
+private def acceptExpectedData(data : FileData, expected : string) : bool {
+    val matches : bool = data.view() == expected
+    delete data
+    return matches
+}
+
+private def verifiesExternalFile(file : Path) : bool {
+    defer delete file
+    assertTrue(writeSucceeded(writeTextFileAtomic(file.view(), "initial")))
+
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+    assertTrue(openExistingFile(file.view(), buffer, status))
+    buffer.insert('!')
+    assertTrue(writeSucceeded(writeTextFileAtomic(file.view(), "external")))
+    assertFalse(saveFile(file.view(), buffer, status))
+    assertTrue(fileContains(readFile(file.view()), "external"))
+
+    val newBuffer : EditorBuffer = emptyBuffer()
+    defer delete newBuffer
+    newBuffer.insert('x')
+    assertFalse(saveFile(file.view(), newBuffer, status))
+    assertTrue(fileContains(readFile(file.view()), "external"))
+    return true
+}
+
+private def acceptsTemporaryFile(
+result : Result[Path, SystemError]
+) : bool {
+    return match move result {
+        Ok(file) => verifiesExternalFile(move file),
+        Error(error) => false
+    }
+}
+
+private def verifiesExternalChangeProtection(directory : Path) : bool {
+    val verified : bool = acceptsTemporaryFile(
+    joinPath(directory.view(), "document.janus")
+    )
+    val _removed : Result[bool, SystemError] = removeDirectoryAll(directory.view())
+    delete directory
+    return verified
+}
+
+/// @test
+def refusesToOverwriteExternalChanges() : Unit {
+    val directory : Result[Path, SystemError] = createTemporaryDirectory(
+    "janus-studio-files-"
+    )
+    val protected : bool = match move directory {
+        Ok(path) => verifiesExternalChangeProtection(move path),
+        Error(error) => false
+    }
+    assertTrue(protected)
 }

@@ -28,6 +28,18 @@ private def decodeUtf8(text : string, output : Array[char]) : Unit {
     }
 }
 
+private def contentFingerprint(text : string) : usize {
+    val data : Ptr[byte] = stringData(text)
+    var value : usize = usize(216613626)
+    var index : usize = usize(0)
+    while index < stringLength(text) {
+        value = (value << usize(5)) ^ (value >> usize(2)) ^
+        numericCast[usize](int(data.load(index)) & 255)
+        index = index + usize(1)
+    }
+    return value
+}
+
 class BufferSnapshot(
 private val characters : Array[char],
 private val cursorPosition : usize,
@@ -77,7 +89,10 @@ private val currentRevision : usize,
 private val savedRevision : usize,
 private val nextRevision : usize,
 private val selectionAnchor : usize,
-private val selecting : bool
+private val selecting : bool,
+private val diskSize : usize,
+private val diskFingerprint : usize,
+private val tracksDiskContent : bool
 ) {
     borrow def appendCharacters(output : Array[char]) : Unit {
         var index : usize = usize(0)
@@ -93,6 +108,9 @@ private val selecting : bool
     borrow def next() : usize { return nextRevision }
     borrow def anchor() : usize { return selectionAnchor }
     borrow def hasSelection() : bool { return selecting }
+    borrow def trackedDiskSize() : usize { return diskSize }
+    borrow def trackedDiskFingerprint() : usize { return diskFingerprint }
+    borrow def hasTrackedDiskContent() : bool { return tracksDiskContent }
 
     def moveUndoStates(output : Array[BufferSnapshot]) : Unit {
         while !undoStates.isEmpty() {
@@ -158,6 +176,9 @@ def emptyBufferArchive() : BufferArchive {
     usize(0),
     usize(1),
     usize(0),
+    false,
+    usize(0),
+    usize(0),
     false
     )
 }
@@ -173,6 +194,9 @@ private val redoStates : Array[BufferSnapshot]
     private var nextRevision : usize = usize(1)
     private var selectionAnchor : usize = usize(0)
     private var selecting : bool = false
+    private var diskSize : usize = usize(0)
+    private var diskFingerprint : usize = usize(0)
+    private var tracksDiskContent : bool = false
 
     private def copySnapshots(
     source : Array[BufferSnapshot]
@@ -198,7 +222,10 @@ private val redoStates : Array[BufferSnapshot]
         savedRevision,
         nextRevision,
         selectionAnchor,
-        selecting
+        selecting,
+        diskSize,
+        diskFingerprint,
+        tracksDiskContent
         )
     }
 
@@ -215,6 +242,9 @@ private val redoStates : Array[BufferSnapshot]
         nextRevision = archive.next()
         selectionAnchor = archive.anchor()
         selecting = archive.hasSelection()
+        diskSize = archive.trackedDiskSize()
+        diskFingerprint = archive.trackedDiskFingerprint()
+        tracksDiskContent = archive.hasTrackedDiskContent()
         delete archive
     }
 
@@ -372,6 +402,19 @@ private val redoStates : Array[BufferSnapshot]
         savedRevision = currentRevision
     }
 
+    def trackDiskContent(text : string) : Unit {
+        diskSize = stringLength(text)
+        diskFingerprint = contentFingerprint(text)
+        tracksDiskContent = true
+    }
+
+    borrow def diskContentMatches(text : string) : bool {
+        return tracksDiskContent && diskSize == stringLength(text) &&
+        diskFingerprint == contentFingerprint(text)
+    }
+
+    borrow def hasDiskContent() : bool { return tracksDiskContent }
+
     def undo() : bool {
         if undoStates.isEmpty() {
             return false
@@ -408,6 +451,7 @@ private val redoStates : Array[BufferSnapshot]
         currentRevision = usize(0)
         savedRevision = usize(0)
         nextRevision = usize(1)
+        tracksDiskContent = false
         this.clearSelection()
     }
 
@@ -420,6 +464,7 @@ private val redoStates : Array[BufferSnapshot]
         currentRevision = usize(0)
         savedRevision = usize(0)
         nextRevision = usize(1)
+        tracksDiskContent = false
         this.clearSelection()
     }
 

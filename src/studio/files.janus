@@ -204,6 +204,7 @@ buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
     buffer.load(data.view())
+    buffer.trackDiskContent(data.view())
     buffer.moveFileStart()
     delete data
     setStatus(status, "Fichier chargé.")
@@ -227,7 +228,11 @@ status : TextBuilder
     val result : Result[FileData, SystemError] = readFile(path)
     return match move result {
         Ok(data) => acceptFile(move data, buffer, status),
-        Error(error) => startEmptyFile(buffer, status)
+        Error(error) => if pathExists(path) {
+            openFailed(status)
+        } else {
+            startEmptyFile(buffer, status)
+        }
     }
 }
 
@@ -250,9 +255,11 @@ status : TextBuilder
 
 def saveSucceeded(
 buffer : EditorBuffer,
+content : string,
 status : TextBuilder
 ) : bool {
     buffer.markSaved()
+    buffer.trackDiskContent(content)
     setStatus(status, "Fichier enregistré.")
     return true
 }
@@ -262,7 +269,7 @@ def saveFailed(status : TextBuilder) : bool {
     return false
 }
 
-def saveFile(
+private def writeBuffer(
 path : string,
 buffer : EditorBuffer,
 status : TextBuilder
@@ -272,12 +279,72 @@ status : TextBuilder
     buffer.appendText(content)
     return match writeTextFileAtomic(path, content.view()) {
         Ok(written) => if written {
-            saveSucceeded(buffer, status)
+            saveSucceeded(buffer, content.view(), status)
         } else {
             saveFailed(status)
         },
         Error(error) => saveFailed(status)
     }
+}
+
+private def acceptUnchangedFile(
+data : FileData,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val unchanged : bool = buffer.diskContentMatches(data.view())
+    delete data
+    if !unchanged {
+        setStatus(status, "Le fichier a été modifié sur le disque ; enregistrement refusé.")
+    }
+    return unchanged
+}
+
+private def reportUnverifiableFile(status : TextBuilder) : bool {
+    setStatus(status, "Impossible de vérifier le fichier avant enregistrement.")
+    return false
+}
+
+private def currentDiskContentMatches(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if !buffer.hasDiskContent() {
+        if pathExists(path) {
+            setStatus(status, "Le fichier a été créé sur le disque ; enregistrement refusé.")
+            return false
+        }
+        return true
+    }
+    val current : Result[FileData, SystemError] = readFile(path)
+    return match move current {
+        Ok(data) => acceptUnchangedFile(move data, buffer, status),
+        Error(error) => reportUnverifiableFile(status)
+    }
+}
+
+def saveFile(
+path : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if !currentDiskContentMatches(path, buffer, status) { return false }
+    return writeBuffer(path, buffer, status)
+}
+
+def saveFileAs(
+path : string,
+currentPath : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    if path == currentPath { return saveFile(path, buffer, status) }
+    if pathExists(path) {
+        setStatus(status, "Le fichier cible existe déjà ; écrasement refusé.")
+        return false
+    }
+    return writeBuffer(path, buffer, status)
 }
 
 def openProjectFolder(
@@ -323,7 +390,7 @@ status : TextBuilder
         return false
     }
     if action == PathPromptAction.SaveAs &&
-    !saveFile(path, buffer, status) {
+    !saveFileAs(path, activePath.view(), buffer, status) {
         return false
     }
     if action == PathPromptAction.Create {

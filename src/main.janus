@@ -94,7 +94,10 @@ def main() : int {
         buffer.clear()
         setStatus(status, "Aucun fichier ouvert.")
     } else {
-        loadFile(activePath.view(), buffer, status)
+        if !loadFile(activePath.view(), buffer, status) &&
+        pathExists(activePath.view()) {
+            activePath.clear()
+        }
     }
     val tabs : DocumentTabs = documentTabs(activePath.view(), buffer)
     defer delete tabs
