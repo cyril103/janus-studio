@@ -82,6 +82,7 @@ private def appendUtf8(text : string, output : Array[char]) : usize {
 
 class DocumentTabs(
 private val states : Array[DocumentState],
+private val archives : Array[BufferArchive],
 private val paths : Array[char],
 private val contents : Array[char],
 private val scratchCharacters : Array[char],
@@ -207,6 +208,7 @@ private val scratch : TextBuilder
         firstLine,
         firstColumn
         ))
+        archives.set(active, buffer.archive())
     }
 
     private def restoreActive(
@@ -221,7 +223,18 @@ private val scratch : TextBuilder
         )
         this.appendSlice(savedContent, scratch)
         delete savedContent
-        buffer.restoreDocument(scratch.view(), state.cursor, state.modified)
+        val requestedArchive : BufferArchive = archives.replace(
+        active,
+        buffer.archive()
+        )
+        val restoredArchive : BufferArchive = buffer.restoreArchive(
+        move requestedArchive
+        )
+        val placeholder : BufferArchive = archives.replace(
+        active,
+        move restoredArchive
+        )
+        delete placeholder
         val savedPath : Slice[char] = new Slice[char](
         paths,
         state.pathStart,
@@ -343,6 +356,7 @@ private val scratch : TextBuilder
         activePath.clear()
         activePath.append(path)
         states.push(this.appendPathState(path))
+        archives.push(buffer.archive())
         active = states.size() - usize(1)
         return true
     }
@@ -366,6 +380,7 @@ private val scratch : TextBuilder
         activePath.clear()
         activePath.append(path)
         states.push(this.appendPathState(path))
+        archives.push(buffer.archive())
         active = states.size() - usize(1)
         return true
     }
@@ -404,11 +419,15 @@ private val scratch : TextBuilder
         }
         if index != active {
             val _removed : DocumentState = states.remove(index)
+            val removedArchive : BufferArchive = archives.remove(index)
+            delete removedArchive
             if index < active { active = active - usize(1) }
             setStatus(status, "Onglet fermé.")
             return true
         }
         val _removed : DocumentState = states.remove(index)
+        val removedArchive : BufferArchive = archives.remove(index)
+        delete removedArchive
         if states.size() == usize(0) {
             buffer.clear()
             activePath.clear()
@@ -427,6 +446,7 @@ private val scratch : TextBuilder
 
     destructor {
         delete states
+        delete archives
         delete paths
         delete contents
         delete scratchCharacters
@@ -436,6 +456,7 @@ private val scratch : TextBuilder
 
 def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
     val states : Array[DocumentState] = new Array[DocumentState](usize(8))
+    val archives : Array[BufferArchive] = new Array[BufferArchive](usize(8))
     val paths : Array[char] = new Array[char](usize(256))
     val contents : Array[char] = new Array[char](usize(2048))
     val scratchCharacters : Array[char] = new Array[char](usize(2048))
@@ -462,9 +483,11 @@ def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
         usize(0),
         usize(0)
         ))
+        archives.push(buffer.archive())
     }
     return new DocumentTabs(
     move states,
+    move archives,
     move paths,
     move contents,
     move scratchCharacters,

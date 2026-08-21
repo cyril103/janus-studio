@@ -224,3 +224,53 @@ def rejectsDocumentPathCollisions() : Unit {
     assertEqual[usize](tabs.size(), usize(2))
     assertEqual[string](path.view(), "/projet/autre.janus")
 }
+
+/// @test
+def restoresUndoAndRedoHistoryForEachTab() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("premier")
+    val tabs : DocumentTabs = documentTabs("premier.janus", buffer)
+    defer delete tabs
+    val path : TextBuilder = new TextBuilder()
+    defer delete path
+    path.append("premier.janus")
+    val status : TextBuilder = new TextBuilder()
+    defer delete status
+    val text : TextBuilder = new TextBuilder()
+    defer delete text
+
+    buffer.insert('!')
+    assertTrue(tabs.create(
+    "second.janus",
+    buffer,
+    path,
+    usize(0),
+    usize(0),
+    status
+    ))
+    buffer.insertText("second")
+    assertTrue(tabs.switchTo(
+    usize(0),
+    buffer,
+    path,
+    usize(0),
+    usize(0)
+    ))
+    assertTrue(buffer.undo())
+    buffer.appendText(text)
+    assertEqual[string](text.view(), "premier")
+    assertTrue(buffer.redo())
+
+    assertTrue(tabs.switchTo(
+    usize(1),
+    buffer,
+    path,
+    usize(0),
+    usize(0)
+    ))
+    assertTrue(buffer.undo())
+    text.clear()
+    buffer.appendText(text)
+    assertEqual[string](text.view(), "")
+}

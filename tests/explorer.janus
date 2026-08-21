@@ -63,6 +63,10 @@ def opensAndClosesProjectDirectories() : Unit {
     assertEqual[string](scratch.view(), "src")
     assertTrue(findExplorerEntry(explorer, "main.janus", scratch) != usize(-1))
 
+    assertFalse(explorer.open("un-dossier-qui-n-existe-pas"))
+    explorer.appendLabel(usize(0), scratch)
+    assertEqual[string](scratch.view(), "src")
+
     explorer.close()
     assertEqual[usize](explorer.size(), usize(0))
     assertFalse(explorer.open("un-dossier-qui-n-existe-pas"))

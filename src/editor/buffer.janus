@@ -96,8 +96,79 @@ private val documentRevision : usize
         return documentRevision
     }
 
+    borrow def copy() : BufferSnapshot {
+        val copied : Array[char] = new Array[char](characters.size())
+        var index : usize = usize(0)
+        while index < characters.size() {
+            copied.push(characters.get(index))
+            index = index + usize(1)
+        }
+        return new BufferSnapshot(
+        move copied,
+        cursorPosition,
+        documentRevision
+        )
+    }
+
     destructor {
         delete characters
+    }
+}
+
+class BufferArchive(
+private val characters : Array[char],
+private val undoStates : Array[BufferSnapshot],
+private val redoStates : Array[BufferSnapshot],
+private val cursorPosition : usize,
+private val currentRevision : usize,
+private val savedRevision : usize,
+private val nextRevision : usize,
+private val selectionAnchor : usize,
+private val selecting : bool
+) {
+    borrow def appendCharacters(output : Array[char]) : Unit {
+        var index : usize = usize(0)
+        while index < characters.size() {
+            output.push(characters.get(index))
+            index = index + usize(1)
+        }
+    }
+
+    borrow def cursor() : usize { return cursorPosition }
+    borrow def revision() : usize { return currentRevision }
+    borrow def saved() : usize { return savedRevision }
+    borrow def next() : usize { return nextRevision }
+    borrow def anchor() : usize { return selectionAnchor }
+    borrow def hasSelection() : bool { return selecting }
+
+    def appendUndoCopies(output : Array[BufferSnapshot]) : Unit {
+        copySnapshotArray(undoStates, output)
+    }
+
+    def appendRedoCopies(output : Array[BufferSnapshot]) : Unit {
+        copySnapshotArray(redoStates, output)
+    }
+
+    destructor {
+        delete characters
+        delete undoStates
+        delete redoStates
+    }
+}
+
+private def copySnapshotArray(
+source : Array[BufferSnapshot],
+output : Array[BufferSnapshot]
+) : Unit {
+    val retained : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
+    defer delete retained
+    while !source.isEmpty() {
+        val state : BufferSnapshot = source.remove(usize(0))
+        output.push(state.copy())
+        retained.push(move state)
+    }
+    while !retained.isEmpty() {
+        source.push(retained.remove(usize(0)))
     }
 }
 
@@ -112,6 +183,50 @@ private val redoStates : Array[BufferSnapshot]
     private var nextRevision : usize = usize(1)
     private var selectionAnchor : usize = usize(0)
     private var selecting : bool = false
+
+    private def copySnapshots(
+    source : Array[BufferSnapshot]
+    ) : Array[BufferSnapshot] {
+        val copied : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
+        copySnapshotArray(source, copied)
+        return move copied
+    }
+
+    def archive() : BufferArchive {
+        val copiedCharacters : Array[char] = new Array[char](characters.size())
+        var index : usize = usize(0)
+        while index < characters.size() {
+            copiedCharacters.push(characters.get(index))
+            index = index + usize(1)
+        }
+        return new BufferArchive(
+        move copiedCharacters,
+        this.copySnapshots(undoStates),
+        this.copySnapshots(redoStates),
+        cursorPosition,
+        currentRevision,
+        savedRevision,
+        nextRevision,
+        selectionAnchor,
+        selecting
+        )
+    }
+
+    def restoreArchive(archive : BufferArchive) : BufferArchive {
+        characters.clear()
+        archive.appendCharacters(characters)
+        undoStates.clear()
+        archive.appendUndoCopies(undoStates)
+        redoStates.clear()
+        archive.appendRedoCopies(redoStates)
+        cursorPosition = archive.cursor()
+        currentRevision = archive.revision()
+        savedRevision = archive.saved()
+        nextRevision = archive.next()
+        selectionAnchor = archive.anchor()
+        selecting = archive.hasSelection()
+        return move archive
+    }
 
     borrow def hasSelection() : bool {
         return selecting && selectionAnchor != cursorPosition

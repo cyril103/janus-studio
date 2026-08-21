@@ -381,11 +381,56 @@ private val paths : Array[char]
         if explorerKindResult(metadata(root)) != int(ExplorerEntryKind.Directory) {
             return false
         }
+        val previousEntries : Array[ExplorerEntry] =
+        new Array[ExplorerEntry](entries.size())
+        defer delete previousEntries
+        val previousNames : Array[char] = new Array[char](names.size())
+        defer delete previousNames
+        val previousPaths : Array[char] = new Array[char](paths.size())
+        defer delete previousPaths
+        var index : usize = usize(0)
+        while index < entries.size() {
+            previousEntries.push(entries.get(index))
+            index = index + usize(1)
+        }
+        index = usize(0)
+        while index < names.size() {
+            previousNames.push(names.get(index))
+            index = index + usize(1)
+        }
+        index = usize(0)
+        while index < paths.size() {
+            previousPaths.push(paths.get(index))
+            index = index + usize(1)
+        }
+        val previousSelection : usize = selectedIndex
         entries.clear()
         names.clear()
         paths.clear()
         this.addRoot(root)
-        return this.toggle(usize(0))
+        if !this.toggle(usize(0)) {
+            entries.clear()
+            names.clear()
+            paths.clear()
+            index = usize(0)
+            while index < previousEntries.size() {
+                entries.push(previousEntries.get(index))
+                index = index + usize(1)
+            }
+            index = usize(0)
+            while index < previousNames.size() {
+                names.push(previousNames.get(index))
+                index = index + usize(1)
+            }
+            index = usize(0)
+            while index < previousPaths.size() {
+                paths.push(previousPaths.get(index))
+                index = index + usize(1)
+            }
+            selectedIndex = previousSelection
+            return false
+        }
+        return true
     }
 
     def close() : Unit {
