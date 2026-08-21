@@ -6,6 +6,7 @@ import std.fs
 import std.option
 import std.path
 import std.result
+import std.slice
 import std.system
 import std.text
 
@@ -169,6 +170,18 @@ private val paths : Array[char]
         }
     }
 
+    private borrow def appendSlice(
+    borrow source : Slice[char],
+    output : TextBuilder
+    ) : Unit {
+        output.clear()
+        var index : usize = usize(0)
+        while index < source.size() {
+            output.appendChar(source.get(index))
+            index = index + usize(1)
+        }
+    }
+
     private borrow def entryLess(
     left : ExplorerEntry,
     right : ExplorerEntry
@@ -326,12 +339,13 @@ private val paths : Array[char]
     ) : bool {
         val parentPath : TextBuilder = new TextBuilder()
         defer delete parentPath
-        this.appendCharacters(
+        val storedPath : Slice[char] = new Slice[char](
         paths,
         parent.pathStart,
-        parent.pathLength,
-        parentPath
+        parent.pathLength
         )
+        this.appendSlice(storedPath, parentPath)
+        delete storedPath
         val children : Array[ExplorerEntry] = new Array[ExplorerEntry](usize(16))
         defer delete children
         val directory : Result[DirectoryIterator, SystemError] =

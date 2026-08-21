@@ -4,6 +4,7 @@ module studio.tabs
 import editor.buffer
 import studio.files
 import std.array
+import std.slice
 import std.text
 
 private struct DocumentState(
@@ -105,6 +106,18 @@ private val scratch : TextBuilder
         }
     }
 
+    private borrow def appendSlice(
+    borrow source : Slice[char],
+    output : TextBuilder
+    ) : Unit {
+        output.clear()
+        var index : usize = usize(0)
+        while index < source.size() {
+            output.appendChar(source.get(index))
+            index = index + usize(1)
+        }
+    }
+
     private def appendPathState(path : string) : DocumentState {
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8(path, paths)
@@ -123,11 +136,17 @@ private val scratch : TextBuilder
 
     private def pathEquals(state : DocumentState, path : string) : bool {
         scratch.clear()
+        val storedPath : Slice[char] = new Slice[char](
+        paths,
+        state.pathStart,
+        state.pathLength
+        )
         var index : usize = usize(0)
-        while index < state.pathLength {
-            scratch.appendChar(paths.get(state.pathStart + index))
+        while index < storedPath.size() {
+            scratch.appendChar(storedPath.get(index))
             index = index + usize(1)
         }
+        delete storedPath
         return scratch.view() == path
     }
 
@@ -160,14 +179,17 @@ private val scratch : TextBuilder
                 appended = appended + usize(1)
             }
         } else {
+            val replacement : MutableSlice[char] = new MutableSlice[char](
+            contents,
+            contentStart,
+            scratchCharacters.size()
+            )
             var replaced : usize = usize(0)
             while replaced < scratchCharacters.size() {
-                contents.set(
-                contentStart + replaced,
-                scratchCharacters.get(replaced)
-                )
+                replacement.set(replaced, scratchCharacters.get(replaced))
                 replaced = replaced + usize(1)
             }
+            delete replacement
         }
         states.set(active, new DocumentState(
         previous.pathStart,
@@ -187,14 +209,21 @@ private val scratch : TextBuilder
     activePath : TextBuilder
     ) : Unit {
         val state : DocumentState = states.get(active)
-        this.appendRange(
+        val savedContent : Slice[char] = new Slice[char](
         contents,
         state.contentStart,
-        state.contentLength,
-        scratch
+        state.contentLength
         )
+        this.appendSlice(savedContent, scratch)
+        delete savedContent
         buffer.restoreDocument(scratch.view(), state.cursor, state.modified)
-        this.appendRange(paths, state.pathStart, state.pathLength, activePath)
+        val savedPath : Slice[char] = new Slice[char](
+        paths,
+        state.pathStart,
+        state.pathLength
+        )
+        this.appendSlice(savedPath, activePath)
+        delete savedPath
     }
 
     borrow def firstLine() : usize {

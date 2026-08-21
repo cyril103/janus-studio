@@ -77,6 +77,49 @@ def restoresIndependentDocuments() : Unit {
 }
 
 /// @test
+def restoresShorterDocumentFromReusedStorage() : Unit {
+    val buffer : EditorBuffer = emptyBuffer()
+    defer delete buffer
+    buffer.load("un contenu assez long")
+    val tabs : DocumentTabs = documentTabs("long.janus", buffer)
+    defer delete tabs
+    val path : TextBuilder = new TextBuilder()
+    defer delete path
+    path.append("long.janus")
+
+    tabs.create("second.janus", buffer, path, usize(0), usize(0))
+    buffer.load("second")
+    assertTrue(tabs.switchTo(
+    usize(0),
+    buffer,
+    path,
+    usize(0),
+    usize(0)
+    ))
+
+    buffer.load("court")
+    assertTrue(tabs.switchTo(
+    usize(1),
+    buffer,
+    path,
+    usize(0),
+    usize(0)
+    ))
+    assertTrue(tabs.switchTo(
+    usize(0),
+    buffer,
+    path,
+    usize(0),
+    usize(0)
+    ))
+
+    val restored : TextBuilder = new TextBuilder()
+    defer delete restored
+    buffer.appendText(restored)
+    assertEqual[string](restored.view(), "court")
+}
+
+/// @test
 def protectsAndClosesModifiedTabs() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
