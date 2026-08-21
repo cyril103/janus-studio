@@ -303,12 +303,42 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     private def eraseRange(start : usize, end : usize) : Unit {
-        var remaining : usize = end - start
+        val removed : usize = end - start
+        var source : usize = end
+        while source < characters.size() {
+            characters.set(start + source - end, characters.get(source))
+            source = source + usize(1)
+        }
+        var remaining : usize = removed
         while remaining > usize(0) {
-            val _removed : char = characters.remove(start)
+            val _discarded : char = characters.pop()
             remaining = remaining - usize(1)
         }
         cursorPosition = start
+    }
+
+    private def insertCharactersAt(
+    position : usize,
+    borrow inserted : Array[char]
+    ) : Unit {
+        if inserted.isEmpty() { return }
+        val previousSize : usize = characters.size()
+        characters.reserve(previousSize + inserted.size())
+        var appended : usize = usize(0)
+        while appended < inserted.size() {
+            characters.push('\0')
+            appended = appended + usize(1)
+        }
+        var source : usize = previousSize
+        while source > position {
+            source = source - usize(1)
+            characters.set(source + inserted.size(), characters.get(source))
+        }
+        var index : usize = usize(0)
+        while index < inserted.size() {
+            characters.set(position + index, inserted.get(index))
+            index = index + usize(1)
+        }
     }
 
     private def insertAt(position : usize, value : char) : Unit {
@@ -322,12 +352,15 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     private def insertLineAt(position : usize, line : Array[char]) : Unit {
+        val inserted : Array[char] = new Array[char](line.size() + usize(1))
+        defer delete inserted
         var index : usize = usize(0)
         while index < line.size() {
-            this.insertAt(position + index, line.get(index))
+            inserted.push(line.get(index))
             index = index + usize(1)
         }
-        this.insertAt(position + line.size(), '\n')
+        inserted.push('\n')
+        this.insertCharactersAt(position, inserted)
     }
 
     borrow def size() : usize {
@@ -458,12 +491,8 @@ private val redoStates : Array[BufferSnapshot]
         decodeUtf8(text, decoded)
         this.rememberChange()
         this.removeSelection()
-        var index : usize = usize(0)
-        while index < decoded.size() {
-            this.insertAt(cursorPosition, decoded.get(index))
-            cursorPosition = cursorPosition + usize(1)
-            index = index + usize(1)
-        }
+        this.insertCharactersAt(cursorPosition, decoded)
+        cursorPosition = cursorPosition + decoded.size()
     }
 
     def insertSpaces(count : usize) : Unit {
@@ -472,12 +501,15 @@ private val redoStates : Array[BufferSnapshot]
         }
         this.rememberChange()
         this.removeSelection()
+        val spaces : Array[char] = new Array[char](count)
+        defer delete spaces
         var index : usize = usize(0)
         while index < count {
-            this.insertAt(cursorPosition, ' ')
-            cursorPosition = cursorPosition + usize(1)
+            spaces.push(' ')
             index = index + usize(1)
         }
+        this.insertCharactersAt(cursorPosition, spaces)
+        cursorPosition = cursorPosition + count
     }
 
     def insertIndentedNewline() : Unit {
