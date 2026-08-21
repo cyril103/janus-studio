@@ -28,6 +28,14 @@ def rejectsExistingPathsForCreationAndSaveAs() : Unit {
 }
 
 /// @test
+def usesTheBundledUnicodeCodeFont() : Unit {
+    assertEqual[string](codeFontPath(), "assets/fonts/DejaVuSansMono.ttf")
+    val characters : TextBuilder = studioFontCharacters()
+    defer delete characters
+    assertTrue(characters.view() != "")
+}
+
+/// @test
 def protectsNativeAndCommandQuitRequests() : Unit {
     assertFalse(resolveQuitRequest(false, false, true, true))
     assertFalse(resolveQuitRequest(true, false, false, true))

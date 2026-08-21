@@ -56,14 +56,6 @@ status : TextBuilder
 }
 
 def codeFontPath() : string {
-    val windowsPath : string = "C:/Windows/Fonts/consola.ttf"
-    if isFile(windowsPath) {
-        return windowsPath
-    }
-    val wslPath : string = "/mnt/c/Windows/Fonts/consola.ttf"
-    if isFile(wslPath) {
-        return wslPath
-    }
     return "assets/fonts/DejaVuSansMono.ttf"
 }
 
@@ -87,6 +79,7 @@ def studioFontCharacters() : TextBuilder {
     appendCharacterRange(8192, 8303, characters)
     appendCharacterRange(8352, 8399, characters)
     appendCharacterRange(8592, 8959, characters)
+    characters.appendChar(char(65533))
     return move characters
 }
 
