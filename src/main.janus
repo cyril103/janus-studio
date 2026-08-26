@@ -41,8 +41,8 @@ def main() : int {
     val startupPath : string = selectedPath()
     if startupPath != "" {
         val _capturedStartupPath : bool = captureDocumentPath(
-        startupPath,
-        activePath
+            startupPath,
+            activePath
         )
     }
     val buffer : EditorBuffer = emptyBuffer()
@@ -100,23 +100,23 @@ def main() : int {
     val codeFontFile : TextBuilder = new TextBuilder()
     defer delete codeFontFile
     val _uiFontPathCaptured : bool = captureAssetPath(
-    "assets/fonts/DejaVuSans.ttf",
-    uiFontPath
+        "assets/fonts/DejaVuSans.ttf",
+        uiFontPath
     )
     val _codeFontPathCaptured : bool = captureAssetPath(
-    codeFontPath(),
-    codeFontFile
+        codeFontPath(),
+        codeFontFile
     )
     val uiFont : Font = loadFontUtf8(
-    uiFontPath.view(),
-    32,
-    fontCharacters.view()
+        uiFontPath.view(),
+        32,
+        fontCharacters.view()
     )
     defer delete uiFont
     val codeFont : Font = loadFontUtf8(
-    codeFontFile.view(),
-    32,
-    fontCharacters.view()
+        codeFontFile.view(),
+        32,
+        fontCharacters.view()
     )
     defer delete codeFont
     if !uiFont.isValid() || !codeFont.isValid() {
@@ -124,37 +124,37 @@ def main() : int {
         return 1
     }
     val oneGlyph : Vector2 = codeFont.measure(
-    "M",
-    codeFontSize,
-    codeFontSpacing
+        "M",
+        codeFontSize,
+        codeFontSpacing
     )
     val glyphAdvance : float = codeFont.measure(
-    "MM",
-    codeFontSize,
-    codeFontSpacing
+        "MM",
+        codeFontSize,
+        codeFontSpacing
     ).x - oneGlyph.x
     val lineAdvance : float = codeFont.measure(
-    "M\nM",
-    codeFontSize,
-    codeFontSpacing
+        "M\nM",
+        codeFontSize,
+        codeFontSpacing
     ).y - oneGlyph.y
     val outputOneGlyph : Vector2 = codeFont.measure(
-    "M",
-    15.0f,
-    codeFontSpacing
+        "M",
+        15.0f,
+        codeFontSpacing
     )
     val outputGlyphAdvance : float = codeFont.measure(
-    "MM",
-    15.0f,
-    codeFontSpacing
+        "MM",
+        15.0f,
+        codeFontSpacing
     ).x - outputOneGlyph.x
     val outputLineAdvance : float = codeFont.measure(
-    "M\nM",
-    15.0f,
-    codeFontSpacing
+        "M\nM",
+        15.0f,
+        codeFontSpacing
     ).y - outputOneGlyph.y
     var maximumLines : usize = numericCast[usize](truncatingCast[int](
-    numericCast[float](editorBottom - editorTop - 12) / lineAdvance
+        numericCast[float](editorBottom - editorTop - 12) / lineAdvance
     ))
     setTargetFps(60)
 
@@ -189,36 +189,36 @@ def main() : int {
         }
         if leftMousePressed {
             val clickedTab : usize = documentTabAtMouse(
-            tabs,
-            uiState.firstDocumentTab
+                tabs,
+                uiState.firstDocumentTab
             )
             if clickedTab != usize(-1) {
                 val previouslySelected : usize = tabs.selected()
                 val closingTab : bool = documentTabCloseHovered(
-                tabs,
-                uiState.firstDocumentTab,
-                clickedTab
+                    tabs,
+                    uiState.firstDocumentTab,
+                    clickedTab
                 )
                 val changed : bool = if closingTab {
                     tabs.close(
-                    clickedTab,
-                    buffer,
-                    activePath,
-                    status,
-                    uiState.firstLine,
-                    uiState.firstColumn
+                        clickedTab,
+                        buffer,
+                        activePath,
+                        status,
+                        uiState.firstLine,
+                        uiState.firstColumn
                     )
                 } else {
                     tabs.switchTo(
-                    clickedTab,
-                    buffer,
-                    activePath,
-                    uiState.firstLine,
-                    uiState.firstColumn
+                        clickedTab,
+                        buffer,
+                        activePath,
+                        uiState.firstLine,
+                        uiState.firstColumn
                     )
                 }
                 if changed && (!closingTab ||
-                clickedTab == previouslySelected) {
+                    clickedTab == previouslySelected) {
                     uiState.firstLine = tabs.firstLine()
                     uiState.firstColumn = tabs.firstColumn()
                     tooling.diagnostics.clear()
@@ -227,8 +227,8 @@ def main() : int {
                     tooling.signatureText.clear()
                     controller.escape()
                     uiState.firstDocumentTab = keepSelectedDocumentTabVisible(
-                    tabs,
-                    uiState.firstDocumentTab
+                        tabs,
+                        uiState.firstDocumentTab
                     )
                 }
                 fileInputConsumed = true
@@ -237,35 +237,35 @@ def main() : int {
         }
         if !uiState.documentTabScrollbarDragging && leftMousePressed &&
         outputVerticalScrollbarHovered(
-        tooling.toolOutput.view(),
-        outputRows
+            tooling.toolOutput.view(),
+            outputRows
         ) {
             uiState.outputVerticalScrollbarDragging = true
         } else if leftMousePressed && outputHorizontalScrollbarHovered(
-        tooling.toolOutput.view(),
-        outputColumns
+            tooling.toolOutput.view(),
+            outputColumns
         ) {
             uiState.outputHorizontalScrollbarDragging = true
         }
         if leftMousePressed && !uiState.outputVerticalScrollbarDragging &&
         !uiState.outputHorizontalScrollbarDragging && explorerVerticalScrollbarHovered(
-        explorer,
-        visibleExplorerRows
+            explorer,
+            visibleExplorerRows
         ) {
             uiState.explorerVerticalScrollbarDragging = true
         } else if leftMousePressed && !uiState.outputVerticalScrollbarDragging &&
         !uiState.outputHorizontalScrollbarDragging && explorerHorizontalScrollbarHovered(
-        explorer,
-        explorerLabel,
-        uiFont
+            explorer,
+            explorerLabel,
+            uiFont
         ) {
             uiState.explorerHorizontalScrollbarDragging = true
         }
         if uiState.outputVerticalScrollbarDragging {
             if isMouseButtonDown(MouseButton.Left) {
                 uiState.firstOutputLine = outputVerticalScrollAtMouse(
-                tooling.toolOutput.view(),
-                outputRows
+                    tooling.toolOutput.view(),
+                    outputRows
                 )
                 layoutMouseConsumed = true
             } else {
@@ -275,8 +275,8 @@ def main() : int {
         if uiState.outputHorizontalScrollbarDragging {
             if isMouseButtonDown(MouseButton.Left) {
                 uiState.firstOutputColumn = outputHorizontalScrollAtMouse(
-                tooling.toolOutput.view(),
-                outputColumns
+                    tooling.toolOutput.view(),
+                    outputColumns
                 )
                 layoutMouseConsumed = true
             } else {
@@ -286,8 +286,8 @@ def main() : int {
         if uiState.explorerVerticalScrollbarDragging {
             if isMouseButtonDown(MouseButton.Left) {
                 uiState.firstExplorerEntry = explorerVerticalScrollAtMouse(
-                explorer,
-                visibleExplorerRows
+                    explorer,
+                    visibleExplorerRows
                 )
                 layoutMouseConsumed = true
             } else {
@@ -297,9 +297,9 @@ def main() : int {
         if uiState.explorerHorizontalScrollbarDragging {
             if isMouseButtonDown(MouseButton.Left) {
                 uiState.explorerHorizontalOffset = explorerHorizontalScrollAtMouse(
-                explorer,
-                explorerLabel,
-                uiFont
+                    explorer,
+                    explorerLabel,
+                    uiFont
                 )
                 layoutMouseConsumed = true
             } else {
@@ -370,43 +370,43 @@ def main() : int {
             setMouseCursor(MouseCursor.Default)
         }
         maximumLines = numericCast[usize](truncatingCast[int](
-        numericCast[float](editorBottom - editorTop - 12) / lineAdvance
+            numericCast[float](editorBottom - editorTop - 12) / lineAdvance
         ))
         visibleColumns = visibleEditorColumns(glyphAdvance)
         outputRows = visibleOutputRows(outputLineAdvance)
         outputColumns = visibleOutputColumns(outputGlyphAdvance)
         visibleExplorerRows = explorerVisibleRows()
         val maximumFirstAfterResize : usize = maximumEditorFirst(
-        buffer,
-        maximumLines
+            buffer,
+            maximumLines
         )
         if uiState.firstLine > maximumFirstAfterResize {
             uiState.firstLine = maximumFirstAfterResize
         }
         val maximumColumnAfterResize : usize = maximumEditorFirstColumn(
-        buffer,
-        visibleColumns
+            buffer,
+            visibleColumns
         )
         if uiState.firstColumn > maximumColumnAfterResize {
             uiState.firstColumn = maximumColumnAfterResize
         }
         val maximumOutputLineAfterResize : usize = maximumOutputFirstLine(
-        tooling.toolOutput.view(),
-        outputRows
+            tooling.toolOutput.view(),
+            outputRows
         )
         if uiState.firstOutputLine > maximumOutputLineAfterResize {
             uiState.firstOutputLine = maximumOutputLineAfterResize
         }
         val maximumOutputColumnAfterResize : usize = maximumOutputFirstColumn(
-        tooling.toolOutput.view(),
-        outputColumns
+            tooling.toolOutput.view(),
+            outputColumns
         )
         if uiState.firstOutputColumn > maximumOutputColumnAfterResize {
             uiState.firstOutputColumn = maximumOutputColumnAfterResize
         }
         val maximumExplorerEntryAfterResize : usize = maximumExplorerFirst(
-        explorer,
-        visibleExplorerRows
+            explorer,
+            visibleExplorerRows
         )
         if uiState.firstExplorerEntry > maximumExplorerEntryAfterResize {
             uiState.firstExplorerEntry = maximumExplorerEntryAfterResize
@@ -423,39 +423,39 @@ def main() : int {
         if !filePrompt.isVisible() && !uiState.fileMenuOpen {
             if mouseInDocumentTabs() {
                 uiState.firstDocumentTab = scrollDocumentTabs(
-                tabs,
-                uiState.firstDocumentTab
+                    tabs,
+                    uiState.firstDocumentTab
                 )
             } else if mouseInExplorerPanel() && shift {
                 uiState.explorerHorizontalOffset = scrollExplorerHorizontally(
-                explorer,
-                explorerLabel,
-                uiFont,
-                uiState.explorerHorizontalOffset
+                    explorer,
+                    explorerLabel,
+                    uiFont,
+                    uiState.explorerHorizontalOffset
                 )
             } else if mouseInExplorerPanel() {
                 uiState.firstExplorerEntry = scrollExplorer(
-                explorer,
-                uiState.firstExplorerEntry,
-                visibleExplorerRows
+                    explorer,
+                    uiState.firstExplorerEntry,
+                    visibleExplorerRows
                 )
             } else if mouseInOutputPanel() && shift {
                 uiState.firstOutputColumn = scrollOutputHorizontally(
-                tooling.toolOutput.view(),
-                uiState.firstOutputColumn,
-                outputColumns
+                    tooling.toolOutput.view(),
+                    uiState.firstOutputColumn,
+                    outputColumns
                 )
             } else if mouseInOutputPanel() {
                 uiState.firstOutputLine = scrollOutputVertically(
-                tooling.toolOutput.view(),
-                uiState.firstOutputLine,
-                outputRows
+                    tooling.toolOutput.view(),
+                    uiState.firstOutputLine,
+                    outputRows
                 )
             } else if shift {
                 val scrolledEditorColumn : usize = scrollEditorHorizontally(
-                buffer,
-                uiState.firstColumn,
-                visibleColumns
+                    buffer,
+                    uiState.firstColumn,
+                    visibleColumns
                 )
                 if scrolledEditorColumn != uiState.firstColumn {
                     uiState.firstColumn = scrolledEditorColumn
@@ -464,9 +464,9 @@ def main() : int {
                 }
             } else {
                 val scrolledEditorFirst : usize = scrollEditor(
-                buffer,
-                uiState.firstLine,
-                maximumLines
+                    buffer,
+                    uiState.firstLine,
+                    maximumLines
                 )
                 if scrolledEditorFirst != uiState.firstLine {
                     uiState.firstLine = scrolledEditorFirst
@@ -482,18 +482,18 @@ def main() : int {
         } else if !layoutMouseConsumed && !filePrompt.isVisible() && uiState.fileMenuOpen &&
         leftMousePressed {
             if pointInArea(
-            fileMenuX,
-            fileMenuTop,
-            fileMenuWidth,
-            fileMenuRowHeight
+                fileMenuX,
+                fileMenuTop,
+                fileMenuWidth,
+                fileMenuRowHeight
             ) {
                 filePrompt.begin(PathPromptAction.OpenFolder, projectRoot.view())
                 tooling.completion.dismiss()
             } else if pointInArea(
-            fileMenuX,
-            fileMenuTop + fileMenuRowHeight,
-            fileMenuWidth,
-            fileMenuRowHeight
+                fileMenuX,
+                fileMenuTop + fileMenuRowHeight,
+                fileMenuWidth,
+                fileMenuRowHeight
             ) && explorer.size() > usize(0) {
                 explorer.close()
                 projectRoot.clear()
@@ -502,8 +502,8 @@ def main() : int {
                 promptedPath.clear()
                 if activePath.view() != "" {
                     val _capturedParent : bool = captureParentDirectory(
-                    activePath.view(),
-                    promptedPath
+                        activePath.view(),
+                        promptedPath
                     )
                 }
                 if tooling.languageServer.restart(promptedPath.view(), tooling.completionError) {
@@ -517,17 +517,17 @@ def main() : int {
         } else if !layoutMouseConsumed && !filePrompt.isVisible() && leftMousePressed &&
         mouseX() >= 0 && mouseX() < editorLeft - 12 {
             val clicked : usize = explorerEntryAtMouse(
-            explorer,
-            uiState.firstExplorerEntry,
-            visibleExplorerRows
+                explorer,
+                uiState.firstExplorerEntry,
+                visibleExplorerRows
             )
             if clicked != usize(-1) {
                 explorer.select(clicked)
                 if explorer.isDirectory(clicked) {
                     explorer.toggle(clicked)
                     val maximum : usize = maximumExplorerFirst(
-                    explorer,
-                    visibleExplorerRows
+                        explorer,
+                        visibleExplorerRows
                     )
                     if uiState.firstExplorerEntry > maximum {
                         uiState.firstExplorerEntry = maximum
@@ -543,12 +543,12 @@ def main() : int {
                     if isDoubleClick {
                         explorer.appendPath(clicked, explorerPath)
                         if tabs.open(
-                        explorerPath.view(),
-                        buffer,
-                        activePath,
-                        status,
-                        uiState.firstLine,
-                        uiState.firstColumn
+                            explorerPath.view(),
+                            buffer,
+                            activePath,
+                            status,
+                            uiState.firstLine,
+                            uiState.firstColumn
                         ) {
                             uiState.firstLine = tabs.firstLine()
                             uiState.firstColumn = tabs.firstColumn()
@@ -559,8 +559,8 @@ def main() : int {
                             search.clear()
                             controller.escape()
                             uiState.firstDocumentTab = keepSelectedDocumentTabVisible(
-                            tabs,
-                            uiState.firstDocumentTab
+                                tabs,
+                                uiState.firstDocumentTab
                             )
                         }
                         uiState.lastExplorerClick = usize(-1)
@@ -574,18 +574,18 @@ def main() : int {
         } else if !layoutMouseConsumed && !filePrompt.isVisible() &&
         tabs.size() > usize(0) && leftMousePressed &&
         pointInArea(
-        editorLeft,
-        editorTop,
-        screenWidth() - editorLeft - 8,
-        editorBottom - editorTop
+            editorLeft,
+            editorTop,
+            screenWidth() - editorLeft - 8,
+            editorBottom - editorTop
         ) {
             moveCursorToEditorMouse(
-            buffer,
-            uiState.firstLine,
-            uiState.firstColumn,
-            glyphAdvance,
-            lineAdvance,
-            maximumLines
+                buffer,
+                uiState.firstLine,
+                uiState.firstColumn,
+                glyphAdvance,
+                lineAdvance,
+                maximumLines
             )
             buffer.clearSelection()
             buffer.beginSelection()
@@ -598,18 +598,18 @@ def main() : int {
         if uiState.mouseSelecting {
             if isMouseButtonDown(MouseButton.Left) &&
             pointInArea(
-            editorLeft,
-            editorTop,
-            screenWidth() - editorLeft - 8,
-            editorBottom - editorTop
+                editorLeft,
+                editorTop,
+                screenWidth() - editorLeft - 8,
+                editorBottom - editorTop
             ) {
                 moveCursorToEditorMouse(
-                buffer,
-                uiState.firstLine,
-                uiState.firstColumn,
-                glyphAdvance,
-                lineAdvance,
-                maximumLines
+                    buffer,
+                    uiState.firstLine,
+                    uiState.firstColumn,
+                    glyphAdvance,
+                    lineAdvance,
+                    maximumLines
                 )
                 uiState.editorScrollDetached = false
                 uiState.horizontalScrollDetached = false
@@ -628,17 +628,17 @@ def main() : int {
             if handlePathPromptKeys(filePrompt) {
                 if filePrompt.action() == PathPromptAction.OpenFolder {
                     if openProjectFolder(
-                    filePrompt.value(),
-                    projectRoot,
-                    explorer,
-                    status
+                        filePrompt.value(),
+                        projectRoot,
+                        explorer,
+                        status
                     ) {
                         filePrompt.dismiss()
                         uiState.firstExplorerEntry = usize(0)
                         uiState.explorerHorizontalOffset = 0
                         if !tooling.languageServer.restart(
-                        projectRoot.view(),
-                        tooling.completionError
+                            projectRoot.view(),
+                            tooling.completionError
                         ) {
                             setStatus(status, tooling.completionError.view())
                         }
@@ -649,29 +649,29 @@ def main() : int {
                     if filePrompt.value() == "" {
                         setStatus(status, "Saisissez un chemin de fichier.")
                     } else if !captureDocumentPath(
-                    filePrompt.value(),
-                    promptedPath
+                        filePrompt.value(),
+                        promptedPath
                     ) {
                         setStatus(status, "Chemin de fichier invalide.")
                     } else if action == PathPromptAction.Open {
                         applied = tabs.open(
-                        promptedPath.view(),
-                        buffer,
-                        activePath,
-                        status,
-                        uiState.firstLine,
-                        uiState.firstColumn
+                            promptedPath.view(),
+                            buffer,
+                            activePath,
+                            status,
+                            uiState.firstLine,
+                            uiState.firstColumn
                         )
                         if applied { filePrompt.dismiss() }
                     } else if action == PathPromptAction.Create {
                         if validateNewPath(promptedPath.view(), status) {
                             applied = tabs.create(
-                            promptedPath.view(),
-                            buffer,
-                            activePath,
-                            uiState.firstLine,
-                            uiState.firstColumn,
-                            status
+                                promptedPath.view(),
+                                buffer,
+                                activePath,
+                                uiState.firstLine,
+                                uiState.firstColumn,
+                                status
                             )
                             if applied {
                                 setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
@@ -679,17 +679,17 @@ def main() : int {
                             }
                         }
                     } else if !tabs.pathAvailableForActive(
-                    promptedPath.view()
+                        promptedPath.view()
                     ) {
                         setStatus(status, "Ce fichier est déjà ouvert dans un autre onglet.")
                     } else if applyPathPrompt(
-                    filePrompt,
-                    promptedPath.view(),
-                    activePath,
-                    buffer,
-                    tooling.diagnostics,
-                    search,
-                    status
+                        filePrompt,
+                        promptedPath.view(),
+                        activePath,
+                        buffer,
+                        tooling.diagnostics,
+                        search,
+                        status
                     ) {
                         applied = tabs.updateActivePath(activePath.view())
                     }
@@ -703,8 +703,8 @@ def main() : int {
                         search.clear()
                         controller.escape()
                         uiState.firstDocumentTab = keepSelectedDocumentTabVisible(
-                        tabs,
-                        uiState.firstDocumentTab
+                            tabs,
+                            uiState.firstDocumentTab
                         )
                     }
                 }
@@ -727,12 +727,12 @@ def main() : int {
         } else if !fileInputConsumed && tabs.size() > usize(0) &&
         control && isKeyPressed(Key.W) {
             val closed : bool = tabs.close(
-            tabs.selected(),
-            buffer,
-            activePath,
-            status,
-            uiState.firstLine,
-            uiState.firstColumn
+                tabs.selected(),
+                buffer,
+                activePath,
+                status,
+                uiState.firstLine,
+                uiState.firstColumn
             )
             if closed {
                 uiState.firstLine = tabs.firstLine()
@@ -743,8 +743,8 @@ def main() : int {
                 tooling.signatureText.clear()
                 controller.escape()
                 uiState.firstDocumentTab = keepSelectedDocumentTabVisible(
-                tabs,
-                uiState.firstDocumentTab
+                    tabs,
+                    uiState.firstDocumentTab
                 )
             }
             fileInputConsumed = true
@@ -760,11 +760,11 @@ def main() : int {
                 (tabs.selected() + usize(1)) % tabs.size()
             }
             if tabs.switchTo(
-            nextTab,
-            buffer,
-            activePath,
-            uiState.firstLine,
-            uiState.firstColumn
+                nextTab,
+                buffer,
+                activePath,
+                uiState.firstLine,
+                uiState.firstColumn
             ) {
                 uiState.firstLine = tabs.firstLine()
                 uiState.firstColumn = tabs.firstColumn()
@@ -774,8 +774,8 @@ def main() : int {
                 tooling.signatureText.clear()
                 controller.escape()
                 uiState.firstDocumentTab = keepSelectedDocumentTabVisible(
-                tabs,
-                uiState.firstDocumentTab
+                    tabs,
+                    uiState.firstDocumentTab
                 )
             }
             fileInputConsumed = true
@@ -818,10 +818,10 @@ def main() : int {
         isKeyPressed(Key.F5) {
             if saveFile(activePath.view(), buffer, status) {
                 tooling.compiler.start(
-                activePath.view(),
-                projectRoot.view(),
-                tooling.toolOutput,
-                tooling.diagnostics
+                    activePath.view(),
+                    projectRoot.view(),
+                    tooling.toolOutput,
+                    tooling.diagnostics
                 )
             }
             uiState.firstOutputLine = usize(0)
@@ -850,24 +850,24 @@ def main() : int {
         isKeyPressed(Key.Space)
         if characterAction == EditorAction.Complete || manualCompletion {
             refreshCompletion(
-            tooling.languageServer,
-            activePath.view(),
-            buffer,
-            tooling.completion,
-            tooling.completionLabels,
-            tooling.completionError,
-            status
+                tooling.languageServer,
+                activePath.view(),
+                buffer,
+                tooling.completion,
+                tooling.completionLabels,
+                tooling.completionError,
+                status
             )
             characterAction = EditorAction.None
         } else if characterAction == EditorAction.SignatureHelp {
             tooling.completion.dismiss()
             refreshSignatureHelp(
-            tooling.languageServer,
-            activePath.view(),
-            buffer,
-            tooling.signatureText,
-            tooling.pendingSignature,
-            tooling.completionError
+                tooling.languageServer,
+                activePath.view(),
+                buffer,
+                tooling.signatureText,
+                tooling.pendingSignature,
+                tooling.completionError
             )
             characterAction = EditorAction.None
         } else if characterAction == EditorAction.DismissSignatureHelp {
@@ -880,9 +880,9 @@ def main() : int {
             characterAction = EditorAction.None
         } else if !completionConsumed && tooling.completion.isFiltering() &&
         (isKeyPressed(Key.Left) || isKeyPressed(Key.Right) ||
-        isKeyPressed(Key.Home) || isKeyPressed(Key.End) ||
-        isKeyPressed(Key.Delete) || isKeyPressed(Key.Enter) ||
-        isKeyPressed(Key.Tab)) {
+            isKeyPressed(Key.Home) || isKeyPressed(Key.End) ||
+            isKeyPressed(Key.Delete) || isKeyPressed(Key.Enter) ||
+            isKeyPressed(Key.Tab)) {
             tooling.completion.dismiss()
         }
         if controller.mode() != EditorMode.Insert ||
@@ -893,19 +893,19 @@ def main() : int {
             tooling.signatureText.clear()
         }
         pollLanguageServer(
-        tooling.languageServer,
-        activePath.view(),
-        buffer,
-        tooling.completion,
-        tooling.completionLabels,
-        tooling.signatureText,
-        tooling.pendingSignature,
-        tooling.completionError,
-        status
+            tooling.languageServer,
+            activePath.view(),
+            buffer,
+            tooling.completion,
+            tooling.completionLabels,
+            tooling.signatureText,
+            tooling.pendingSignature,
+            tooling.completionError,
+            status
         )
         val compilerState : CompilerCheckState = tooling.compiler.poll(
-        tooling.toolOutput,
-        tooling.diagnostics
+            tooling.toolOutput,
+            tooling.diagnostics
         )
         if compilerState == CompilerCheckState.Completed ||
         compilerState == CompilerCheckState.Failed {
@@ -932,17 +932,17 @@ def main() : int {
         val requestedAction : EditorAction =
         if keyAction != EditorAction.None { keyAction } else { characterAction }
         val editorQuitRequested : bool = applyEditorAction(
-        requestedAction,
-        activePath.view(),
-        buffer,
-        status
+            requestedAction,
+            activePath.view(),
+            buffer,
+            status
         )
         val hasModifiedDocuments : bool = tabs.anyModified(buffer)
         uiState.quitRequested = resolveQuitRequest(
-        editorQuitRequested,
-        requestedAction == EditorAction.ForceQuit,
-        nativeCloseRequested,
-        hasModifiedDocuments
+            editorQuitRequested,
+            requestedAction == EditorAction.ForceQuit,
+            nativeCloseRequested,
+            hasModifiedDocuments
         )
         if (editorQuitRequested || nativeCloseRequested) &&
         !uiState.quitRequested && hasModifiedDocuments {
@@ -956,8 +956,8 @@ def main() : int {
         }
         if controller.mode() != editorModeBeforeInput &&
         (controller.mode() != EditorMode.Normal ||
-        (editorModeBeforeInput == EditorMode.Search &&
-        isKeyPressed(Key.Escape))) {
+            (editorModeBeforeInput == EditorMode.Search &&
+            isKeyPressed(Key.Escape))) {
             search.clear()
         }
         if buffer.line() != cursorLineBeforeInput ||
@@ -971,45 +971,45 @@ def main() : int {
         }
         if !uiState.horizontalScrollDetached {
             uiState.firstColumn = keepCursorHorizontallyVisible(
-            buffer,
-            uiState.firstColumn,
-            visibleColumns
+                buffer,
+                uiState.firstColumn,
+                visibleColumns
             )
         }
         controller.appendStatus(modeLine)
         controller.appendCommandLine(commandLine)
         drawStudio(
-        activePath.view(),
-        buffer,
-        tabs,
-        tabLabel,
-        uiState,
-        visibleCharacters,
-        syntaxSpans,
-        glyph,
-        tooling.diagnostics,
-        tooling.diagnosticText,
-        search,
-        tooling.completion,
-        tooling.completionText,
-        tooling.signatureText,
-        filePrompt,
-        statusLine,
-        status,
-        tooling.toolOutput,
-        modeLine,
-        commandLine,
-        explorer,
-        visibleExplorerRows,
-        explorerLabel,
-        controller.mode(),
-        uiFont,
-        codeFont,
-        glyphAdvance,
-        lineAdvance,
-        outputGlyphAdvance,
-        outputLineAdvance,
-        maximumLines
+            activePath.view(),
+            buffer,
+            tabs,
+            tabLabel,
+            uiState,
+            visibleCharacters,
+            syntaxSpans,
+            glyph,
+            tooling.diagnostics,
+            tooling.diagnosticText,
+            search,
+            tooling.completion,
+            tooling.completionText,
+            tooling.signatureText,
+            filePrompt,
+            statusLine,
+            status,
+            tooling.toolOutput,
+            modeLine,
+            commandLine,
+            explorer,
+            visibleExplorerRows,
+            explorerLabel,
+            controller.mode(),
+            uiFont,
+            codeFont,
+            glyphAdvance,
+            lineAdvance,
+            outputGlyphAdvance,
+            outputLineAdvance,
+            maximumLines
         )
     }
 

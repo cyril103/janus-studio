@@ -32,9 +32,9 @@ private def unicodeEscape(source : string, start : usize) : int {
 }
 
 def appendDecodedJsonString(
-source : string,
-start : usize,
-output : TextBuilder
+    source : string,
+    start : usize,
+    output : TextBuilder
 ) : usize {
     val data : Ptr[byte] = stringData(source)
     var index : usize = start
@@ -100,7 +100,7 @@ def skipJsonWhitespace(source : string, start : usize) : usize {
     var index : usize = start
     while index < stringLength(source) &&
     (data.load(index) == byte(32) || data.load(index) == byte(9) ||
-    data.load(index) == byte(10) || data.load(index) == byte(13)) {
+        data.load(index) == byte(10) || data.load(index) == byte(13)) {
         index = index + usize(1)
     }
     return index
@@ -152,9 +152,9 @@ private def keyMatches(source : string, start : usize, end : usize, key : string
 }
 
 def findJsonObjectProperty(
-source : string,
-key : string,
-objectStart : usize
+    source : string,
+    key : string,
+    objectStart : usize
 ) : usize {
     val data : Ptr[byte] = stringData(source)
     var index : usize = skipJsonWhitespace(source, objectStart)
@@ -194,7 +194,7 @@ def findJsonProperty(source : string, key : string, start : usize) : usize {
             var separator : usize = end + usize(1)
             while separator < stringLength(source) &&
             (data.load(separator) == byte(32) || data.load(separator) == byte(9) ||
-            data.load(separator) == byte(10) || data.load(separator) == byte(13)) {
+                data.load(separator) == byte(10) || data.load(separator) == byte(13)) {
                 separator = separator + usize(1)
             }
             if keyMatches(source, index + usize(1), end, key) &&
@@ -202,7 +202,7 @@ def findJsonProperty(source : string, key : string, start : usize) : usize {
                 var value : usize = separator + usize(1)
                 while value < stringLength(source) &&
                 (data.load(value) == byte(32) || data.load(value) == byte(9) ||
-                data.load(value) == byte(10) || data.load(value) == byte(13)) {
+                    data.load(value) == byte(10) || data.load(value) == byte(13)) {
                     value = value + usize(1)
                 }
                 return value
@@ -214,10 +214,10 @@ def findJsonProperty(source : string, key : string, start : usize) : usize {
 }
 
 def appendDecodedUtf8Range(
-source : string,
-start : usize,
-length : usize,
-output : TextBuilder
+    source : string,
+    start : usize,
+    length : usize,
+    output : TextBuilder
 ) : Unit {
     var index : usize = start
     val end : usize = start + length

@@ -7,7 +7,7 @@ def parsesStructuredDiagnostics() : Unit {
     val diagnostics : EditorDiagnostics = editorDiagnostics()
     defer delete diagnostics
     diagnostics.load(
-    "{\"schemaVersion\":\"0.5.2\",\"diagnostics\":[{\"severity\":\"error\",\"code\":\"JANA0001\",\"message\":\"type mismatch\",\"primaryLocation\":{\"file\":\"sample.janus\",\"position\":{\"offset\":12,\"line\":3,\"column\":5}},\"notes\":[],\"secondaryLocations\":[],\"suggestions\":[]},{\"severity\":\"warning\",\"code\":\"JANA0002\",\"message\":\"unused value\",\"primaryLocation\":{\"file\":\"sample.janus\",\"position\":{\"offset\":20,\"line\":6,\"column\":2}},\"notes\":[],\"secondaryLocations\":[],\"suggestions\":[]}]}"
+        "{\"schemaVersion\":\"0.5.2\",\"diagnostics\":[{\"severity\":\"error\",\"code\":\"JANA0001\",\"message\":\"type mismatch\",\"primaryLocation\":{\"file\":\"sample.janus\",\"position\":{\"offset\":12,\"line\":3,\"column\":5}},\"notes\":[],\"secondaryLocations\":[],\"suggestions\":[]},{\"severity\":\"warning\",\"code\":\"JANA0002\",\"message\":\"unused value\",\"primaryLocation\":{\"file\":\"sample.janus\",\"position\":{\"offset\":20,\"line\":6,\"column\":2}},\"notes\":[],\"secondaryLocations\":[],\"suggestions\":[]}]}"
     )
     assertEqual[usize](diagnostics.size(), usize(2))
     assertEqual[usize](diagnostics.line(usize(0)), usize(2))
@@ -19,8 +19,8 @@ def parsesStructuredDiagnostics() : Unit {
     defer delete output
     diagnostics.appendAll(output)
     assertEqual[string](
-    output.view(),
-    "erreur ligne 3:5 — type mismatch\navertissement ligne 6:2 — unused value\n"
+        output.view(),
+        "erreur ligne 3:5 — type mismatch\navertissement ligne 6:2 — unused value\n"
     )
     assertTrue(diagnostics.appendForLine(usize(2), output))
     assertEqual[string](output.view(), "Erreur : type mismatch")
@@ -32,7 +32,7 @@ def preservesUnicodeAndEscapedDiagnosticMessages() : Unit {
     val diagnostics : EditorDiagnostics = editorDiagnostics()
     defer delete diagnostics
     diagnostics.load(
-    "{\"diagnostics\":[{\"severity\":\"error\",\"message\":\"échec \\uD83D\\uDE00 avec \\\"severity\\\":\\\"warning\\\"\",\"primaryLocation\":{\"position\":{\"line\":1,\"column\":1}}}]}"
+        "{\"diagnostics\":[{\"severity\":\"error\",\"message\":\"échec \\uD83D\\uDE00 avec \\\"severity\\\":\\\"warning\\\"\",\"primaryLocation\":{\"position\":{\"line\":1,\"column\":1}}}]}"
     )
     val output : TextBuilder = new TextBuilder()
     defer delete output
@@ -41,8 +41,8 @@ def preservesUnicodeAndEscapedDiagnosticMessages() : Unit {
     assertEqual[usize](diagnostics.size(), usize(1))
     assertTrue(diagnostics.isError(usize(0)))
     assertEqual[string](
-    output.view(),
-    "erreur ligne 1:1 — échec 😀 avec \"severity\":\"warning\"\n"
+        output.view(),
+        "erreur ligne 1:1 — échec 😀 avec \"severity\":\"warning\"\n"
     )
 }
 
@@ -51,7 +51,7 @@ def acceptsReorderedDiagnosticFields() : Unit {
     val diagnostics : EditorDiagnostics = editorDiagnostics()
     defer delete diagnostics
     diagnostics.load(
-    "{\"diagnostics\":[{\"primaryLocation\":{\"position\":{\"column\":7,\"line\":4}},\"message\":\"reordered\",\"severity\":\"error\"}]}"
+        "{\"diagnostics\":[{\"primaryLocation\":{\"position\":{\"column\":7,\"line\":4}},\"message\":\"reordered\",\"severity\":\"error\"}]}"
     )
     val output : TextBuilder = new TextBuilder()
     defer delete output

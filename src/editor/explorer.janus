@@ -17,13 +17,13 @@ enum ExplorerEntryKind derives Copy, Equality, Debug {
 }
 
 private struct ExplorerEntry(
-val nameStart : usize,
-val nameLength : usize,
-val pathStart : usize,
-val pathLength : usize,
-val depth : usize,
-val kind : ExplorerEntryKind,
-val expanded : bool
+    val nameStart : usize,
+    val nameLength : usize,
+    val pathStart : usize,
+    val pathLength : usize,
+    val depth : usize,
+    val kind : ExplorerEntryKind,
+    val expanded : bool
 ) derives Copy, Equality, Debug {}
 
 private def baseNameStart(path : string) : usize {
@@ -51,7 +51,7 @@ private def explorerKind(metadata : FileMetadata) : int {
 }
 
 private def explorerKindResult(
-result : Result[FileMetadata, SystemError]
+    result : Result[FileMetadata, SystemError]
 ) : int {
     return match result {
         Ok(value) => explorerKind(value),
@@ -60,18 +60,18 @@ result : Result[FileMetadata, SystemError]
 }
 
 class ProjectExplorer(
-private val entries : Array[ExplorerEntry],
-private var names : Array[char],
-private var paths : Array[char]
+    private val entries : Array[ExplorerEntry],
+    private var names : Array[char],
+    private var paths : Array[char]
 ) {
     private var selectedIndex : usize = usize(0)
 
     private def addRoot(root : string) : Unit {
         val nameStart : usize = names.size()
         var nameLength : usize = appendUtf8Characters(
-        root,
-        baseNameStart(root),
-        names
+            root,
+            baseNameStart(root),
+            names
         )
         if nameLength == usize(0) {
             nameLength = appendUtf8Characters(root, usize(0), names)
@@ -79,22 +79,22 @@ private var paths : Array[char]
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8Characters(root, usize(0), paths)
         entries.push(new ExplorerEntry(
-        nameStart,
-        nameLength,
-        pathStart,
-        pathLength,
-        usize(0),
-        ExplorerEntryKind.Directory,
-        false
+            nameStart,
+            nameLength,
+            pathStart,
+            pathLength,
+            usize(0),
+            ExplorerEntryKind.Directory,
+            false
         ))
         selectedIndex = usize(0)
     }
 
     private borrow def appendCharacters(
-    borrow source : Array[char],
-    start : usize,
-    length : usize,
-    output : TextBuilder
+        borrow source : Array[char],
+        start : usize,
+        length : usize,
+        output : TextBuilder
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -105,8 +105,8 @@ private var paths : Array[char]
     }
 
     private borrow def appendSlice(
-    borrow source : Slice[char],
-    output : TextBuilder
+        borrow source : Slice[char],
+        output : TextBuilder
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -117,8 +117,8 @@ private var paths : Array[char]
     }
 
     private borrow def entryLess(
-    left : ExplorerEntry,
-    right : ExplorerEntry
+        left : ExplorerEntry,
+        right : ExplorerEntry
     ) : bool {
         if left.kind != right.kind {
             return left.kind == ExplorerEntryKind.Directory
@@ -151,10 +151,10 @@ private var paths : Array[char]
     }
 
     private def addJoinedEntry(
-    label : string,
-    fullPath : Path,
-    depth : usize,
-    output : Array[ExplorerEntry]
+        label : string,
+        fullPath : Path,
+        depth : usize,
+        output : Array[ExplorerEntry]
     ) : bool {
         val kind : int = explorerKindResult(metadata(fullPath.view()))
         if kind < 0 {
@@ -162,56 +162,56 @@ private var paths : Array[char]
             return false
         }
         return this.storeEntry(
-        label,
-        move fullPath,
-        depth,
-        ExplorerEntryKind(kind),
-        output
+            label,
+            move fullPath,
+            depth,
+            ExplorerEntryKind(kind),
+            output
         )
     }
 
     private def storeEntry(
-    label : string,
-    fullPath : Path,
-    depth : usize,
-    kind : ExplorerEntryKind,
-    output : Array[ExplorerEntry]
+        label : string,
+        fullPath : Path,
+        depth : usize,
+        kind : ExplorerEntryKind,
+        output : Array[ExplorerEntry]
     ) : bool {
         val nameStart : usize = names.size()
         val nameLength : usize = appendUtf8Characters(label, usize(0), names)
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8Characters(
-        fullPath.view(),
-        usize(0),
-        paths
+            fullPath.view(),
+            usize(0),
+            paths
         )
         delete fullPath
         output.push(new ExplorerEntry(
-        nameStart,
-        nameLength,
-        pathStart,
-        pathLength,
-        depth,
-        kind,
-        false
+            nameStart,
+            nameLength,
+            pathStart,
+            pathLength,
+            depth,
+            kind,
+            false
         ))
         return true
     }
 
     private def addDirectoryEntry(
-    name : Path,
-    parentPath : string,
-    depth : usize,
-    output : Array[ExplorerEntry]
+        name : Path,
+        parentPath : string,
+        depth : usize,
+        output : Array[ExplorerEntry]
     ) : bool {
         val label : string = name.view()
         val joined : Result[Path, SystemError] = joinPath(parentPath, label)
         val added : bool = match move joined {
             Ok(fullPath) => this.addJoinedEntry(
-            label,
-            move fullPath,
-            depth,
-            output
+                label,
+                move fullPath,
+                depth,
+                output
             ),
             Error(error) => false
         }
@@ -220,67 +220,67 @@ private var paths : Array[char]
     }
 
     private def continueDirectoryEntry(
-    name : Path,
-    parentPath : string,
-    depth : usize,
-    output : Array[ExplorerEntry]
+        name : Path,
+        parentPath : string,
+        depth : usize,
+        output : Array[ExplorerEntry]
     ) : int {
         this.addDirectoryEntry(move name, parentPath, depth, output)
         return 1
     }
 
     private def consumeOptionalDirectoryEntry(
-    entry : Option[Path],
-    parentPath : string,
-    depth : usize,
-    output : Array[ExplorerEntry]
+        entry : Option[Path],
+        parentPath : string,
+        depth : usize,
+        output : Array[ExplorerEntry]
     ) : int {
         return match move entry {
             Some(name) => this.continueDirectoryEntry(
-            move name,
-            parentPath,
-            depth,
-            output
+                move name,
+                parentPath,
+                depth,
+                output
             ),
             None => 0
         }
     }
 
     private def consumeDirectoryEntry(
-    result : Result[Option[Path], SystemError],
-    parentPath : string,
-    depth : usize,
-    output : Array[ExplorerEntry]
+        result : Result[Option[Path], SystemError],
+        parentPath : string,
+        depth : usize,
+        output : Array[ExplorerEntry]
     ) : int {
         return match move result {
             Ok(entry) => this.consumeOptionalDirectoryEntry(
-            move entry,
-            parentPath,
-            depth,
-            output
+                move entry,
+                parentPath,
+                depth,
+                output
             ),
             Error(error) => -1
         }
     }
 
     private def readChildren(
-    iterator : DirectoryIterator,
-    parentPath : string,
-    depth : usize,
-    output : Array[ExplorerEntry]
+        iterator : DirectoryIterator,
+        parentPath : string,
+        depth : usize,
+        output : Array[ExplorerEntry]
     ) : bool {
         var state : int = this.consumeDirectoryEntry(
-        iterator.next(),
-        parentPath,
-        depth,
-        output
-        )
-        while state == 1 {
-            state = this.consumeDirectoryEntry(
             iterator.next(),
             parentPath,
             depth,
             output
+        )
+        while state == 1 {
+            state = this.consumeDirectoryEntry(
+                iterator.next(),
+                parentPath,
+                depth,
+                output
             )
         }
         val closed : bool = match iterator.close() {
@@ -289,15 +289,15 @@ private var paths : Array[char]
         }
         delete iterator
         output.sortWith((left : ExplorerEntry, right : ExplorerEntry) =>
-        this.entryLess(left, right))
+            this.entryLess(left, right))
         return state == 0 && closed
     }
 
     private def copyStorageRange(
-    source : Array[char],
-    start : usize,
-    length : usize,
-    output : Array[char]
+        source : Array[char],
+        start : usize,
+        length : usize,
+        output : Array[char]
     ) : Unit {
         var index : usize = usize(0)
         while index < length {
@@ -315,25 +315,25 @@ private var paths : Array[char]
             val nameStart : usize = compactedNames.size()
             val pathStart : usize = compactedPaths.size()
             this.copyStorageRange(
-            names,
-            entry.nameStart,
-            entry.nameLength,
-            compactedNames
+                names,
+                entry.nameStart,
+                entry.nameLength,
+                compactedNames
             )
             this.copyStorageRange(
-            paths,
-            entry.pathStart,
-            entry.pathLength,
-            compactedPaths
+                paths,
+                entry.pathStart,
+                entry.pathLength,
+                compactedPaths
             )
             entries.set(index, new ExplorerEntry(
-            nameStart,
-            entry.nameLength,
-            pathStart,
-            entry.pathLength,
-            entry.depth,
-            entry.kind,
-            entry.expanded
+                nameStart,
+                entry.nameLength,
+                pathStart,
+                entry.pathLength,
+                entry.depth,
+                entry.kind,
+                entry.expanded
             ))
             index = index + usize(1)
         }
@@ -344,15 +344,15 @@ private var paths : Array[char]
     }
 
     private def loadChildren(
-    index : usize,
-    parent : ExplorerEntry
+        index : usize,
+        parent : ExplorerEntry
     ) : bool {
         val parentPath : TextBuilder = new TextBuilder()
         defer delete parentPath
         val storedPath : Slice[char] = new Slice[char](
-        paths,
-        parent.pathStart,
-        parent.pathLength
+            paths,
+            parent.pathStart,
+            parent.pathLength
         )
         this.appendSlice(storedPath, parentPath)
         delete storedPath
@@ -362,10 +362,10 @@ private var paths : Array[char]
         readDirectory(parentPath.view())
         val loaded : bool = match move directory {
             Ok(iterator) => this.readChildren(
-            move iterator,
-            parentPath.view(),
-            parent.depth + usize(1),
-            children
+                move iterator,
+                parentPath.view(),
+                parent.depth + usize(1),
+                children
             ),
             Error(error) => false
         }
@@ -376,8 +376,8 @@ private var paths : Array[char]
         var childIndex : usize = usize(0)
         while childIndex < children.size() {
             this.insertEntry(
-            index + usize(1) + childIndex,
-            children.get(childIndex)
+                index + usize(1) + childIndex,
+                children.get(childIndex)
             )
             childIndex = childIndex + usize(1)
         }
@@ -499,13 +499,13 @@ private var paths : Array[char]
                 removed = removed + usize(1)
             }
             entries.set(index, new ExplorerEntry(
-            entry.nameStart,
-            entry.nameLength,
-            entry.pathStart,
-            entry.pathLength,
-            entry.depth,
-            entry.kind,
-            false
+                entry.nameStart,
+                entry.nameLength,
+                entry.pathStart,
+                entry.pathLength,
+                entry.depth,
+                entry.kind,
+                false
             ))
             if selectedIndex > index && selectedIndex <= index + removed {
                 selectedIndex = index
@@ -519,13 +519,13 @@ private var paths : Array[char]
             return false
         }
         entries.set(index, new ExplorerEntry(
-        entry.nameStart,
-        entry.nameLength,
-        entry.pathStart,
-        entry.pathLength,
-        entry.depth,
-        entry.kind,
-        true
+            entry.nameStart,
+            entry.nameLength,
+            entry.pathStart,
+            entry.pathLength,
+            entry.depth,
+            entry.kind,
+            true
         ))
         return true
     }
@@ -542,9 +542,9 @@ def projectExplorer(root : string) : ProjectExplorer {
     val names : Array[char] = new Array[char](usize(256))
     val paths : Array[char] = new Array[char](usize(1024))
     val explorer : ProjectExplorer = new ProjectExplorer(
-    move entries,
-    move names,
-    move paths
+        move entries,
+        move names,
+        move paths
     )
     explorer.open(root)
     return explorer

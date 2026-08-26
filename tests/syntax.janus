@@ -4,9 +4,9 @@ import std.array
 import std.testing
 
 def highlightedSource(
-text : string,
-characters : Array[char],
-spans : Array[SyntaxSpan]
+    text : string,
+    characters : Array[char],
+    spans : Array[SyntaxSpan]
 ) : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer

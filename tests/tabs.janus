@@ -16,22 +16,22 @@ def startsAndReturnsToNoOpenDocument() : Unit {
 
     assertEqual[usize](tabs.size(), usize(0))
     assertTrue(tabs.create(
-    "nouveau.janus",
-    buffer,
-    path,
-    usize(0),
-    usize(0),
-    status
+        "nouveau.janus",
+        buffer,
+        path,
+        usize(0),
+        usize(0),
+        status
     ))
     assertEqual[usize](tabs.size(), usize(1))
     assertEqual[string](path.view(), "nouveau.janus")
     assertTrue(tabs.close(
-    usize(0),
-    buffer,
-    path,
-    status,
-    usize(0),
-    usize(0)
+        usize(0),
+        buffer,
+        path,
+        status,
+        usize(0),
+        usize(0)
     ))
     assertEqual[usize](tabs.size(), usize(0))
     assertEqual[string](path.view(), "")
@@ -52,23 +52,23 @@ def restoresIndependentDocuments() : Unit {
 
     buffer.insert('!')
     assertTrue(tabs.create(
-    "src/deuxième.janus",
-    buffer,
-    path,
-    usize(3),
-    usize(4),
-    status
+        "src/deuxième.janus",
+        buffer,
+        path,
+        usize(3),
+        usize(4),
+        status
     ))
     assertEqual[usize](tabs.size(), usize(2))
     assertEqual[string](path.view(), "src/deuxième.janus")
     buffer.insertText("second")
 
     assertTrue(tabs.switchTo(
-    usize(0),
-    buffer,
-    path,
-    usize(7),
-    usize(8)
+        usize(0),
+        buffer,
+        path,
+        usize(7),
+        usize(8)
     ))
     val text : TextBuilder = new TextBuilder()
     defer delete text
@@ -79,11 +79,11 @@ def restoresIndependentDocuments() : Unit {
     assertEqual[usize](tabs.firstColumn(), usize(4))
 
     assertTrue(tabs.switchTo(
-    usize(1),
-    buffer,
-    path,
-    usize(1),
-    usize(2)
+        usize(1),
+        buffer,
+        path,
+        usize(1),
+        usize(2)
     ))
     text.clear()
     buffer.appendText(text)
@@ -106,36 +106,36 @@ def restoresShorterDocumentFromReusedStorage() : Unit {
     defer delete status
 
     assertTrue(tabs.create(
-    "second.janus",
-    buffer,
-    path,
-    usize(0),
-    usize(0),
-    status
+        "second.janus",
+        buffer,
+        path,
+        usize(0),
+        usize(0),
+        status
     ))
     buffer.load("second")
     assertTrue(tabs.switchTo(
-    usize(0),
-    buffer,
-    path,
-    usize(0),
-    usize(0)
+        usize(0),
+        buffer,
+        path,
+        usize(0),
+        usize(0)
     ))
 
     buffer.load("court")
     assertTrue(tabs.switchTo(
-    usize(1),
-    buffer,
-    path,
-    usize(0),
-    usize(0)
+        usize(1),
+        buffer,
+        path,
+        usize(0),
+        usize(0)
     ))
     assertTrue(tabs.switchTo(
-    usize(0),
-    buffer,
-    path,
-    usize(0),
-    usize(0)
+        usize(0),
+        buffer,
+        path,
+        usize(0),
+        usize(0)
     ))
 
     val restored : TextBuilder = new TextBuilder()
@@ -158,32 +158,32 @@ def protectsAndClosesModifiedTabs() : Unit {
     defer delete status
 
     assertTrue(tabs.create(
-    "travail.janus",
-    buffer,
-    path,
-    usize(0),
-    usize(0),
-    status
+        "travail.janus",
+        buffer,
+        path,
+        usize(0),
+        usize(0),
+        status
     ))
     buffer.insertText("modifié")
     assertFalse(tabs.close(
-    tabs.selected(),
-    buffer,
-    path,
-    status,
-    usize(0),
-    usize(0)
+        tabs.selected(),
+        buffer,
+        path,
+        status,
+        usize(0),
+        usize(0)
     ))
     assertEqual[usize](tabs.size(), usize(2))
 
     buffer.markSaved()
     assertTrue(tabs.close(
-    tabs.selected(),
-    buffer,
-    path,
-    status,
-    usize(0),
-    usize(0)
+        tabs.selected(),
+        buffer,
+        path,
+        status,
+        usize(0),
+        usize(0)
     ))
     assertEqual[usize](tabs.size(), usize(1))
     assertEqual[string](path.view(), "stable.janus")
@@ -203,21 +203,21 @@ def rejectsDocumentPathCollisions() : Unit {
     defer delete status
 
     assertFalse(tabs.create(
-    "/projet/stable.janus",
-    buffer,
-    path,
-    usize(0),
-    usize(0),
-    status
+        "/projet/stable.janus",
+        buffer,
+        path,
+        usize(0),
+        usize(0),
+        status
     ))
     assertEqual[usize](tabs.size(), usize(1))
     assertTrue(tabs.create(
-    "/projet/autre.janus",
-    buffer,
-    path,
-    usize(0),
-    usize(0),
-    status
+        "/projet/autre.janus",
+        buffer,
+        path,
+        usize(0),
+        usize(0),
+        status
     ))
     assertFalse(tabs.pathAvailableForActive("/projet/stable.janus"))
     assertFalse(tabs.updateActivePath("/projet/stable.janus"))
@@ -242,20 +242,20 @@ def restoresUndoAndRedoHistoryForEachTab() : Unit {
 
     buffer.insert('!')
     assertTrue(tabs.create(
-    "second.janus",
-    buffer,
-    path,
-    usize(0),
-    usize(0),
-    status
+        "second.janus",
+        buffer,
+        path,
+        usize(0),
+        usize(0),
+        status
     ))
     buffer.insertText("second")
     assertTrue(tabs.switchTo(
-    usize(0),
-    buffer,
-    path,
-    usize(0),
-    usize(0)
+        usize(0),
+        buffer,
+        path,
+        usize(0),
+        usize(0)
     ))
     assertTrue(buffer.undo())
     buffer.appendText(text)
@@ -263,11 +263,11 @@ def restoresUndoAndRedoHistoryForEachTab() : Unit {
     assertTrue(buffer.redo())
 
     assertTrue(tabs.switchTo(
-    usize(1),
-    buffer,
-    path,
-    usize(0),
-    usize(0)
+        usize(1),
+        buffer,
+        path,
+        usize(0),
+        usize(0)
     ))
     assertTrue(buffer.undo())
     text.clear()

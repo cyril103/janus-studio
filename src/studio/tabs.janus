@@ -8,11 +8,11 @@ import std.array
 import std.text
 
 private class Document(
-private val path : TextBuilder,
-private var archive : BufferArchive,
-private var modified : bool,
-private var firstVisibleLine : usize,
-private var firstVisibleColumn : usize
+    private val path : TextBuilder,
+    private var archive : BufferArchive,
+    private var modified : bool,
+    private var firstVisibleLine : usize,
+    private var firstVisibleColumn : usize
 ) {
     def pathEquals(value : string) : bool {
         return path.view() == value
@@ -39,10 +39,10 @@ private var firstVisibleColumn : usize
             output.append("Nouveau fichier")
         } else {
             appendDecodedUtf8Range(
-            value,
-            start,
-            stringLength(value) - start,
-            output
+                value,
+                start,
+                stringLength(value) - start,
+                output
             )
         }
     }
@@ -57,9 +57,9 @@ private var firstVisibleColumn : usize
     }
 
     def capture(
-    buffer : EditorBuffer,
-    firstLine : usize,
-    firstColumn : usize
+        buffer : EditorBuffer,
+        firstLine : usize,
+        firstColumn : usize
     ) : Unit {
         modified = buffer.isModified()
         firstVisibleLine = firstLine
@@ -85,11 +85,11 @@ private def document(path : string, modified : bool) : Document {
     val storedPath : TextBuilder = new TextBuilder()
     storedPath.append(path)
     return new Document(
-    move storedPath,
-    emptyBufferArchive(),
-    modified,
-    usize(0),
-    usize(0)
+        move storedPath,
+        emptyBufferArchive(),
+        modified,
+        usize(0),
+        usize(0)
     )
 }
 
@@ -119,17 +119,17 @@ class DocumentTabs(private val documents : Array[Document]) {
     }
 
     private def snapshot(
-    buffer : EditorBuffer,
-    firstLine : usize,
-    firstColumn : usize
+        buffer : EditorBuffer,
+        firstLine : usize,
+        firstColumn : usize
     ) : Unit {
         borrow var current : Document = documents.getMutable(active)
         current.capture(buffer, firstLine, firstColumn)
     }
 
     private def restoreActive(
-    buffer : EditorBuffer,
-    activePath : TextBuilder
+        buffer : EditorBuffer,
+        activePath : TextBuilder
     ) : Unit {
         borrow var current : Document = documents.getMutable(active)
         current.restore(buffer, activePath)
@@ -173,11 +173,11 @@ class DocumentTabs(private val documents : Array[Document]) {
     }
 
     def switchTo(
-    index : usize,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize
+        index : usize,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize
     ) : bool {
         if index >= documents.size() || index == active { return false }
         this.snapshot(buffer, firstLine, firstColumn)
@@ -187,12 +187,12 @@ class DocumentTabs(private val documents : Array[Document]) {
     }
 
     def open(
-    path : string,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    status : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize
+        path : string,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        status : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize
     ) : bool {
         val existing : usize = this.find(path)
         if existing != usize(-1) {
@@ -202,11 +202,11 @@ class DocumentTabs(private val documents : Array[Document]) {
                 return true
             }
             val changed : bool = this.switchTo(
-            existing,
-            buffer,
-            activePath,
-            firstLine,
-            firstColumn
+                existing,
+                buffer,
+                activePath,
+                firstLine,
+                firstColumn
             )
             setStatus(status, "Onglet activé.")
             return changed
@@ -231,12 +231,12 @@ class DocumentTabs(private val documents : Array[Document]) {
     }
 
     def create(
-    path : string,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize,
-    status : TextBuilder
+        path : string,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize,
+        status : TextBuilder
     ) : bool {
         if this.find(path) != usize(-1) {
             setStatus(status, "Ce fichier est déjà ouvert dans un onglet.")
@@ -261,12 +261,12 @@ class DocumentTabs(private val documents : Array[Document]) {
     }
 
     def close(
-    index : usize,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    status : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize
+        index : usize,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        status : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize
     ) : bool {
         if index >= documents.size() { return false }
         if this.isModified(index, buffer) {

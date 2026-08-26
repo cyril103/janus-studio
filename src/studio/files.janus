@@ -44,9 +44,9 @@ def validateNewPath(path : string, status : TextBuilder) : bool {
 }
 
 def validateSaveAsPath(
-path : string,
-currentPath : string,
-status : TextBuilder
+    path : string,
+    currentPath : string,
+    status : TextBuilder
 ) : bool {
     if path != currentPath && pathExists(path) {
         setStatus(status, "Le fichier cible existe déjà ; écrasement refusé.")
@@ -60,9 +60,9 @@ def codeFontPath() : string {
 }
 
 private def useAssetRoot(
-root : string,
-relativePath : string,
-output : TextBuilder
+    root : string,
+    relativePath : string,
+    output : TextBuilder
 ) : bool {
     val joined : Result[Path, SystemError] = joinPath(root, relativePath)
     return match move joined {
@@ -72,9 +72,9 @@ output : TextBuilder
 }
 
 private def captureConfiguredAssetPath(
-root : Option[EnvironmentValue],
-relativePath : string,
-output : TextBuilder
+    root : Option[EnvironmentValue],
+    relativePath : string,
+    output : TextBuilder
 ) : bool {
     return match move root {
         Some(path) => useConfiguredAssetRoot(move path, relativePath, output),
@@ -83,9 +83,9 @@ output : TextBuilder
 }
 
 private def useConfiguredAssetRoot(
-root : EnvironmentValue,
-relativePath : string,
-output : TextBuilder
+    root : EnvironmentValue,
+    relativePath : string,
+    output : TextBuilder
 ) : bool {
     val captured : bool = useAssetRoot(root.view(), relativePath, output)
     delete root
@@ -93,9 +93,9 @@ output : TextBuilder
 }
 
 private def captureAssetEnvironment(
-result : Result[Option[EnvironmentValue], SystemError],
-relativePath : string,
-output : TextBuilder
+    result : Result[Option[EnvironmentValue], SystemError],
+    relativePath : string,
+    output : TextBuilder
 ) : bool {
     return match move result {
         Ok(root) => captureConfiguredAssetPath(move root, relativePath, output),
@@ -106,16 +106,16 @@ output : TextBuilder
 def captureAssetPath(relativePath : string, output : TextBuilder) : bool {
     output.clear()
     return captureAssetEnvironment(
-    environmentVariable("JANUS_STUDIO_RESOURCE_DIR"),
-    relativePath,
-    output
+        environmentVariable("JANUS_STUDIO_RESOURCE_DIR"),
+        relativePath,
+        output
     )
 }
 
 private def appendCharacterRange(
-first : int,
-last : int,
-output : TextBuilder
+    first : int,
+    last : int,
+    output : TextBuilder
 ) : Unit {
     var value : int = first
     while value <= last {
@@ -144,8 +144,8 @@ def selectedPath() : string {
 }
 
 def useWorkingDirectory(
-directory : WorkingDirectory,
-output : TextBuilder
+    directory : WorkingDirectory,
+    output : TextBuilder
 ) : bool {
     output.append(directory.view())
     delete directory
@@ -173,9 +173,9 @@ def useNormalizedProjectDirectory(path : Path, output : TextBuilder) : bool {
 }
 
 def joinProjectDirectory(
-directory : WorkingDirectory,
-path : string,
-output : TextBuilder
+    directory : WorkingDirectory,
+    path : string,
+    output : TextBuilder
 ) : bool {
     val joined : Result[Path, SystemError] = joinPath(directory.view(), path)
     delete directory
@@ -245,9 +245,9 @@ def setStatus(status : TextBuilder, message : string) : Unit {
 }
 
 private def acceptDecodedFile(
-text : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    text : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     buffer.load(text)
     buffer.trackDiskContent(text)
@@ -262,9 +262,9 @@ private def rejectInvalidTextFile(status : TextBuilder) : bool {
 }
 
 def acceptFile(
-data : FileData,
-buffer : EditorBuffer,
-status : TextBuilder
+    data : FileData,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     val accepted : bool = match data.asText() {
         Ok(text) => acceptDecodedFile(text, buffer, status),
@@ -275,8 +275,8 @@ status : TextBuilder
 }
 
 def startEmptyFile(
-buffer : EditorBuffer,
-status : TextBuilder
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     buffer.clear()
     setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
@@ -284,9 +284,9 @@ status : TextBuilder
 }
 
 def loadFile(
-path : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    path : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     val result : Result[FileData, SystemError] = readFile(path)
     return match move result {
@@ -305,9 +305,9 @@ def openFailed(status : TextBuilder) : bool {
 }
 
 def openExistingFile(
-path : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    path : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     val result : Result[FileData, SystemError] = readFile(path)
     return match move result {
@@ -317,9 +317,9 @@ status : TextBuilder
 }
 
 def saveSucceeded(
-buffer : EditorBuffer,
-content : string,
-status : TextBuilder
+    buffer : EditorBuffer,
+    content : string,
+    status : TextBuilder
 ) : bool {
     buffer.markSaved()
     buffer.trackDiskContent(content)
@@ -333,9 +333,9 @@ def saveFailed(status : TextBuilder) : bool {
 }
 
 private def writeBuffer(
-path : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    path : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     val content : TextBuilder = new TextBuilder()
     defer delete content
@@ -351,9 +351,9 @@ status : TextBuilder
 }
 
 private def acceptUnchangedText(
-text : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    text : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     val unchanged : bool = buffer.diskContentMatches(text)
     if !unchanged {
@@ -368,9 +368,9 @@ private def reportUnverifiableFile(status : TextBuilder) : bool {
 }
 
 private def acceptUnchangedFile(
-data : FileData,
-buffer : EditorBuffer,
-status : TextBuilder
+    data : FileData,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     val unchanged : bool = match data.asText() {
         Ok(text) => acceptUnchangedText(text, buffer, status),
@@ -381,9 +381,9 @@ status : TextBuilder
 }
 
 private def currentDiskContentMatches(
-path : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    path : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     if !buffer.hasDiskContent() {
         if pathExists(path) {
@@ -400,19 +400,19 @@ status : TextBuilder
 }
 
 def saveFile(
-path : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    path : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     if !currentDiskContentMatches(path, buffer, status) { return false }
     return writeBuffer(path, buffer, status)
 }
 
 def saveFileAs(
-path : string,
-currentPath : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    path : string,
+    currentPath : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     if path == currentPath { return saveFile(path, buffer, status) }
     if pathExists(path) {
@@ -423,10 +423,10 @@ status : TextBuilder
 }
 
 def openProjectFolder(
-path : string,
-projectRoot : TextBuilder,
-explorer : ProjectExplorer,
-status : TextBuilder
+    path : string,
+    projectRoot : TextBuilder,
+    explorer : ProjectExplorer,
+    status : TextBuilder
 ) : bool {
     if path == "" {
         setStatus(status, "Saisissez un chemin de dossier.")
@@ -443,13 +443,13 @@ status : TextBuilder
 }
 
 def applyPathPrompt(
-prompt : PathPrompt,
-path : string,
-activePath : TextBuilder,
-buffer : EditorBuffer,
-diagnostics : EditorDiagnostics,
-search : SearchModel,
-status : TextBuilder
+    prompt : PathPrompt,
+    path : string,
+    activePath : TextBuilder,
+    buffer : EditorBuffer,
+    diagnostics : EditorDiagnostics,
+    search : SearchModel,
+    status : TextBuilder
 ) : bool {
     if path == "" {
         setStatus(status, "Saisissez un chemin de fichier.")
@@ -481,15 +481,15 @@ status : TextBuilder
 }
 
 def openExplorerFile(
-path : string,
-activePath : TextBuilder,
-buffer : EditorBuffer,
-status : TextBuilder
+    path : string,
+    activePath : TextBuilder,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     if buffer.isModified() {
         setStatus(
-        status,
-        "Enregistrez les modifications avant d'ouvrir un autre fichier."
+            status,
+            "Enregistrez les modifications avant d'ouvrir un autre fichier."
         )
         return false
     }

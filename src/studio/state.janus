@@ -14,67 +14,67 @@ enum PaneResize derives Copy, Equality, Debug {
 }
 
 class StudioUiState(
-var firstLine : usize,
-var firstColumn : usize,
-var firstOutputLine : usize,
-var firstOutputColumn : usize,
-var firstDocumentTab : usize,
-var firstExplorerEntry : usize,
-var explorerHorizontalOffset : int,
-var lastExplorerClick : usize,
-var lastExplorerClickAt : usize,
-var quitRequested : bool,
-var fileMenuOpen : bool,
-var editorScrollDetached : bool,
-var horizontalScrollDetached : bool,
-var paneResize : PaneResize,
-var horizontalScrollbarDragging : bool,
-var outputVerticalScrollbarDragging : bool,
-var outputHorizontalScrollbarDragging : bool,
-var explorerVerticalScrollbarDragging : bool,
-var explorerHorizontalScrollbarDragging : bool,
-var documentTabScrollbarDragging : bool,
-var mouseSelecting : bool
+    var firstLine : usize,
+    var firstColumn : usize,
+    var firstOutputLine : usize,
+    var firstOutputColumn : usize,
+    var firstDocumentTab : usize,
+    var firstExplorerEntry : usize,
+    var explorerHorizontalOffset : int,
+    var lastExplorerClick : usize,
+    var lastExplorerClickAt : usize,
+    var quitRequested : bool,
+    var fileMenuOpen : bool,
+    var editorScrollDetached : bool,
+    var horizontalScrollDetached : bool,
+    var paneResize : PaneResize,
+    var horizontalScrollbarDragging : bool,
+    var outputVerticalScrollbarDragging : bool,
+    var outputHorizontalScrollbarDragging : bool,
+    var explorerVerticalScrollbarDragging : bool,
+    var explorerHorizontalScrollbarDragging : bool,
+    var documentTabScrollbarDragging : bool,
+    var mouseSelecting : bool
 ) {}
 
 def studioUiState() : StudioUiState {
     return new StudioUiState(
-    usize(0),
-    usize(0),
-    usize(0),
-    usize(0),
-    usize(0),
-    usize(0),
-    0,
-    usize(-1),
-    usize(0),
-    false,
-    false,
-    false,
-    false,
-    PaneResize.None,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false,
-    false
+        usize(0),
+        usize(0),
+        usize(0),
+        usize(0),
+        usize(0),
+        usize(0),
+        0,
+        usize(-1),
+        usize(0),
+        false,
+        false,
+        false,
+        false,
+        PaneResize.None,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
     )
 }
 
 class StudioToolingState(
-val diagnostics : EditorDiagnostics,
-val diagnosticText : TextBuilder,
-val completion : CompletionModel,
-val completionLabels : TextBuilder,
-val completionError : TextBuilder,
-val languageServer : LspClient,
-val completionText : TextBuilder,
-val signatureText : TextBuilder,
-val pendingSignature : TextBuilder,
-val toolOutput : TextBuilder,
-val compiler : CompilerJob
+    val diagnostics : EditorDiagnostics,
+    val diagnosticText : TextBuilder,
+    val completion : CompletionModel,
+    val completionLabels : TextBuilder,
+    val completionError : TextBuilder,
+    val languageServer : LspClient,
+    val completionText : TextBuilder,
+    val signatureText : TextBuilder,
+    val pendingSignature : TextBuilder,
+    val toolOutput : TextBuilder,
+    val compiler : CompilerJob
 ) {
     destructor {
         delete diagnostics
@@ -94,20 +94,20 @@ val compiler : CompilerJob
 def studioToolingState(workspacePath : string) : StudioToolingState {
     val completionError : TextBuilder = new TextBuilder()
     val languageServer : LspClient = lspClient(
-    workspacePath,
-    completionError
+        workspacePath,
+        completionError
     )
     return new StudioToolingState(
-    editorDiagnostics(),
-    new TextBuilder(),
-    completionModel(),
-    new TextBuilder(),
-    move completionError,
-    move languageServer,
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    compilerJobForProgram()
+        editorDiagnostics(),
+        new TextBuilder(),
+        completionModel(),
+        new TextBuilder(),
+        move completionError,
+        move languageServer,
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        compilerJobForProgram()
     )
 }

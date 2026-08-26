@@ -31,12 +31,12 @@ private def parseNumber(source : string, start : usize) : usize {
 }
 
 class EditorDiagnostics(
-private val lines : Array[usize],
-private val columns : Array[usize],
-private val severities : Array[int],
-private val messageStarts : Array[usize],
-private val messageLengths : Array[usize],
-private val messages : TextBuilder
+    private val lines : Array[usize],
+    private val columns : Array[usize],
+    private val severities : Array[int],
+    private val messageStarts : Array[usize],
+    private val messageLengths : Array[usize],
+    private val messages : TextBuilder
 ) {
     def clear() : Unit {
         lines.clear()
@@ -60,10 +60,10 @@ private val messages : TextBuilder
             if this.line(index) == requestedLine {
                 output.append(if this.isError(index) { "Erreur : " } else { "Avertissement : " })
                 appendDecodedUtf8Range(
-                source,
-                messageStarts.get(index),
-                messageLengths.get(index),
-                output
+                    source,
+                    messageStarts.get(index),
+                    messageLengths.get(index),
+                    output
                 )
                 return true
             }
@@ -77,9 +77,9 @@ private val messages : TextBuilder
         val data : Ptr[byte] = stringData(json)
         val size : usize = stringLength(json)
         val diagnostics : usize = findJsonObjectProperty(
-        json,
-        "diagnostics",
-        usize(0)
+            json,
+            "diagnostics",
+            usize(0)
         )
         if diagnostics >= size || data.load(diagnostics) != byte(91) { return }
         var cursor : usize = skipJsonWhitespace(json, diagnostics + usize(1))
@@ -87,9 +87,9 @@ private val messages : TextBuilder
             val severity : usize = findJsonObjectProperty(json, "severity", cursor)
             val message : usize = findJsonObjectProperty(json, "message", cursor)
             val primary : usize = findJsonObjectProperty(
-            json,
-            "primaryLocation",
-            cursor
+                json,
+                "primaryLocation",
+                cursor
             )
             val position : usize = findJsonObjectProperty(json, "position", primary)
             val line : usize = findJsonObjectProperty(json, "line", position)
@@ -99,20 +99,20 @@ private val messages : TextBuilder
             data.load(severity) == byte(34) && data.load(message) == byte(34) {
                 val start : usize = messages.size()
                 val _messageEnd : usize = appendDecodedJsonString(
-                json,
-                message + usize(1),
-                messages
+                    json,
+                    message + usize(1),
+                    messages
                 )
                 val parsedLine : usize = parseNumber(json, line)
                 val parsedColumn : usize = parseNumber(json, column)
                 lines.push(
-                if parsedLine > usize(0) { parsedLine - usize(1) } else { usize(0) }
+                    if parsedLine > usize(0) { parsedLine - usize(1) } else { usize(0) }
                 )
                 columns.push(
-                if parsedColumn > usize(0) { parsedColumn - usize(1) } else { usize(0) }
+                    if parsedColumn > usize(0) { parsedColumn - usize(1) } else { usize(0) }
                 )
                 severities.push(
-                if matchesAt(json, "error", severity + usize(1)) { 2 } else { 1 }
+                    if matchesAt(json, "error", severity + usize(1)) { 2 } else { 1 }
                 )
                 messageStarts.push(start)
                 messageLengths.push(messages.size() - start)
@@ -137,10 +137,10 @@ private val messages : TextBuilder
             output.appendUSize(this.column(index) + usize(1))
             output.append(" — ")
             appendDecodedUtf8Range(
-            source,
-            messageStarts.get(index),
-            messageLengths.get(index),
-            output
+                source,
+                messageStarts.get(index),
+                messageLengths.get(index),
+                output
             )
             output.append("\n")
             index = index + usize(1)
@@ -159,11 +159,11 @@ private val messages : TextBuilder
 
 def editorDiagnostics() : EditorDiagnostics {
     return new EditorDiagnostics(
-    new Array[usize](usize(8)),
-    new Array[usize](usize(8)),
-    new Array[int](usize(8)),
-    new Array[usize](usize(8)),
-    new Array[usize](usize(8)),
-    new TextBuilder()
+        new Array[usize](usize(8)),
+        new Array[usize](usize(8)),
+        new Array[int](usize(8)),
+        new Array[usize](usize(8)),
+        new Array[usize](usize(8)),
+        new TextBuilder()
     )
 }

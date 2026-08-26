@@ -6,8 +6,8 @@ import std.array
 import std.text
 
 class SearchModel(
-private val query : TextBuilder,
-private val matches : Array[usize]
+    private val query : TextBuilder,
+    private val matches : Array[usize]
 ) {
     private var selectedIndex : usize = usize(0)
     private var queryLength : usize = usize(0)
@@ -84,7 +84,7 @@ private val matches : Array[usize]
 
 def searchModel() : SearchModel {
     return new SearchModel(
-    new TextBuilder(),
-    new Array[usize](usize(16))
+        new TextBuilder(),
+        new Array[usize](usize(16))
     )
 }

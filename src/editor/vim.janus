@@ -33,13 +33,13 @@ enum EditorAction derives Copy, Equality, Debug {
 }
 
 class VimController(
-private var currentMode : EditorMode,
-private var pendingG : bool,
-private var pendingD : bool,
-private var pendingY : bool,
-private var hasLineRegister : bool,
-private val command : TextBuilder,
-private val lineRegister : Array[char]
+    private var currentMode : EditorMode,
+    private var pendingG : bool,
+    private var pendingD : bool,
+    private var pendingY : bool,
+    private var hasLineRegister : bool,
+    private val command : TextBuilder,
+    private val lineRegister : Array[char]
 ) {
     def mode() : EditorMode {
         return currentMode
@@ -48,10 +48,10 @@ private val lineRegister : Array[char]
     def appendStatus(output : TextBuilder) : Unit {
         output.clear()
         output.append(match currentMode {
-            Normal => "NORMAL",
-            Insert => "INSERT",
-            Command => "COMMAND",
-            Search => "SEARCH"
+                Normal => "NORMAL",
+                Insert => "INSERT",
+                Command => "COMMAND",
+                Search => "SEARCH"
         })
         if pendingG {
             output.append("  g")
@@ -244,12 +244,12 @@ private val lineRegister : Array[char]
 
 def vimController() : VimController {
     return new VimController(
-    EditorMode.Normal,
-    false,
-    false,
-    false,
-    false,
-    new TextBuilder(),
-    new Array[char](usize(64))
+        EditorMode.Normal,
+        false,
+        false,
+        false,
+        false,
+        new TextBuilder(),
+        new Array[char](usize(64))
     )
 }

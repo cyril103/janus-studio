@@ -42,9 +42,9 @@ private def contentFingerprint(text : string) : usize {
 }
 
 class BufferSnapshot(
-private val characters : Array[char],
-private val cursorPosition : usize,
-private val documentRevision : usize
+    private val characters : Array[char],
+    private val cursorPosition : usize,
+    private val documentRevision : usize
 ) {
     borrow def size() : usize {
         return characters.size()
@@ -68,18 +68,18 @@ private val documentRevision : usize
 }
 
 class BufferArchive(
-private var characters : Array[char],
-private var undoStates : Deque[BufferSnapshot],
-private var redoStates : Deque[BufferSnapshot],
-private val cursorPosition : usize,
-private val currentRevision : usize,
-private val savedRevision : usize,
-private val nextRevision : usize,
-private val selectionAnchor : usize,
-private val selecting : bool,
-private val diskSize : usize,
-private val diskFingerprint : usize,
-private val tracksDiskContent : bool
+    private var characters : Array[char],
+    private var undoStates : Deque[BufferSnapshot],
+    private var redoStates : Deque[BufferSnapshot],
+    private val cursorPosition : usize,
+    private val currentRevision : usize,
+    private val savedRevision : usize,
+    private val nextRevision : usize,
+    private val selectionAnchor : usize,
+    private val selecting : bool,
+    private val diskSize : usize,
+    private val diskFingerprint : usize,
+    private val tracksDiskContent : bool
 ) {
     def takeCharacters() : Array[char] {
         val previous : Array[char] = move characters
@@ -135,25 +135,25 @@ private def trimSnapshotDeque(states : Deque[BufferSnapshot]) : Unit {
 
 def emptyBufferArchive() : BufferArchive {
     return new BufferArchive(
-    new Array[char](usize(0)),
-    new Deque[BufferSnapshot](usize(1)),
-    new Deque[BufferSnapshot](usize(1)),
-    usize(0),
-    usize(0),
-    usize(0),
-    usize(1),
-    usize(0),
-    false,
-    usize(0),
-    usize(0),
-    false
+        new Array[char](usize(0)),
+        new Deque[BufferSnapshot](usize(1)),
+        new Deque[BufferSnapshot](usize(1)),
+        usize(0),
+        usize(0),
+        usize(0),
+        usize(1),
+        usize(0),
+        false,
+        usize(0),
+        usize(0),
+        false
     )
 }
 
 class EditorBuffer(
-private var characters : Array[char],
-private var undoStates : Deque[BufferSnapshot],
-private var redoStates : Deque[BufferSnapshot]
+    private var characters : Array[char],
+    private var undoStates : Deque[BufferSnapshot],
+    private var redoStates : Deque[BufferSnapshot]
 ) {
     private var cursorPosition : usize = usize(0)
     private var currentRevision : usize = usize(0)
@@ -173,18 +173,18 @@ private var redoStates : Deque[BufferSnapshot]
         val archivedRedo : Deque[BufferSnapshot] = move redoStates
         redoStates = new Deque[BufferSnapshot](usize(32))
         return new BufferArchive(
-        move archivedCharacters,
-        move archivedUndo,
-        move archivedRedo,
-        cursorPosition,
-        currentRevision,
-        savedRevision,
-        nextRevision,
-        selectionAnchor,
-        selecting,
-        diskSize,
-        diskFingerprint,
-        tracksDiskContent
+            move archivedCharacters,
+            move archivedUndo,
+            move archivedRedo,
+            cursorPosition,
+            currentRevision,
+            savedRevision,
+            nextRevision,
+            selectionAnchor,
+            selecting,
+            diskSize,
+            diskFingerprint,
+            tracksDiskContent
         )
     }
 
@@ -298,8 +298,8 @@ private var redoStates : Deque[BufferSnapshot]
     }
 
     private def insertCharactersAt(
-    position : usize,
-    borrow inserted : Array[char]
+        position : usize,
+        borrow inserted : Array[char]
     ) : Unit {
         if inserted.isEmpty() { return }
         val previousSize : usize = characters.size()
@@ -519,7 +519,7 @@ private var redoStates : Deque[BufferSnapshot]
         var indentation : usize = usize(0)
         while start + indentation < cursorPosition &&
         (characters.get(start + indentation) == ' ' ||
-        characters.get(start + indentation) == '\t') {
+            characters.get(start + indentation) == '\t') {
             indentation = indentation + usize(1)
         }
         val afterOpening : bool = cursorPosition > usize(0) &&
@@ -550,8 +550,8 @@ private var redoStates : Deque[BufferSnapshot]
             index = usize(0)
             while index < indentation {
                 this.insertAt(
-                contentCursor + usize(1) + index,
-                characters.get(start + index)
+                    contentCursor + usize(1) + index,
+                    characters.get(start + index)
                 )
                 index = index + usize(1)
             }
@@ -1002,9 +1002,9 @@ private var redoStates : Deque[BufferSnapshot]
     }
 
     borrow def appendVisibleText(
-    output : TextBuilder,
-    firstLine : usize,
-    maximumLines : usize
+        output : TextBuilder,
+        firstLine : usize,
+        maximumLines : usize
     ) : Unit {
         var index : usize = usize(0)
         var lineIndex : usize = usize(0)
@@ -1027,9 +1027,9 @@ private var redoStates : Deque[BufferSnapshot]
     }
 
     borrow def appendVisibleCharacters(
-    output : Array[char],
-    firstLine : usize,
-    maximumLines : usize
+        output : Array[char],
+        firstLine : usize,
+        maximumLines : usize
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -1061,8 +1061,8 @@ private var redoStates : Deque[BufferSnapshot]
 
 def emptyBuffer() : EditorBuffer {
     return new EditorBuffer(
-    new Array[char](usize(256)),
-    new Deque[BufferSnapshot](usize(32)),
-    new Deque[BufferSnapshot](usize(32))
+        new Array[char](usize(256)),
+        new Deque[BufferSnapshot](usize(32)),
+        new Deque[BufferSnapshot](usize(32))
     )
 }

@@ -19,10 +19,10 @@ def shiftDown() : bool {
 }
 
 def resolveQuitRequest(
-requested : bool,
-forced : bool,
-nativeClose : bool,
-hasModifiedDocuments : bool
+    requested : bool,
+    forced : bool,
+    nativeClose : bool,
+    hasModifiedDocuments : bool
 ) : bool {
     if forced {
         return requested
@@ -73,8 +73,8 @@ def handlePathPromptKeys(prompt : PathPrompt) : bool {
 }
 
 def handleModeKeys(
-controller : VimController,
-buffer : EditorBuffer
+    controller : VimController,
+    buffer : EditorBuffer
 ) : EditorAction {
     if isKeyPressed(Key.Escape) {
         controller.escape()
@@ -148,9 +148,9 @@ buffer : EditorBuffer
 }
 
 def handlePrintableKeys(
-controller : VimController,
-buffer : EditorBuffer,
-completion : CompletionModel
+    controller : VimController,
+    buffer : EditorBuffer,
+    completion : CompletionModel
 ) : EditorAction {
     val control : bool = controlDown()
     var action : EditorAction = EditorAction.None
@@ -189,9 +189,9 @@ completion : CompletionModel
 }
 
 def handleCompletionKeys(
-completion : CompletionModel,
-buffer : EditorBuffer,
-pendingSignature : TextBuilder
+    completion : CompletionModel,
+    buffer : EditorBuffer,
+    pendingSignature : TextBuilder
 ) : bool {
     if !completion.isVisible() {
         return false
@@ -217,74 +217,74 @@ pendingSignature : TextBuilder
 }
 
 def refreshCompletion(
-lsp : LspClient,
-path : string,
-buffer : EditorBuffer,
-completion : CompletionModel,
-labels : TextBuilder,
-error : TextBuilder,
-status : TextBuilder
+    lsp : LspClient,
+    path : string,
+    buffer : EditorBuffer,
+    completion : CompletionModel,
+    labels : TextBuilder,
+    error : TextBuilder,
+    status : TextBuilder
 ) : Unit {
     if lsp.requestCompletion(
-    path,
-    buffer,
-    buffer.line(),
-    buffer.column(),
-    labels,
-    error
+        path,
+        buffer,
+        buffer.line(),
+        buffer.column(),
+        labels,
+        error
     ) {
         status.clear()
         status.append("Complétion en cours…")
     } else {
         completion.dismiss()
         setStatus(
-        status,
-        if error.size() > usize(0) {
-            error.view()
-        } else {
-            "Aucune proposition à cette position."
-        }
+            status,
+            if error.size() > usize(0) {
+                error.view()
+            } else {
+                "Aucune proposition à cette position."
+            }
         )
     }
 }
 
 def refreshSignatureHelp(
-lsp : LspClient,
-path : string,
-buffer : EditorBuffer,
-signature : TextBuilder,
-fallback : TextBuilder,
-error : TextBuilder
+    lsp : LspClient,
+    path : string,
+    buffer : EditorBuffer,
+    signature : TextBuilder,
+    fallback : TextBuilder,
+    error : TextBuilder
 ) : Unit {
     if !lsp.requestSignatureHelp(
-    path,
-    buffer,
-    buffer.line(),
-    buffer.column(),
-    signature,
-    error
+        path,
+        buffer,
+        buffer.line(),
+        buffer.column(),
+        signature,
+        error
     ) && fallback.size() > usize(0) {
         signature.append(fallback.view())
     }
 }
 
 def pollLanguageServer(
-lsp : LspClient,
-path : string,
-buffer : EditorBuffer,
-completion : CompletionModel,
-labels : TextBuilder,
-signature : TextBuilder,
-fallback : TextBuilder,
-error : TextBuilder,
-status : TextBuilder
+    lsp : LspClient,
+    path : string,
+    buffer : EditorBuffer,
+    completion : CompletionModel,
+    labels : TextBuilder,
+    signature : TextBuilder,
+    fallback : TextBuilder,
+    error : TextBuilder,
+    status : TextBuilder
 ) : Unit {
     val response : LspResponseKind = lsp.poll(
-    path,
-    buffer,
-    labels,
-    signature,
-    error
+        path,
+        buffer,
+        labels,
+        signature,
+        error
     )
     if response == LspResponseKind.Completion {
         if labels.size() > usize(0) {
@@ -308,10 +308,10 @@ status : TextBuilder
 }
 
 def applyEditorAction(
-action : EditorAction,
-path : string,
-buffer : EditorBuffer,
-status : TextBuilder
+    action : EditorAction,
+    path : string,
+    buffer : EditorBuffer,
+    status : TextBuilder
 ) : bool {
     if action == EditorAction.Save {
         saveFile(path, buffer, status)
