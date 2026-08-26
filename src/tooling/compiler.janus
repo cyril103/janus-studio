@@ -17,6 +17,49 @@ enum CompilerCheckState derives Copy, Equality, Debug {
     Failed
 }
 
+private def isPathSeparator(value : byte) : bool {
+    return value == byte(47) || value == byte(92)
+}
+
+private def isTestSourcePath(path : string) : bool {
+    val data : Ptr[byte] = stringData(path)
+    val length : usize = stringLength(path)
+    if length < usize(6) || data.load(length - usize(6)) != byte(46) ||
+    data.load(length - usize(5)) != byte(106) ||
+    data.load(length - usize(4)) != byte(97) ||
+    data.load(length - usize(3)) != byte(110) ||
+    data.load(length - usize(2)) != byte(117) ||
+    data.load(length - usize(1)) != byte(115) {
+        return false
+    }
+    var index : usize = usize(0)
+    while index + usize(5) < length {
+        val startsSegment : bool = index == usize(0) ||
+        isPathSeparator(data.load(index - usize(1)))
+        if startsSegment && data.load(index) == byte(116) &&
+        data.load(index + usize(1)) == byte(101) &&
+        data.load(index + usize(2)) == byte(115) &&
+        data.load(index + usize(3)) == byte(116) &&
+        data.load(index + usize(4)) == byte(115) &&
+        isPathSeparator(data.load(index + usize(5))) {
+            return true
+        }
+        index = index + usize(1)
+    }
+    return false
+}
+
+private def appendCheckTarget(
+path : string,
+arguments : Array[string]
+) : Unit {
+    if isTestSourcePath(path) {
+        arguments.push("--all")
+    } else {
+        arguments.push(path)
+    }
+}
+
 private def emitWorkerResult(process : ProcessResult) : int {
     val exitCode : int = process.exitCode()
     val output : TextBuilder = new TextBuilder()
@@ -32,15 +75,15 @@ private def emitWorkerResult(process : ProcessResult) : int {
     return exitCode
 }
 
-def runCompilerWorker(path : string) : int {
+def runCompilerWorker(path : string, workspace : string) : int {
     val arguments : Array[string] = new Array[string](usize(4))
     defer delete arguments
     arguments.push("check")
-    arguments.push(path)
+    appendCheckTarget(path, arguments)
     arguments.push("--diagnostic-format")
     arguments.push("json")
     val result : Result[ProcessResult, SystemError] =
-    runProcess("janus", arguments, "", true, true)
+    runProcess("janus", arguments, workspace, true, true)
     return match move result {
         Ok(process) => emitWorkerResult(move process),
         Error(error) => 1
@@ -58,15 +101,24 @@ def compilerWorkerRequested() : bool {
     return argumentEqualsWorker(programArgument(usize(1)))
 }
 
-private def runWorkerArgument(argument : Option[string]) : int {
-    return match argument {
-        Some(path) => runCompilerWorker(path),
+private def runWorkerArguments(
+pathArgument : Option[string],
+workspaceArgument : Option[string]
+) : int {
+    return match pathArgument {
+        Some(path) => match workspaceArgument {
+            Some(workspace) => runCompilerWorker(path, workspace),
+            None => runCompilerWorker(path, "")
+        },
         None => 2
     }
 }
 
 def runRequestedCompilerWorker() : int {
-    return runWorkerArgument(programArgument(usize(2)))
+    return runWorkerArguments(
+    programArgument(usize(2)),
+    programArgument(usize(3))
+    )
 }
 
 class CompilerJob(
@@ -95,6 +147,7 @@ private val received : ByteBuffer
 
     def start(
     path : string,
+    workspace : string,
     output : TextBuilder,
     diagnostics : EditorDiagnostics
     ) : bool {
@@ -103,11 +156,16 @@ private val received : ByteBuffer
         output.clear()
         output.append("Vérification en cours…")
         diagnostics.clear()
-        val arguments : Array[string] = new Array[string](usize(2))
+        val arguments : Array[string] = new Array[string](usize(3))
         defer delete arguments
         arguments.push("--check-worker")
         arguments.push(path)
-        if !this.acceptStart(spawnProcess(executable.view(), arguments, "")) {
+        arguments.push(workspace)
+        if !this.acceptStart(spawnProcess(
+        executable.view(),
+        arguments,
+        workspace
+        )) {
             output.clear()
             output.append("Impossible de lancer la vérification Janus.")
             return false
@@ -316,7 +374,7 @@ def checkFile(path : string, output : TextBuilder) : bool {
     val arguments : Array[string] = new Array[string](usize(4))
     defer delete arguments
     arguments.push("check")
-    arguments.push(path)
+    appendCheckTarget(path, arguments)
     arguments.push("--diagnostic-format")
     arguments.push("human")
 
@@ -361,7 +419,7 @@ diagnostics : EditorDiagnostics
     val arguments : Array[string] = new Array[string](usize(4))
     defer delete arguments
     arguments.push("check")
-    arguments.push(path)
+    appendCheckTarget(path, arguments)
     arguments.push("--diagnostic-format")
     arguments.push("json")
 

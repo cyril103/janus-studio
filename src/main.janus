@@ -819,6 +819,7 @@ def main() : int {
             if saveFile(activePath.view(), buffer, status) {
                 tooling.compiler.start(
                 activePath.view(),
+                projectRoot.view(),
                 tooling.toolOutput,
                 tooling.diagnostics
                 )

@@ -18,6 +18,14 @@ def checksTheWelcomeSample() : Unit {
     ))
     assertEqual[usize](diagnostics.size(), usize(0))
 
+    val testCheckSucceeded : bool = checkFileWithDiagnostics(
+    "tests/compiler.janus",
+    output,
+    diagnostics
+    )
+    assertTrue(testCheckSucceeded)
+    assertEqual[usize](diagnostics.size(), usize(0))
+
     assertTrue(!checkFileWithDiagnostics(
     "tests/invalid-diagnostic.txt",
     output,
