@@ -4,6 +4,7 @@ module studio.input
 import editor.buffer
 import editor.completion
 import editor.path_prompt
+import editor.syntax
 import editor.vim
 import studio.files
 import tooling.lsp
@@ -276,16 +277,20 @@ def pollLanguageServer(
     labels : TextBuilder,
     signature : TextBuilder,
     fallback : TextBuilder,
+    semanticTokens : Array[SemanticToken],
+    semanticRevision : usize,
     error : TextBuilder,
     status : TextBuilder
-) : Unit {
+) : usize {
     val response : LspResponseKind = lsp.poll(
         path,
         buffer,
         labels,
         signature,
+        semanticTokens,
         error
     )
+    var highlightedRevision : usize = semanticRevision
     if response == LspResponseKind.Completion {
         if labels.size() > usize(0) {
             completion.load(labels.view())
@@ -304,7 +309,14 @@ def pollLanguageServer(
         setStatus(status, error.view())
     } else if response == LspResponseKind.Discarded {
         completion.dismiss()
+    } else if response == LspResponseKind.SemanticTokens {
+        highlightedRevision = buffer.revision()
     }
+    if lsp.isIdle() && path != "" &&
+    highlightedRevision != buffer.revision() {
+        val _requested : bool = lsp.requestSemanticTokens(path, buffer, error)
+    }
+    return highlightedRevision
 }
 
 def applyEditorAction(

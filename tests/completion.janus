@@ -1,6 +1,8 @@
 import editor.buffer
 import editor.completion
+import editor.syntax
 import tooling.lsp
+import std.array
 import std.io
 import std.testing
 import std.text
@@ -13,13 +15,78 @@ def awaitLspResponse(
     signature : TextBuilder,
     error : TextBuilder
 ) : LspResponseKind {
+    val semanticTokens : Array[SemanticToken] = new Array[SemanticToken](usize(16))
+    defer delete semanticTokens
     var attempts : usize = usize(0)
     var response : LspResponseKind = LspResponseKind.None
     while response == LspResponseKind.None && attempts < usize(5000000) {
-        response = client.poll(path, buffer, labels, signature, error)
+        response = client.poll(
+            path,
+            buffer,
+            labels,
+            signature,
+            semanticTokens,
+            error
+        )
         attempts = attempts + usize(1)
     }
     return response
+}
+
+def awaitSemanticResponse(
+    client : LspClient,
+    path : string,
+    buffer : EditorBuffer,
+    tokens : Array[SemanticToken],
+    error : TextBuilder
+) : LspResponseKind {
+    val labels : TextBuilder = new TextBuilder()
+    defer delete labels
+    val signature : TextBuilder = new TextBuilder()
+    defer delete signature
+    var attempts : usize = usize(0)
+    var response : LspResponseKind = LspResponseKind.None
+    while response == LspResponseKind.None && attempts < usize(5000000) {
+        response = client.poll(path, buffer, labels, signature, tokens, error)
+        attempts = attempts + usize(1)
+    }
+    return response
+}
+
+def containsSemanticKind(
+    tokens : Array[SemanticToken],
+    kind : SyntaxKind
+) : bool {
+    var index : usize = usize(0)
+    while index < tokens.size() {
+        if tokens.get(index).kind == kind { return true }
+        index = index + usize(1)
+    }
+    return false
+}
+
+/// @test
+def decodesDeltaEncodedSemanticTokens() : Unit {
+    val tokens : Array[SemanticToken] = new Array[SemanticToken](usize(8))
+    defer delete tokens
+    extractSemanticTokens(
+        "{\"result\":{\"data\":[1,2,3,2,1,0,5,4,5,0,2,1,6,9,0]}}",
+        tokens
+    )
+
+    assertEqual[usize](tokens.size(), usize(3))
+    assertEqual[SemanticToken](
+        tokens.get(usize(0)),
+        new SemanticToken(usize(1), usize(2), usize(3), SyntaxKind.Class)
+    )
+    assertEqual[SemanticToken](
+        tokens.get(usize(1)),
+        new SemanticToken(usize(1), usize(7), usize(4), SyntaxKind.Function)
+    )
+    assertEqual[SemanticToken](
+        tokens.get(usize(2)),
+        new SemanticToken(usize(3), usize(1), usize(6), SyntaxKind.Property)
+    )
 }
 
 /// @test
@@ -146,6 +213,28 @@ def reusesPersistentLspSession() : Unit {
         awaitLspResponse(client, ".", buffer, labels, signature, error),
         LspResponseKind.Ready
     )
+
+    val semanticTokens : Array[SemanticToken] =
+    new Array[SemanticToken](usize(64))
+    defer delete semanticTokens
+    assertTrue(client.requestSemanticTokens(
+        "samples/persistent-completion.janus",
+        buffer,
+        error
+    ))
+    assertEqual[LspResponseKind](
+        awaitSemanticResponse(
+        client,
+        "samples/persistent-completion.janus",
+        buffer,
+        semanticTokens,
+        error
+        ),
+        LspResponseKind.SemanticTokens
+    )
+    assertTrue(containsSemanticKind(semanticTokens, SyntaxKind.Namespace))
+    assertTrue(containsSemanticKind(semanticTokens, SyntaxKind.Function))
+    assertTrue(containsSemanticKind(semanticTokens, SyntaxKind.Variable))
 
     assertTrue(client.requestCompletion(
         "samples/persistent-completion.janus",

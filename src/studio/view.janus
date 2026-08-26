@@ -1012,7 +1012,9 @@ def drawHighlightedCode(
     font : Font,
     characters : Array[char],
     spans : Array[SyntaxSpan],
+    semanticTokens : Array[SemanticToken],
     glyph : TextBuilder,
+    firstLine : usize,
     x : int,
     y : int,
     glyphAdvance : float,
@@ -1020,10 +1022,15 @@ def drawHighlightedCode(
 ) : Unit {
     var line : usize = usize(0)
     var column : usize = usize(0)
+    var utf16Column : usize = usize(0)
+    var semanticIndex : usize = usize(0)
+    while semanticIndex < semanticTokens.size() &&
+    semanticTokens.get(semanticIndex).line < firstLine {
+        semanticIndex = semanticIndex + usize(1)
+    }
     var spanIndex : usize = usize(0)
     while spanIndex < spans.size() {
         val span : SyntaxSpan = spans.get(spanIndex)
-        val color : Color = syntaxColor(span.kind)
         var index : usize = span.start
         val end : usize = span.start + span.length
         while index < end {
@@ -1031,7 +1038,27 @@ def drawHighlightedCode(
             if value == '\n' {
                 line = line + usize(1)
                 column = usize(0)
+                utf16Column = usize(0)
             } else {
+                val absoluteLine : usize = firstLine + line
+                while semanticIndex < semanticTokens.size() &&
+                semanticTokenBefore(
+                    semanticTokens.get(semanticIndex),
+                    absoluteLine,
+                    utf16Column
+                ) {
+                    semanticIndex = semanticIndex + usize(1)
+                }
+                val kind : SyntaxKind = if semanticIndex < semanticTokens.size() &&
+                semanticTokenContains(
+                    semanticTokens.get(semanticIndex),
+                    absoluteLine,
+                    utf16Column
+                ) {
+                    semanticTokens.get(semanticIndex).kind
+                } else {
+                    span.kind
+                }
                 if value != ' ' && value != '\t' && value != '\r' {
                     glyph.clear()
                     glyph.appendChar(value)
@@ -1045,15 +1072,38 @@ def drawHighlightedCode(
                         numericCast[float](truncatingCast[int](line)) * lineAdvance
                         ),
                         codeFontSize,
-                        color
+                        syntaxColor(kind)
                     )
                 }
                 column = column + usize(1)
+                utf16Column = utf16Column + if int(value) > 65535 {
+                    usize(2)
+                } else {
+                    usize(1)
+                }
             }
             index = index + usize(1)
         }
         spanIndex = spanIndex + usize(1)
     }
+}
+
+def semanticTokenBefore(
+    token : SemanticToken,
+    line : usize,
+    column : usize
+) : bool {
+    return token.line < line ||
+    (token.line == line && token.column + token.length <= column)
+}
+
+def semanticTokenContains(
+    token : SemanticToken,
+    line : usize,
+    column : usize
+) : bool {
+    return token.line == line && column >= token.column &&
+    column < token.column + token.length
 }
 
 def drawLineNumbers(

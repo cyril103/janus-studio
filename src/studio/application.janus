@@ -207,6 +207,7 @@ def drawStudioFrame(
         ui,
         app.visibleCharacters,
         app.syntaxSpans,
+        app.tooling.semanticTokens,
         app.glyph,
         app.tooling.diagnostics,
         app.tooling.diagnosticText,

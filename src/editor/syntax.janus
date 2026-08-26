@@ -29,6 +29,32 @@ struct SyntaxSpan(
     val kind : SyntaxKind
 ) derives Copy {}
 
+/// Token sémantique LSP, positionné en unités UTF-16 comme dans VS Code.
+struct SemanticToken(
+    val line : usize,
+    val column : usize,
+    val length : usize,
+    val kind : SyntaxKind
+) derives Copy, Equality, Debug {}
+
+def semanticSyntaxKind(tokenType : usize) : SyntaxKind {
+    if tokenType == usize(0) { return SyntaxKind.Namespace }
+    if tokenType == usize(1) { return SyntaxKind.Type }
+    if tokenType == usize(2) { return SyntaxKind.Class }
+    if tokenType == usize(3) { return SyntaxKind.Enum }
+    if tokenType == usize(4) { return SyntaxKind.Interface }
+    if tokenType == usize(5) { return SyntaxKind.Function }
+    if tokenType == usize(6) { return SyntaxKind.Method }
+    if tokenType == usize(7) { return SyntaxKind.Variable }
+    if tokenType == usize(8) { return SyntaxKind.Parameter }
+    if tokenType == usize(9) { return SyntaxKind.Property }
+    if tokenType == usize(10) { return SyntaxKind.Keyword }
+    if tokenType == usize(11) { return SyntaxKind.String }
+    if tokenType == usize(12) { return SyntaxKind.Number }
+    if tokenType == usize(13) { return SyntaxKind.Operator }
+    return SyntaxKind.Plain
+}
+
 def isIdentifierStart(value : char) : bool {
     return value == '_' ||
     (value >= 'a' && value <= 'z') ||

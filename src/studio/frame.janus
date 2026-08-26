@@ -72,6 +72,7 @@ def restoreSelectedDocument(app : StudioAppState, ui : StudioUiState) : Unit {
     app.search.clear()
     app.tooling.completion.dismiss()
     app.controller.escape()
+    app.tooling.invalidateSemanticTokens()
     ui.firstDocumentTab = keepSelectedDocumentTabVisible(
         app.tabs,
         ui.firstDocumentTab

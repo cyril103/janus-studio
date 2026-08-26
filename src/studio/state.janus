@@ -82,9 +82,20 @@ class StudioToolingState(
     val completionText : TextBuilder,
     val signatureText : TextBuilder,
     val pendingSignature : TextBuilder,
+    val semanticTokens : Array[SemanticToken],
+    var semanticRevision : usize,
     val toolOutput : TextBuilder,
     val compiler : CompilerJob
 ) {
+    def updateSemanticRevision(value : usize) : Unit {
+        semanticRevision = value
+    }
+
+    def invalidateSemanticTokens() : Unit {
+        semanticTokens.clear()
+        semanticRevision = usize(-1)
+    }
+
     destructor {
         delete diagnostics
         delete diagnosticText
@@ -95,6 +106,7 @@ class StudioToolingState(
         delete completionText
         delete signatureText
         delete pendingSignature
+        delete semanticTokens
         delete toolOutput
         delete compiler
     }
@@ -116,6 +128,8 @@ def studioToolingState(workspacePath : string) : StudioToolingState {
         new TextBuilder(),
         new TextBuilder(),
         new TextBuilder(),
+        new Array[SemanticToken](usize(256)),
+        usize(-1),
         new TextBuilder(),
         compilerJobForProgram()
     )

@@ -399,7 +399,7 @@ def dismissStaleLanguageHints(
 }
 
 def pollTooling(app : StudioAppState, ui : StudioUiState) : Unit {
-    pollLanguageServer(
+    val semanticRevision : usize = pollLanguageServer(
         app.tooling.languageServer,
         app.activePath.view(),
         app.buffer,
@@ -407,9 +407,12 @@ def pollTooling(app : StudioAppState, ui : StudioUiState) : Unit {
         app.tooling.completionLabels,
         app.tooling.signatureText,
         app.tooling.pendingSignature,
+        app.tooling.semanticTokens,
+        app.tooling.semanticRevision,
         app.tooling.completionError,
         app.status
     )
+    app.tooling.updateSemanticRevision(semanticRevision)
     val compilerState : CompilerCheckState = app.tooling.compiler.poll(
         app.tooling.toolOutput,
         app.tooling.diagnostics

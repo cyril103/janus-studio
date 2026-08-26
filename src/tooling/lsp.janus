@@ -2,6 +2,7 @@
 module tooling.lsp
 
 import editor.buffer
+import editor.syntax
 import tooling.json
 import std.array
 import std.bytes
@@ -234,6 +235,7 @@ enum LspResponseKind derives Copy, Equality, Debug {
     Ready,
     Completion,
     Signature,
+    SemanticTokens,
     Discarded,
     Failure
 }
@@ -242,7 +244,77 @@ private enum PendingResponse derives Copy, Equality, Debug {
     None,
     Initialize,
     Completion,
-    Signature
+    Signature,
+    SemanticTokens
+}
+
+private def parseUnsignedJsonNumber(source : string, start : usize) : usize {
+    val data : Ptr[byte] = stringData(source)
+    var index : usize = start
+    var value : usize = usize(0)
+    while index < stringLength(source) && data.load(index) >= byte(48) &&
+    data.load(index) <= byte(57) {
+        value = value * usize(10) +
+        numericCast[usize](int(data.load(index)) - 48)
+        index = index + usize(1)
+    }
+    return value
+}
+
+/// Décode le format delta de textDocument/semanticTokens/full.
+def extractSemanticTokens(
+    json : string,
+    output : Array[SemanticToken]
+) : Unit {
+    output.clear()
+    val size : usize = stringLength(json)
+    val data : Ptr[byte] = stringData(json)
+    val result : usize = findJsonObjectProperty(json, "result", usize(0))
+    val values : usize = if result < size {
+        findJsonObjectProperty(json, "data", result)
+    } else {
+        size
+    }
+    if values >= size || data.load(values) != byte(91) { return }
+    var cursor : usize = skipJsonWhitespace(json, values + usize(1))
+    var field : usize = usize(0)
+    var line : usize = usize(0)
+    var column : usize = usize(0)
+    var deltaLine : usize = usize(0)
+    var deltaColumn : usize = usize(0)
+    var length : usize = usize(0)
+    var tokenType : usize = usize(0)
+    while cursor < size && data.load(cursor) != byte(93) {
+        if data.load(cursor) < byte(48) || data.load(cursor) > byte(57) {
+            output.clear()
+            return
+        }
+        val value : usize = parseUnsignedJsonNumber(json, cursor)
+        if field == usize(0) { deltaLine = value }
+        else if field == usize(1) { deltaColumn = value }
+        else if field == usize(2) { length = value }
+        else if field == usize(3) { tokenType = value }
+        else {
+            line = line + deltaLine
+            column = if deltaLine == usize(0) {
+                column + deltaColumn
+            } else {
+                deltaColumn
+            }
+            output.push(new SemanticToken(
+                line,
+                column,
+                length,
+                semanticSyntaxKind(tokenType)
+            ))
+        }
+        field = (field + usize(1)) % usize(5)
+        cursor = skipJsonWhitespace(json, jsonValueEnd(json, cursor))
+        if cursor < size && data.load(cursor) == byte(44) {
+            cursor = skipJsonWhitespace(json, cursor + usize(1))
+        }
+    }
+    if field != usize(0) { output.clear() }
 }
 
 private struct LspFrameCopy(
@@ -714,6 +786,9 @@ class LspClient(
     }
 
     borrow def isReady() : bool { return ready }
+    borrow def isIdle() : bool {
+        return ready && pendingResponse == PendingResponse.None
+    }
 
     private def sendClose(error : TextBuilder) : bool {
         body.clear()
@@ -854,11 +929,36 @@ class LspClient(
         return true
     }
 
+    def requestSemanticTokens(
+        path : string,
+        buffer : EditorBuffer,
+        error : TextBuilder
+    ) : bool {
+        if !this.isIdle() || path == "" { return false }
+        error.clear()
+        if !this.synchronizeDocument(path, buffer, error) { return false }
+        val id : usize = requestId
+        requestId = requestId + usize(1)
+        body.clear()
+        if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
+        !this.appendNumber(id) || !body.appendText(
+            ",\"method\":\"textDocument/semanticTokens/full\",\"params\":{\"textDocument\":{\"uri\":"
+        ) || !appendJsonString(activeUri.view(), body) ||
+        !body.appendText("}}}") || !this.sendBody(error) {
+            return false
+        }
+        pendingId = id
+        pendingResponse = PendingResponse.SemanticTokens
+        this.rememberPendingDocument(buffer)
+        return true
+    }
+
     def poll(
         path : string,
         buffer : EditorBuffer,
         labels : TextBuilder,
         signature : TextBuilder,
+        semanticTokens : Array[SemanticToken],
         error : TextBuilder
     ) : LspResponseKind {
         val state : int = this.pollPendingResponse(error)
@@ -881,8 +981,12 @@ class LspClient(
             extractCompletionLabels(responseJson.view(), labels)
             return LspResponseKind.Completion
         }
-        extractSignatureLabel(responseJson.view(), signature)
-        return LspResponseKind.Signature
+        if completed == PendingResponse.Signature {
+            extractSignatureLabel(responseJson.view(), signature)
+            return LspResponseKind.Signature
+        }
+        extractSemanticTokens(responseJson.view(), semanticTokens)
+        return LspResponseKind.SemanticTokens
     }
 
     def shutdown(error : TextBuilder) : bool {
