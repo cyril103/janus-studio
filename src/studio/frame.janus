@@ -1,0 +1,647 @@
+/// Cycle d'interaction d'une frame de Janus Studio.
+module studio.frame
+
+import editor.vim
+import editor.path_prompt
+import studio.files
+import studio.input
+import studio.state
+import studio.view
+import std.graphics
+import std.wall_time
+
+class StudioFrame(
+    val nativeCloseRequested : bool,
+    val control : bool,
+    val shift : bool,
+    val cursorLineBeforeInput : usize,
+    val cursorColumnBeforeInput : usize,
+    val bufferSizeBeforeInput : usize,
+    val editorModeBeforeInput : EditorMode,
+    val leftMousePressed : bool,
+    var visibleColumns : usize,
+    var outputRows : usize,
+    var outputColumns : usize,
+    var visibleExplorerRows : usize,
+    var maximumLines : usize,
+    var fileInputConsumed : bool,
+    var layoutMouseConsumed : bool
+) {}
+
+def beginStudioFrame(
+    app : StudioAppState,
+    glyphAdvance : float,
+    lineAdvance : float,
+    outputGlyphAdvance : float,
+    outputLineAdvance : float
+) : StudioFrame {
+    constrainStudioLayout()
+    return new StudioFrame(
+        windowShouldClose(),
+        controlDown(),
+        shiftDown(),
+        app.buffer.line(),
+        app.buffer.column(),
+        app.buffer.size(),
+        app.controller.mode(),
+        isMouseButtonPressed(MouseButton.Left),
+        visibleEditorColumns(glyphAdvance),
+        visibleOutputRows(outputLineAdvance),
+        visibleOutputColumns(outputGlyphAdvance),
+        explorerVisibleRows(),
+        visibleEditorLines(lineAdvance),
+        false,
+        false
+    )
+}
+
+def visibleEditorLines(lineAdvance : float) : usize {
+    return numericCast[usize](truncatingCast[int](
+        numericCast[float](editorBottom - editorTop - 12) / lineAdvance
+    ))
+}
+
+def minimum(left : usize, right : usize) : usize {
+    return if left < right { left } else { right }
+}
+
+def restoreSelectedDocument(app : StudioAppState, ui : StudioUiState) : Unit {
+    ui.firstLine = app.tabs.firstLine()
+    ui.firstColumn = app.tabs.firstColumn()
+    ui.editorScrollDetached = false
+    ui.horizontalScrollDetached = false
+    app.tooling.diagnostics.clear()
+    app.search.clear()
+    app.tooling.completion.dismiss()
+    app.tooling.signatureText.clear()
+    app.controller.escape()
+    ui.firstDocumentTab = keepSelectedDocumentTabVisible(
+        app.tabs,
+        ui.firstDocumentTab
+    )
+}
+
+def handleDocumentTabs(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    if frame.leftMousePressed && documentTabScrollbarHovered(app.tabs) {
+        ui.documentTabScrollbarDragging = true
+    }
+    if ui.documentTabScrollbarDragging {
+        if isMouseButtonDown(MouseButton.Left) {
+            ui.firstDocumentTab = documentTabScrollAtMouse(app.tabs)
+            frame.layoutMouseConsumed = true
+        } else {
+            ui.documentTabScrollbarDragging = false
+        }
+    }
+    if !frame.leftMousePressed { return }
+
+    val clickedTab : usize = documentTabAtMouse(app.tabs, ui.firstDocumentTab)
+    if clickedTab == usize(-1) { return }
+
+    val previouslySelected : usize = app.tabs.selected()
+    val closingTab : bool = documentTabCloseHovered(
+        app.tabs,
+        ui.firstDocumentTab,
+        clickedTab
+    )
+    val changed : bool = if closingTab {
+        app.tabs.close(
+            clickedTab,
+            app.buffer,
+            app.activePath,
+            app.status,
+            ui.firstLine,
+            ui.firstColumn
+        )
+    } else {
+        app.tabs.switchTo(
+            clickedTab,
+            app.buffer,
+            app.activePath,
+            ui.firstLine,
+            ui.firstColumn
+        )
+    }
+    if changed && (!closingTab || clickedTab == previouslySelected) {
+        restoreSelectedDocument(app, ui)
+    }
+    frame.fileInputConsumed = true
+    frame.layoutMouseConsumed = true
+}
+
+def beginScrollbarDragging(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    uiFont : Font
+) : Unit {
+    if !frame.leftMousePressed { return }
+    if !ui.documentTabScrollbarDragging && outputVerticalScrollbarHovered(
+        app.tooling.toolOutput.view(),
+        frame.outputRows
+    ) {
+        ui.outputVerticalScrollbarDragging = true
+    } else if outputHorizontalScrollbarHovered(
+        app.tooling.toolOutput.view(),
+        frame.outputColumns
+    ) {
+        ui.outputHorizontalScrollbarDragging = true
+    }
+    if ui.outputVerticalScrollbarDragging ||
+    ui.outputHorizontalScrollbarDragging {
+        return
+    }
+    if explorerVerticalScrollbarHovered(app.explorer, frame.visibleExplorerRows) {
+        ui.explorerVerticalScrollbarDragging = true
+    } else if explorerHorizontalScrollbarHovered(
+        app.explorer,
+        app.explorerLabel,
+        uiFont
+    ) {
+        ui.explorerHorizontalScrollbarDragging = true
+    }
+}
+
+def dragOutputScrollbars(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    if ui.outputVerticalScrollbarDragging {
+        if isMouseButtonDown(MouseButton.Left) {
+            ui.firstOutputLine = outputVerticalScrollAtMouse(
+                app.tooling.toolOutput.view(),
+                frame.outputRows
+            )
+            frame.layoutMouseConsumed = true
+        } else {
+            ui.outputVerticalScrollbarDragging = false
+        }
+    }
+    if ui.outputHorizontalScrollbarDragging {
+        if isMouseButtonDown(MouseButton.Left) {
+            ui.firstOutputColumn = outputHorizontalScrollAtMouse(
+                app.tooling.toolOutput.view(),
+                frame.outputColumns
+            )
+            frame.layoutMouseConsumed = true
+        } else {
+            ui.outputHorizontalScrollbarDragging = false
+        }
+    }
+}
+
+def dragExplorerScrollbars(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    uiFont : Font
+) : Unit {
+    if ui.explorerVerticalScrollbarDragging {
+        if isMouseButtonDown(MouseButton.Left) {
+            ui.firstExplorerEntry = explorerVerticalScrollAtMouse(
+                app.explorer,
+                frame.visibleExplorerRows
+            )
+            frame.layoutMouseConsumed = true
+        } else {
+            ui.explorerVerticalScrollbarDragging = false
+        }
+    }
+    if ui.explorerHorizontalScrollbarDragging {
+        if isMouseButtonDown(MouseButton.Left) {
+            ui.explorerHorizontalOffset = explorerHorizontalScrollAtMouse(
+                app.explorer,
+                app.explorerLabel,
+                uiFont
+            )
+            frame.layoutMouseConsumed = true
+        } else {
+            ui.explorerHorizontalScrollbarDragging = false
+        }
+    }
+}
+
+def anyPanelScrollbarDragging(ui : StudioUiState) : bool {
+    return ui.outputVerticalScrollbarDragging ||
+    ui.outputHorizontalScrollbarDragging ||
+    ui.explorerVerticalScrollbarDragging ||
+    ui.explorerHorizontalScrollbarDragging
+}
+
+def handleEditorScrollbar(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    if ui.paneResize == PaneResize.None && !anyPanelScrollbarDragging(ui) &&
+    frame.leftMousePressed && horizontalScrollbarHovered(
+        app.buffer,
+        frame.visibleColumns
+    ) {
+        ui.horizontalScrollbarDragging = true
+    }
+    if !ui.horizontalScrollbarDragging { return }
+    if !isMouseButtonDown(MouseButton.Left) {
+        ui.horizontalScrollbarDragging = false
+        return
+    }
+    ui.firstColumn = horizontalScrollAtMouse(app.buffer, frame.visibleColumns)
+    ui.horizontalScrollDetached = true
+    app.tooling.completion.dismiss()
+    frame.layoutMouseConsumed = true
+}
+
+def handlePaneResize(ui : StudioUiState, frame : StudioFrame) : Unit {
+    if ui.paneResize == PaneResize.None &&
+    !ui.horizontalScrollbarDragging && !anyPanelScrollbarDragging(ui) &&
+    frame.leftMousePressed {
+        if explorerSeparatorHovered() {
+            ui.paneResize = PaneResize.Explorer
+        } else if outputSeparatorHovered() {
+            ui.paneResize = PaneResize.Output
+        }
+    }
+    if ui.paneResize == PaneResize.None { return }
+    if !isMouseButtonDown(MouseButton.Left) {
+        ui.paneResize = PaneResize.None
+        return
+    }
+    if ui.paneResize == PaneResize.Explorer {
+        resizeExplorerToMouse()
+    } else {
+        resizeOutputToMouse()
+    }
+    frame.layoutMouseConsumed = true
+}
+
+def updateLayoutCursor(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    uiFont : Font
+) : Unit {
+    if ui.explorerVerticalScrollbarDragging ||
+    explorerVerticalScrollbarHovered(app.explorer, frame.visibleExplorerRows) ||
+    ui.outputVerticalScrollbarDragging ||
+    outputVerticalScrollbarHovered(app.tooling.toolOutput.view(), frame.outputRows) {
+        setMouseCursor(MouseCursor.ResizeNorthSouth)
+    } else if ui.documentTabScrollbarDragging ||
+    documentTabScrollbarHovered(app.tabs) ||
+    ui.explorerHorizontalScrollbarDragging ||
+    explorerHorizontalScrollbarHovered(app.explorer, app.explorerLabel, uiFont) ||
+    ui.outputHorizontalScrollbarDragging ||
+    outputHorizontalScrollbarHovered(app.tooling.toolOutput.view(), frame.outputColumns) ||
+    ui.horizontalScrollbarDragging ||
+    horizontalScrollbarHovered(app.buffer, frame.visibleColumns) {
+        setMouseCursor(MouseCursor.ResizeEastWest)
+    } else if ui.paneResize == PaneResize.Explorer || explorerSeparatorHovered() {
+        setMouseCursor(MouseCursor.ResizeEastWest)
+    } else if ui.paneResize == PaneResize.Output || outputSeparatorHovered() {
+        setMouseCursor(MouseCursor.ResizeNorthSouth)
+    } else {
+        setMouseCursor(MouseCursor.Default)
+    }
+}
+
+def handleLayoutMouse(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    uiFont : Font
+) : Unit {
+    handleDocumentTabs(app, ui, frame)
+    beginScrollbarDragging(app, ui, frame, uiFont)
+    dragOutputScrollbars(app, ui, frame)
+    dragExplorerScrollbars(app, ui, frame, uiFont)
+    handleEditorScrollbar(app, ui, frame)
+    handlePaneResize(ui, frame)
+    updateLayoutCursor(app, ui, frame, uiFont)
+}
+
+def clampLayoutOffsets(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    uiFont : Font,
+    glyphAdvance : float,
+    lineAdvance : float,
+    outputGlyphAdvance : float,
+    outputLineAdvance : float
+) : Unit {
+    frame.maximumLines = visibleEditorLines(lineAdvance)
+    frame.visibleColumns = visibleEditorColumns(glyphAdvance)
+    frame.outputRows = visibleOutputRows(outputLineAdvance)
+    frame.outputColumns = visibleOutputColumns(outputGlyphAdvance)
+    frame.visibleExplorerRows = explorerVisibleRows()
+    ui.firstLine = minimum(
+        ui.firstLine,
+        maximumEditorFirst(app.buffer, frame.maximumLines)
+    )
+    ui.firstColumn = minimum(
+        ui.firstColumn,
+        maximumEditorFirstColumn(app.buffer, frame.visibleColumns)
+    )
+    ui.firstOutputLine = minimum(
+        ui.firstOutputLine,
+        maximumOutputFirstLine(app.tooling.toolOutput.view(), frame.outputRows)
+    )
+    ui.firstOutputColumn = minimum(
+        ui.firstOutputColumn,
+        maximumOutputFirstColumn(app.tooling.toolOutput.view(), frame.outputColumns)
+    )
+    ui.firstExplorerEntry = minimum(
+        ui.firstExplorerEntry,
+        maximumExplorerFirst(app.explorer, frame.visibleExplorerRows)
+    )
+    val maximumExplorerOffset : int = maximumExplorerHorizontalOffset(
+        app.explorer,
+        app.explorerLabel,
+        uiFont
+    )
+    if ui.explorerHorizontalOffset > maximumExplorerOffset {
+        ui.explorerHorizontalOffset = maximumExplorerOffset
+    }
+    ui.firstDocumentTab = minimum(
+        ui.firstDocumentTab,
+        maximumFirstDocumentTab(app.tabs)
+    )
+}
+
+def handleWheelScrolling(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    uiFont : Font
+) : Unit {
+    if app.filePrompt.isVisible() || ui.fileMenuOpen { return }
+    if mouseInDocumentTabs() {
+        ui.firstDocumentTab = scrollDocumentTabs(app.tabs, ui.firstDocumentTab)
+    } else if mouseInExplorerPanel() && frame.shift {
+        ui.explorerHorizontalOffset = scrollExplorerHorizontally(
+            app.explorer,
+            app.explorerLabel,
+            uiFont,
+            ui.explorerHorizontalOffset
+        )
+    } else if mouseInExplorerPanel() {
+        ui.firstExplorerEntry = scrollExplorer(
+            app.explorer,
+            ui.firstExplorerEntry,
+            frame.visibleExplorerRows
+        )
+    } else if mouseInOutputPanel() && frame.shift {
+        ui.firstOutputColumn = scrollOutputHorizontally(
+            app.tooling.toolOutput.view(),
+            ui.firstOutputColumn,
+            frame.outputColumns
+        )
+    } else if mouseInOutputPanel() {
+        ui.firstOutputLine = scrollOutputVertically(
+            app.tooling.toolOutput.view(),
+            ui.firstOutputLine,
+            frame.outputRows
+        )
+    } else if frame.shift {
+        scrollEditorColumns(app, ui, frame)
+    } else {
+        scrollEditorLines(app, ui, frame)
+    }
+}
+
+def scrollEditorColumns(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    val requested : usize = scrollEditorHorizontally(
+        app.buffer,
+        ui.firstColumn,
+        frame.visibleColumns
+    )
+    if requested == ui.firstColumn { return }
+    ui.firstColumn = requested
+    ui.horizontalScrollDetached = true
+    app.tooling.completion.dismiss()
+}
+
+def scrollEditorLines(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    val requested : usize = scrollEditor(
+        app.buffer,
+        ui.firstLine,
+        frame.maximumLines
+    )
+    if requested == ui.firstLine { return }
+    ui.firstLine = requested
+    ui.editorScrollDetached = true
+    app.tooling.completion.dismiss()
+}
+
+def handleFileMenuClick(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : bool {
+    if frame.layoutMouseConsumed || app.filePrompt.isVisible() ||
+    !frame.leftMousePressed {
+        return false
+    }
+    if pointInArea(fileMenuX, 0, fileMenuButtonWidth, editorTop) {
+        ui.fileMenuOpen = !ui.fileMenuOpen
+        return true
+    }
+    if !ui.fileMenuOpen { return false }
+    if pointInArea(fileMenuX, fileMenuTop, fileMenuWidth, fileMenuRowHeight) {
+        app.filePrompt.begin(PathPromptAction.OpenFolder, app.projectRoot.view())
+        app.tooling.completion.dismiss()
+    } else if pointInArea(
+        fileMenuX,
+        fileMenuTop + fileMenuRowHeight,
+        fileMenuWidth,
+        fileMenuRowHeight
+    ) && app.explorer.size() > usize(0) {
+        closeProjectFolder(app, ui)
+    }
+    ui.fileMenuOpen = false
+    return true
+}
+
+def closeProjectFolder(app : StudioAppState, ui : StudioUiState) : Unit {
+    app.explorer.close()
+    app.projectRoot.clear()
+    ui.firstExplorerEntry = usize(0)
+    ui.explorerHorizontalOffset = 0
+    app.promptedPath.clear()
+    if app.activePath.view() != "" {
+        val _captured : bool = captureParentDirectory(
+            app.activePath.view(),
+            app.promptedPath
+        )
+    }
+    if app.tooling.languageServer.restart(
+        app.promptedPath.view(),
+        app.tooling.completionError
+    ) {
+        setStatus(app.status, "Dossier fermé.")
+    } else {
+        setStatus(app.status, app.tooling.completionError.view())
+    }
+}
+
+def handleExplorerClick(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : bool {
+    if frame.layoutMouseConsumed || app.filePrompt.isVisible() ||
+    !frame.leftMousePressed || mouseX() < 0 || mouseX() >= editorLeft - 12 {
+        return false
+    }
+    val clicked : usize = explorerEntryAtMouse(
+        app.explorer,
+        ui.firstExplorerEntry,
+        frame.visibleExplorerRows
+    )
+    if clicked == usize(-1) { return false }
+    app.explorer.select(clicked)
+    if app.explorer.isDirectory(clicked) {
+        toggleExplorerDirectory(app, ui, frame, clicked)
+    } else {
+        selectExplorerFile(app, ui, clicked)
+    }
+    return true
+}
+
+def toggleExplorerDirectory(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    clicked : usize
+) : Unit {
+    app.explorer.toggle(clicked)
+    ui.firstExplorerEntry = minimum(
+        ui.firstExplorerEntry,
+        maximumExplorerFirst(app.explorer, frame.visibleExplorerRows)
+    )
+    ui.lastExplorerClick = usize(-1)
+}
+
+def selectExplorerFile(
+    app : StudioAppState,
+    ui : StudioUiState,
+    clicked : usize
+) : Unit {
+    val clickedAt : usize = wallNow().unixMilliseconds()
+    val isDoubleClick : bool = clicked == ui.lastExplorerClick &&
+    clickedAt >= ui.lastExplorerClickAt &&
+    clickedAt - ui.lastExplorerClickAt <= doubleClickDelayMilliseconds
+    if !isDoubleClick {
+        ui.lastExplorerClick = clicked
+        ui.lastExplorerClickAt = clickedAt
+        return
+    }
+    app.explorer.appendPath(clicked, app.explorerPath)
+    if app.tabs.open(
+        app.explorerPath.view(),
+        app.buffer,
+        app.activePath,
+        app.status,
+        ui.firstLine,
+        ui.firstColumn
+    ) {
+        restoreSelectedDocument(app, ui)
+    }
+    ui.lastExplorerClick = usize(-1)
+}
+
+def mouseInEditor() : bool {
+    return pointInArea(
+        editorLeft,
+        editorTop,
+        screenWidth() - editorLeft - 8,
+        editorBottom - editorTop
+    )
+}
+
+def handleEditorMouse(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    glyphAdvance : float,
+    lineAdvance : float
+) : bool {
+    if ui.mouseSelecting {
+        return continueEditorSelection(app, ui, frame, glyphAdvance, lineAdvance)
+    }
+    if frame.layoutMouseConsumed || app.filePrompt.isVisible() ||
+    app.tabs.size() == usize(0) || !frame.leftMousePressed || !mouseInEditor() {
+        return false
+    }
+    moveCursorToEditorMouse(
+        app.buffer,
+        ui.firstLine,
+        ui.firstColumn,
+        glyphAdvance,
+        lineAdvance,
+        frame.maximumLines
+    )
+    app.buffer.clearSelection()
+    app.buffer.beginSelection()
+    ui.mouseSelecting = true
+    ui.editorScrollDetached = false
+    ui.horizontalScrollDetached = false
+    app.tooling.completion.dismiss()
+    return true
+}
+
+def continueEditorSelection(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    glyphAdvance : float,
+    lineAdvance : float
+) : bool {
+    if !isMouseButtonDown(MouseButton.Left) || !mouseInEditor() {
+        ui.mouseSelecting = false
+        return false
+    }
+    moveCursorToEditorMouse(
+        app.buffer,
+        ui.firstLine,
+        ui.firstColumn,
+        glyphAdvance,
+        lineAdvance,
+        frame.maximumLines
+    )
+    ui.editorScrollDetached = false
+    ui.horizontalScrollDetached = false
+    return true
+}
+
+def handleWorkspaceMouse(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    glyphAdvance : float,
+    lineAdvance : float
+) : Unit {
+    if handleFileMenuClick(app, ui, frame) {
+        frame.fileInputConsumed = true
+        return
+    }
+    if handleExplorerClick(app, ui, frame) {
+        frame.fileInputConsumed = true
+        return
+    }
+    if handleEditorMouse(app, ui, frame, glyphAdvance, lineAdvance) {
+        frame.fileInputConsumed = true
+    }
+}
