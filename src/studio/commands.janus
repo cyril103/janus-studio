@@ -1,0 +1,475 @@
+/// Commandes utilisateur et outillage de Janus Studio.
+module studio.commands
+
+import editor.completion
+import editor.path_prompt
+import editor.vim
+import studio.files
+import studio.frame
+import studio.input
+import studio.state
+import tooling.compiler
+import std.graphics
+
+def handleFileCommands(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    consumeOpenFileMenu(ui, frame)
+    if app.filePrompt.isVisible() {
+        submitPathPrompt(app, ui)
+        frame.fileInputConsumed = true
+        return
+    }
+    if frame.fileInputConsumed { return }
+    if beginPathPromptShortcut(app, frame) { return }
+    if closeTabShortcut(app, ui, frame) { return }
+    if switchTabShortcut(app, ui, frame) { return }
+    if handleClipboardShortcut(app, frame) { return }
+    handleSaveShortcut(app, ui, frame)
+}
+
+def consumeOpenFileMenu(ui : StudioUiState, frame : StudioFrame) : Unit {
+    if !ui.fileMenuOpen { return }
+    if isKeyPressed(Key.Escape) { ui.fileMenuOpen = false }
+    frame.fileInputConsumed = true
+}
+
+def submitPathPrompt(app : StudioAppState, ui : StudioUiState) : Unit {
+    if !handlePathPromptKeys(app.filePrompt) { return }
+    if app.filePrompt.action() == PathPromptAction.OpenFolder {
+        submitFolderPrompt(app, ui)
+        return
+    }
+    submitDocumentPrompt(app, ui)
+}
+
+def submitFolderPrompt(app : StudioAppState, ui : StudioUiState) : Unit {
+    if !openProjectFolder(
+        app.filePrompt.value(),
+        app.projectRoot,
+        app.explorer,
+        app.status
+    ) {
+        return
+    }
+    app.filePrompt.dismiss()
+    ui.firstExplorerEntry = usize(0)
+    ui.explorerHorizontalOffset = 0
+    if !app.tooling.languageServer.restart(
+        app.projectRoot.view(),
+        app.tooling.completionError
+    ) {
+        setStatus(app.status, app.tooling.completionError.view())
+    }
+}
+
+def capturePromptedDocument(app : StudioAppState) : bool {
+    if app.filePrompt.value() == "" {
+        setStatus(app.status, "Saisissez un chemin de fichier.")
+        return false
+    }
+    if captureDocumentPath(app.filePrompt.value(), app.promptedPath) {
+        return true
+    }
+    setStatus(app.status, "Chemin de fichier invalide.")
+    return false
+}
+
+def submitDocumentPrompt(app : StudioAppState, ui : StudioUiState) : Unit {
+    if !capturePromptedDocument(app) { return }
+    val action : PathPromptAction = app.filePrompt.action()
+    val applied : bool = if action == PathPromptAction.Open {
+        openPromptedDocument(app, ui)
+    } else {
+        if action == PathPromptAction.Create {
+            createPromptedDocument(app, ui)
+        } else {
+            saveAsPromptedDocument(app)
+        }
+    }
+    if applied {
+        restoreSelectedDocument(app, ui)
+        ui.editorScrollDetached = false
+        ui.horizontalScrollDetached = false
+    }
+}
+
+def openPromptedDocument(app : StudioAppState, ui : StudioUiState) : bool {
+    val opened : bool = app.tabs.open(
+        app.promptedPath.view(),
+        app.buffer,
+        app.activePath,
+        app.status,
+        ui.firstLine,
+        ui.firstColumn
+    )
+    if opened { app.filePrompt.dismiss() }
+    return opened
+}
+
+def createPromptedDocument(app : StudioAppState, ui : StudioUiState) : bool {
+    if !validateNewPath(app.promptedPath.view(), app.status) { return false }
+    val created : bool = app.tabs.create(
+        app.promptedPath.view(),
+        app.buffer,
+        app.activePath,
+        ui.firstLine,
+        ui.firstColumn,
+        app.status
+    )
+    if created {
+        setStatus(app.status, "Nouveau fichier : Ctrl+S pour le créer.")
+        app.filePrompt.dismiss()
+    }
+    return created
+}
+
+def saveAsPromptedDocument(app : StudioAppState) : bool {
+    if !app.tabs.pathAvailableForActive(app.promptedPath.view()) {
+        setStatus(
+            app.status,
+            "Ce fichier est déjà ouvert dans un autre onglet."
+        )
+        return false
+    }
+    if !applyPathPrompt(
+        app.filePrompt,
+        app.promptedPath.view(),
+        app.activePath,
+        app.buffer,
+        app.tooling.diagnostics,
+        app.search,
+        app.status
+    ) {
+        return false
+    }
+    return app.tabs.updateActivePath(app.activePath.view())
+}
+
+def beginPathPromptShortcut(app : StudioAppState, frame : StudioFrame) : bool {
+    if app.tabs.size() > usize(0) && frame.control && frame.shift &&
+    isKeyPressed(Key.S) {
+        app.filePrompt.begin(PathPromptAction.SaveAs, app.activePath.view())
+    } else if frame.control && isKeyPressed(Key.O) {
+        app.filePrompt.begin(PathPromptAction.Open, "")
+    } else if frame.control && isKeyPressed(Key.N) {
+        app.filePrompt.begin(PathPromptAction.Create, "")
+    } else {
+        return false
+    }
+    app.tooling.completion.dismiss()
+    frame.fileInputConsumed = true
+    return true
+}
+
+def closeTabShortcut(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : bool {
+    if app.tabs.size() == usize(0) || !frame.control ||
+    !isKeyPressed(Key.W) {
+        return false
+    }
+    if app.tabs.close(
+        app.tabs.selected(),
+        app.buffer,
+        app.activePath,
+        app.status,
+        ui.firstLine,
+        ui.firstColumn
+    ) {
+        restoreSelectedDocument(app, ui)
+        app.tooling.signatureText.clear()
+    }
+    frame.fileInputConsumed = true
+    return true
+}
+
+def switchTabShortcut(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : bool {
+    if app.tabs.size() == usize(0) || !frame.control ||
+    !isKeyPressed(Key.Tab) {
+        return false
+    }
+    val next : usize = if frame.shift {
+        if app.tabs.selected() == usize(0) {
+            app.tabs.size() - usize(1)
+        } else {
+            app.tabs.selected() - usize(1)
+        }
+    } else {
+        (app.tabs.selected() + usize(1)) % app.tabs.size()
+    }
+    if app.tabs.switchTo(
+        next,
+        app.buffer,
+        app.activePath,
+        ui.firstLine,
+        ui.firstColumn
+    ) {
+        restoreSelectedDocument(app, ui)
+        app.tooling.signatureText.clear()
+    }
+    frame.fileInputConsumed = true
+    return true
+}
+
+def handleClipboardShortcut(app : StudioAppState, frame : StudioFrame) : bool {
+    if app.tabs.size() == usize(0) || !frame.control { return false }
+    if isKeyPressed(Key.C) && app.buffer.appendSelection(app.clipboard) {
+        setClipboardText(app.clipboard.view())
+        setStatus(app.status, "Sélection copiée.")
+    } else if isKeyPressed(Key.X) && app.buffer.appendSelection(app.clipboard) {
+        setClipboardText(app.clipboard.view())
+        app.buffer.deleteSelection()
+        setStatus(app.status, "Sélection coupée.")
+    } else if isKeyPressed(Key.V) &&
+    app.controller.mode() == EditorMode.Insert {
+        pasteClipboard(app)
+    } else {
+        return false
+    }
+    frame.fileInputConsumed = true
+    return true
+}
+
+def pasteClipboard(app : StudioAppState) : Unit {
+    val systemClipboard : string = clipboardText()
+    if systemClipboard != "" {
+        app.buffer.insertText(systemClipboard)
+    } else if app.clipboard.size() > usize(0) {
+        app.buffer.insertText(app.clipboard.view())
+    }
+    setStatus(app.status, "Presse-papiers collé.")
+}
+
+def handleSaveShortcut(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    if app.tabs.size() == usize(0) { return }
+    if frame.control && isKeyPressed(Key.S) {
+        saveFile(app.activePath.view(), app.buffer, app.status)
+    } else if isKeyPressed(Key.F5) {
+        runCompilerCheck(app, ui)
+    } else {
+        return
+    }
+    frame.fileInputConsumed = true
+}
+
+def runCompilerCheck(app : StudioAppState, ui : StudioUiState) : Unit {
+    if saveFile(app.activePath.view(), app.buffer, app.status) {
+        app.tooling.compiler.start(
+            app.activePath.view(),
+            app.projectRoot.view(),
+            app.tooling.toolOutput,
+            app.tooling.diagnostics
+        )
+    }
+    ui.firstOutputLine = usize(0)
+    ui.firstOutputColumn = usize(0)
+}
+
+def handleEditorCommands(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    val completionConsumed : bool = completionConsumesInput(app, frame)
+    var keyAction : EditorAction = EditorAction.None
+    var characterAction : EditorAction = EditorAction.None
+    if !completionConsumed {
+        keyAction = handleModeKeys(app.controller, app.buffer)
+        characterAction = handlePrintableKeys(
+            app.controller,
+            app.buffer,
+            app.tooling.completion
+        )
+    }
+    updateCompletionFilter(app, completionConsumed)
+    characterAction = resolveLanguageFeatureAction(app, frame, characterAction)
+    dismissStaleLanguageHints(app, completionConsumed)
+    pollTooling(app, ui)
+    val requestedAction : EditorAction = resolveSearchAction(
+        app,
+        keyAction,
+        characterAction
+    )
+    applyEditorCommand(app, ui, frame, requestedAction)
+}
+
+def completionConsumesInput(
+    app : StudioAppState,
+    frame : StudioFrame
+) : bool {
+    if frame.fileInputConsumed || app.tabs.size() == usize(0) { return true }
+    return handleCompletionKeys(
+        app.tooling.completion,
+        app.buffer,
+        app.tooling.pendingSignature
+    )
+}
+
+def updateCompletionFilter(
+    app : StudioAppState,
+    completionConsumed : bool
+) : Unit {
+    if !completionConsumed && isKeyPressed(Key.Backspace) &&
+    app.tooling.completion.isFiltering() {
+        app.tooling.completion.broaden()
+    }
+}
+
+def resolveLanguageFeatureAction(
+    app : StudioAppState,
+    frame : StudioFrame,
+    action : EditorAction
+) : EditorAction {
+    val manualCompletion : bool = app.controller.mode() == EditorMode.Insert &&
+    frame.control && isKeyPressed(Key.Space)
+    if action == EditorAction.Complete || manualCompletion {
+        refreshCompletion(
+            app.tooling.languageServer,
+            app.activePath.view(),
+            app.buffer,
+            app.tooling.completion,
+            app.tooling.completionLabels,
+            app.tooling.completionError,
+            app.status
+        )
+        return EditorAction.None
+    }
+    if action == EditorAction.SignatureHelp {
+        app.tooling.completion.dismiss()
+        refreshSignatureHelp(
+            app.tooling.languageServer,
+            app.activePath.view(),
+            app.buffer,
+            app.tooling.signatureText,
+            app.tooling.pendingSignature,
+            app.tooling.completionError
+        )
+        return EditorAction.None
+    }
+    if action == EditorAction.DismissSignatureHelp {
+        app.tooling.completion.dismiss()
+        app.tooling.signatureText.clear()
+        app.tooling.pendingSignature.clear()
+        return EditorAction.None
+    }
+    if action == EditorAction.DismissCompletion {
+        app.tooling.completion.dismiss()
+        return EditorAction.None
+    }
+    return action
+}
+
+def completionInvalidatedByNavigation() : bool {
+    return isKeyPressed(Key.Left) || isKeyPressed(Key.Right) ||
+    isKeyPressed(Key.Home) || isKeyPressed(Key.End) ||
+    isKeyPressed(Key.Delete) || isKeyPressed(Key.Enter) ||
+    isKeyPressed(Key.Tab)
+}
+
+def signatureInvalidated(app : StudioAppState) : bool {
+    return app.controller.mode() != EditorMode.Insert ||
+    isKeyPressed(Key.Escape) || isKeyPressed(Key.Backspace) ||
+    isKeyPressed(Key.Delete) || isKeyPressed(Key.Left) ||
+    isKeyPressed(Key.Right) || isKeyPressed(Key.Home) ||
+    isKeyPressed(Key.End)
+}
+
+def dismissStaleLanguageHints(
+    app : StudioAppState,
+    completionConsumed : bool
+) : Unit {
+    if !completionConsumed && app.tooling.completion.isFiltering() &&
+    completionInvalidatedByNavigation() {
+        app.tooling.completion.dismiss()
+    }
+    if signatureInvalidated(app) { app.tooling.signatureText.clear() }
+}
+
+def pollTooling(app : StudioAppState, ui : StudioUiState) : Unit {
+    pollLanguageServer(
+        app.tooling.languageServer,
+        app.activePath.view(),
+        app.buffer,
+        app.tooling.completion,
+        app.tooling.completionLabels,
+        app.tooling.signatureText,
+        app.tooling.pendingSignature,
+        app.tooling.completionError,
+        app.status
+    )
+    val compilerState : CompilerCheckState = app.tooling.compiler.poll(
+        app.tooling.toolOutput,
+        app.tooling.diagnostics
+    )
+    if compilerState == CompilerCheckState.Completed ||
+    compilerState == CompilerCheckState.Failed {
+        ui.firstOutputLine = usize(0)
+        ui.firstOutputColumn = usize(0)
+    }
+}
+
+def resolveSearchAction(
+    app : StudioAppState,
+    keyAction : EditorAction,
+    characterAction : EditorAction
+) : EditorAction {
+    if keyAction == EditorAction.Search {
+        app.search.begin(app.buffer, app.controller.commandView())
+        app.search.appendStatus(app.status)
+        return EditorAction.None
+    }
+    if keyAction == EditorAction.SearchNext ||
+    characterAction == EditorAction.SearchNext {
+        app.search.selectNext(app.buffer)
+        app.search.appendStatus(app.status)
+        return EditorAction.None
+    }
+    if keyAction == EditorAction.SearchPrevious ||
+    characterAction == EditorAction.SearchPrevious {
+        app.search.selectPrevious(app.buffer)
+        app.search.appendStatus(app.status)
+        return EditorAction.None
+    }
+    return if keyAction != EditorAction.None { keyAction } else { characterAction }
+}
+
+def applyEditorCommand(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    requestedAction : EditorAction
+) : Unit {
+    val editorQuitRequested : bool = applyEditorAction(
+        requestedAction,
+        app.activePath.view(),
+        app.buffer,
+        app.status
+    )
+    val hasModifiedDocuments : bool = app.tabs.anyModified(app.buffer)
+    ui.quitRequested = resolveQuitRequest(
+        editorQuitRequested,
+        requestedAction == EditorAction.ForceQuit,
+        frame.nativeCloseRequested,
+        hasModifiedDocuments
+    )
+    if (editorQuitRequested || frame.nativeCloseRequested) &&
+    !ui.quitRequested && hasModifiedDocuments {
+        setStatus(
+            app.status,
+            "Des onglets contiennent des modifications non enregistrées."
+        )
+    }
+}

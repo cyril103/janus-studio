@@ -68,12 +68,9 @@ def minimum(left : usize, right : usize) : usize {
 def restoreSelectedDocument(app : StudioAppState, ui : StudioUiState) : Unit {
     ui.firstLine = app.tabs.firstLine()
     ui.firstColumn = app.tabs.firstColumn()
-    ui.editorScrollDetached = false
-    ui.horizontalScrollDetached = false
     app.tooling.diagnostics.clear()
     app.search.clear()
     app.tooling.completion.dismiss()
-    app.tooling.signatureText.clear()
     app.controller.escape()
     ui.firstDocumentTab = keepSelectedDocumentTabVisible(
         app.tabs,
@@ -128,6 +125,7 @@ def handleDocumentTabs(
     }
     if changed && (!closingTab || clickedTab == previouslySelected) {
         restoreSelectedDocument(app, ui)
+        app.tooling.signatureText.clear()
     }
     frame.fileInputConsumed = true
     frame.layoutMouseConsumed = true
@@ -558,6 +556,8 @@ def selectExplorerFile(
         ui.firstColumn
     ) {
         restoreSelectedDocument(app, ui)
+        ui.editorScrollDetached = false
+        ui.horizontalScrollDetached = false
     }
     ui.lastExplorerClick = usize(-1)
 }
