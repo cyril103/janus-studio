@@ -1,192 +1,30 @@
-import editor.buffer
-import editor.completion
-import editor.explorer
-import editor.path_prompt
-import editor.search
-import editor.syntax
-import editor.vim
-import studio.files
-import studio.commands
-import studio.frame
-import studio.input
-import studio.render
+import studio.application
 import studio.state
-import studio.tabs
-import studio.view
 import tooling.compiler
-import tooling.diagnostics
-import tooling.lsp
-import std.array
 import std.graphics
-import std.text
-import std.wall_time
 
 def main() : int {
     if compilerWorkerRequested() { return runRequestedCompilerWorker() }
-    val app : StudioAppState = studioAppState()
-    defer delete app
-
-    if !initWindow(1200, 760, "Janus Studio") {
+    if !openStudioWindow() {
         println("Impossible d'ouvrir la fenêtre Janus Studio.")
         return 1
     }
     defer closeWindow()
-    setWindowResizable(true)
-    disableExitKey()
 
-    val fontCharacters : TextBuilder = studioFontCharacters()
-    defer delete fontCharacters
-    val uiFontPath : TextBuilder = new TextBuilder()
-    defer delete uiFontPath
-    val codeFontFile : TextBuilder = new TextBuilder()
-    defer delete codeFontFile
-    val _uiFontPathCaptured : bool = captureAssetPath(
-        "assets/fonts/DejaVuSans.ttf",
-        uiFontPath
-    )
-    val _codeFontPathCaptured : bool = captureAssetPath(
-        codeFontPath(),
-        codeFontFile
-    )
-    val uiFont : Font = loadFontUtf8(
-        uiFontPath.view(),
-        32,
-        fontCharacters.view()
-    )
-    defer delete uiFont
-    val codeFont : Font = loadFontUtf8(
-        codeFontFile.view(),
-        32,
-        fontCharacters.view()
-    )
-    defer delete codeFont
-    if !uiFont.isValid() || !codeFont.isValid() {
+    val display : StudioDisplay = studioDisplay()
+    defer delete display
+    if !display.isValid() {
         println("Impossible de charger les polices de Janus Studio.")
         return 1
     }
-    val oneGlyph : Vector2 = codeFont.measure(
-        "M",
-        codeFontSize,
-        codeFontSpacing
-    )
-    val glyphAdvance : float = codeFont.measure(
-        "MM",
-        codeFontSize,
-        codeFontSpacing
-    ).x - oneGlyph.x
-    val lineAdvance : float = codeFont.measure(
-        "M\nM",
-        codeFontSize,
-        codeFontSpacing
-    ).y - oneGlyph.y
-    val outputOneGlyph : Vector2 = codeFont.measure(
-        "M",
-        15.0f,
-        codeFontSpacing
-    )
-    val outputGlyphAdvance : float = codeFont.measure(
-        "MM",
-        15.0f,
-        codeFontSpacing
-    ).x - outputOneGlyph.x
-    val outputLineAdvance : float = codeFont.measure(
-        "M\nM",
-        15.0f,
-        codeFontSpacing
-    ).y - outputOneGlyph.y
-    setTargetFps(60)
+    val app : StudioAppState = studioAppState()
+    defer delete app
+    val ui : StudioUiState = studioUiState()
+    defer delete ui
 
-    val uiState : StudioUiState = studioUiState()
-    defer delete uiState
-    while !uiState.quitRequested {
-        val frame : StudioFrame = beginStudioFrame(
-            app,
-            glyphAdvance,
-            lineAdvance,
-            outputGlyphAdvance,
-            outputLineAdvance
-        )
-        handleLayoutMouse(app, uiState, frame, uiFont)
-        clampLayoutOffsets(
-            app,
-            uiState,
-            frame,
-            uiFont,
-            glyphAdvance,
-            lineAdvance,
-            outputGlyphAdvance,
-            outputLineAdvance
-        )
-        handleWheelScrolling(app, uiState, frame, uiFont)
-        handleWorkspaceMouse(app, uiState, frame, glyphAdvance, lineAdvance)
-        handleFileCommands(app, uiState, frame)
-        handleEditorCommands(app, uiState, frame)
-        if app.buffer.isModified() {
-            app.tooling.diagnostics.clear()
-        }
-        if app.buffer.size() != frame.bufferSizeBeforeInput {
-            app.search.clear()
-        }
-        if app.controller.mode() != frame.editorModeBeforeInput &&
-        (app.controller.mode() != EditorMode.Normal ||
-            (frame.editorModeBeforeInput == EditorMode.Search &&
-            isKeyPressed(Key.Escape))) {
-            app.search.clear()
-        }
-        if app.buffer.line() != frame.cursorLineBeforeInput ||
-        app.buffer.column() != frame.cursorColumnBeforeInput ||
-        isKeyPressed(Key.Delete) {
-            uiState.editorScrollDetached = false
-            uiState.horizontalScrollDetached = false
-        }
-        if !uiState.editorScrollDetached {
-            uiState.firstLine = keepCursorVisible(app.buffer, uiState.firstLine, frame.maximumLines)
-        }
-        if !uiState.horizontalScrollDetached {
-            uiState.firstColumn = keepCursorHorizontallyVisible(
-                app.buffer,
-                uiState.firstColumn,
-                frame.visibleColumns
-            )
-        }
-        app.controller.appendStatus(app.modeLine)
-        app.controller.appendCommandLine(app.commandLine)
-        drawStudio(
-            app.activePath.view(),
-            app.buffer,
-            app.tabs,
-            app.tabLabel,
-            uiState,
-            app.visibleCharacters,
-            app.syntaxSpans,
-            app.glyph,
-            app.tooling.diagnostics,
-            app.tooling.diagnosticText,
-            app.search,
-            app.tooling.completion,
-            app.tooling.completionText,
-            app.tooling.signatureText,
-            app.filePrompt,
-            app.statusLine,
-            app.status,
-            app.tooling.toolOutput,
-            app.modeLine,
-            app.commandLine,
-            app.explorer,
-            frame.visibleExplorerRows,
-            app.explorerLabel,
-            app.controller.mode(),
-            uiFont,
-            codeFont,
-            glyphAdvance,
-            lineAdvance,
-            outputGlyphAdvance,
-            outputLineAdvance,
-            frame.maximumLines
-        )
-        delete frame
-    }
-
-    val _languageServerStopped : bool = app.tooling.languageServer.shutdown(app.tooling.completionError)
+    runStudioSession(app, ui, display)
+    val _serverStopped : bool = app.tooling.languageServer.shutdown(
+        app.tooling.completionError
+    )
     return 0
 }

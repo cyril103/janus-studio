@@ -1,0 +1,235 @@
+/// Initialisation et orchestration de Janus Studio.
+module studio.application
+
+import editor.vim
+import studio.commands
+import studio.files
+import studio.frame
+import studio.render
+import studio.state
+import studio.view
+import std.graphics
+import std.text
+
+class StudioDisplay(
+    val uiFont : Font,
+    val codeFont : Font,
+    val glyphAdvance : float,
+    val lineAdvance : float,
+    val outputGlyphAdvance : float,
+    val outputLineAdvance : float
+) {
+    def isValid() : bool {
+        return uiFont.isValid() && codeFont.isValid()
+    }
+
+    destructor {
+        delete uiFont
+        delete codeFont
+    }
+}
+
+def openStudioWindow() : bool {
+    if !initWindow(1200, 760, "Janus Studio") { return false }
+    setWindowResizable(true)
+    disableExitKey()
+    setTargetFps(60)
+    return true
+}
+
+def studioDisplay() : StudioDisplay {
+    val characters : TextBuilder = studioFontCharacters()
+    defer delete characters
+    val uiFontPath : TextBuilder = new TextBuilder()
+    defer delete uiFontPath
+    val codeFontFile : TextBuilder = new TextBuilder()
+    defer delete codeFontFile
+    val _uiPathCaptured : bool = captureAssetPath(
+        "assets/fonts/DejaVuSans.ttf",
+        uiFontPath
+    )
+    val _codePathCaptured : bool = captureAssetPath(
+        codeFontPath(),
+        codeFontFile
+    )
+    val uiFont : Font = loadFontUtf8(uiFontPath.view(), 32, characters.view())
+    val codeFont : Font = loadFontUtf8(codeFontFile.view(), 32, characters.view())
+    val codeMetrics : Vector2 = codeFont.measure(
+        "M",
+        codeFontSize,
+        codeFontSpacing
+    )
+    val outputMetrics : Vector2 = codeFont.measure(
+        "M",
+        15.0f,
+        codeFontSpacing
+    )
+    val glyphAdvance : float = glyphWidth(
+        codeFont,
+        codeMetrics,
+        codeFontSize
+    )
+    val lineAdvance : float = lineHeight(
+        codeFont,
+        codeMetrics,
+        codeFontSize
+    )
+    val outputGlyphAdvance : float = glyphWidth(
+        codeFont,
+        outputMetrics,
+        15.0f
+    )
+    val outputLineAdvance : float = lineHeight(
+        codeFont,
+        outputMetrics,
+        15.0f
+    )
+    return new StudioDisplay(
+        move uiFont,
+        move codeFont,
+        glyphAdvance,
+        lineAdvance,
+        outputGlyphAdvance,
+        outputLineAdvance
+    )
+}
+
+def glyphWidth(font : Font, oneGlyph : Vector2, size : float) : float {
+    return font.measure("MM", size, codeFontSpacing).x - oneGlyph.x
+}
+
+def lineHeight(font : Font, oneGlyph : Vector2, size : float) : float {
+    return font.measure("M\nM", size, codeFontSpacing).y - oneGlyph.y
+}
+
+def runStudioSession(
+    app : StudioAppState,
+    ui : StudioUiState,
+    display : StudioDisplay
+) : Unit {
+    while !ui.quitRequested {
+        val frame : StudioFrame = beginStudioFrame(
+            app,
+            display.glyphAdvance,
+            display.lineAdvance,
+            display.outputGlyphAdvance,
+            display.outputLineAdvance
+        )
+        handleFrame(app, ui, frame, display)
+        delete frame
+    }
+}
+
+def handleFrame(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    display : StudioDisplay
+) : Unit {
+    handleLayoutMouse(app, ui, frame, display.uiFont)
+    clampLayoutOffsets(
+        app,
+        ui,
+        frame,
+        display.uiFont,
+        display.glyphAdvance,
+        display.lineAdvance,
+        display.outputGlyphAdvance,
+        display.outputLineAdvance
+    )
+    handleWheelScrolling(app, ui, frame, display.uiFont)
+    handleWorkspaceMouse(
+        app,
+        ui,
+        frame,
+        display.glyphAdvance,
+        display.lineAdvance
+    )
+    handleFileCommands(app, ui, frame)
+    handleEditorCommands(app, ui, frame)
+    synchronizeDocumentState(app, ui, frame)
+    drawStudioFrame(app, ui, frame, display)
+}
+
+def synchronizeDocumentState(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame
+) : Unit {
+    if app.buffer.isModified() { app.tooling.diagnostics.clear() }
+    if app.buffer.size() != frame.bufferSizeBeforeInput { app.search.clear() }
+    if searchModeEnded(app, frame) { app.search.clear() }
+    if cursorMoved(app, frame) || isKeyPressed(Key.Delete) {
+        ui.editorScrollDetached = false
+        ui.horizontalScrollDetached = false
+    }
+    if !ui.editorScrollDetached {
+        ui.firstLine = keepCursorVisible(
+            app.buffer,
+            ui.firstLine,
+            frame.maximumLines
+        )
+    }
+    if !ui.horizontalScrollDetached {
+        ui.firstColumn = keepCursorHorizontallyVisible(
+            app.buffer,
+            ui.firstColumn,
+            frame.visibleColumns
+        )
+    }
+}
+
+def searchModeEnded(app : StudioAppState, frame : StudioFrame) : bool {
+    if app.controller.mode() == frame.editorModeBeforeInput { return false }
+    return app.controller.mode() != EditorMode.Normal ||
+    (frame.editorModeBeforeInput == EditorMode.Search &&
+        isKeyPressed(Key.Escape))
+}
+
+def cursorMoved(app : StudioAppState, frame : StudioFrame) : bool {
+    return app.buffer.line() != frame.cursorLineBeforeInput ||
+    app.buffer.column() != frame.cursorColumnBeforeInput
+}
+
+def drawStudioFrame(
+    app : StudioAppState,
+    ui : StudioUiState,
+    frame : StudioFrame,
+    display : StudioDisplay
+) : Unit {
+    app.controller.appendStatus(app.modeLine)
+    app.controller.appendCommandLine(app.commandLine)
+    drawStudio(
+        app.activePath.view(),
+        app.buffer,
+        app.tabs,
+        app.tabLabel,
+        ui,
+        app.visibleCharacters,
+        app.syntaxSpans,
+        app.glyph,
+        app.tooling.diagnostics,
+        app.tooling.diagnosticText,
+        app.search,
+        app.tooling.completion,
+        app.tooling.completionText,
+        app.tooling.signatureText,
+        app.filePrompt,
+        app.statusLine,
+        app.status,
+        app.tooling.toolOutput,
+        app.modeLine,
+        app.commandLine,
+        app.explorer,
+        frame.visibleExplorerRows,
+        app.explorerLabel,
+        app.controller.mode(),
+        display.uiFont,
+        display.codeFont,
+        display.glyphAdvance,
+        display.lineAdvance,
+        display.outputGlyphAdvance,
+        display.outputLineAdvance,
+        frame.maximumLines
+    )
+}
