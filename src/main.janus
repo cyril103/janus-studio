@@ -7,6 +7,7 @@ import editor.syntax
 import editor.vim
 import studio.files
 import studio.input
+import studio.render
 import studio.state
 import studio.tabs
 import studio.view
