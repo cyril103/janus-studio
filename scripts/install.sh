@@ -4,17 +4,52 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 PREFIX=${JANUS_STUDIO_PREFIX:-"${HOME}/.local"}
+JANUS_BIN=${JANUS:-janus}
+MINIMUM_JANUS_VERSION=0.21.0
 BIN_DIR="$PREFIX/bin"
 LIB_DIR="$PREFIX/lib/janus-studio"
 SHARE_DIR="$PREFIX/share/janus-studio"
 
-if ! command -v janus >/dev/null 2>&1; then
-  echo "janus-studio: la commande janus est nécessaire pour construire l'application" >&2
+if ! command -v "$JANUS_BIN" >/dev/null 2>&1; then
+  echo "janus-studio: compilateur Janus introuvable: $JANUS_BIN" >&2
+  echo "Définissez JANUS=/chemin/vers/janus ou ajoutez-le au PATH." >&2
+  exit 1
+fi
+
+JANUS_VERSION_OUTPUT=$("$JANUS_BIN" --version 2>/dev/null) || {
+  echo "janus-studio: impossible de déterminer la version de $JANUS_BIN" >&2
+  exit 1
+}
+JANUS_VERSION=${JANUS_VERSION_OUTPUT#janus }
+JANUS_VERSION=${JANUS_VERSION%%+*}
+JANUS_VERSION=${JANUS_VERSION%%-*}
+
+version_is_supported() (
+  old_ifs=$IFS
+  IFS=.
+  set -- $1
+  IFS=$old_ifs
+  major=${1:-0}
+  minor=${2:-0}
+  patch=${3:-0}
+
+  case "$major.$minor.$patch" in
+    *[!0-9.]*) return 1 ;;
+  esac
+
+  [ "$major" -gt 0 ] ||
+    { [ "$major" -eq 0 ] && [ "$minor" -gt 21 ]; } ||
+    { [ "$major" -eq 0 ] && [ "$minor" -eq 21 ] && [ "$patch" -ge 0 ]; }
+)
+
+if ! version_is_supported "$JANUS_VERSION"; then
+  echo "janus-studio: Janus $MINIMUM_JANUS_VERSION ou plus récent est requis; version trouvée: $JANUS_VERSION" >&2
+  echo "Définissez JANUS=/chemin/vers/janus-$MINIMUM_JANUS_VERSION ou mettez le PATH à jour." >&2
   exit 1
 fi
 
 cd "$PROJECT_ROOT"
-janus build --release
+"$JANUS_BIN" build --release
 
 EXECUTABLE="$PROJECT_ROOT/target/release/janus-studio"
 if [ ! -x "$EXECUTABLE" ]; then

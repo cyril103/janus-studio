@@ -92,7 +92,10 @@ private def fileContains(result : Result[FileData, SystemError], expected : stri
 }
 
 private def acceptExpectedData(data : FileData, expected : string) : bool {
-    val matches : bool = data.view() == expected
+    val matches : bool = match data.asText() {
+        Ok(text) => text == expected,
+        Error(error) => false
+    }
     delete data
     return matches
 }

@@ -3,19 +3,37 @@ param(
         $env:JANUS_STUDIO_PREFIX
     } else {
         Join-Path $env:LOCALAPPDATA "JanusStudio"
+    }),
+    [string]$Janus = $(if ($env:JANUS) {
+        $env:JANUS
+    } else {
+        "janus"
     })
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 
-if (-not (Get-Command janus -ErrorAction SilentlyContinue)) {
-    throw "La commande janus est nécessaire pour construire Janus Studio."
+if (-not (Get-Command $Janus -ErrorAction SilentlyContinue)) {
+    throw "Compilateur Janus introuvable: $Janus. Utilisez -Janus ou la variable JANUS."
+}
+
+try {
+    $JanusIdentity = (& $Janus --version --json | ConvertFrom-Json)
+    if ($LASTEXITCODE -ne 0) { throw "commande en échec" }
+    $JanusVersion = [version]$JanusIdentity.version
+} catch {
+    throw "Impossible de déterminer la version de $Janus."
+}
+
+$MinimumJanusVersion = [version]"0.21.0"
+if ($JanusVersion -lt $MinimumJanusVersion) {
+    throw "Janus $MinimumJanusVersion ou plus récent est requis; version trouvée: $JanusVersion. Utilisez -Janus ou la variable JANUS."
 }
 
 Push-Location $ProjectRoot
 try {
-    & janus build --release
+    & $Janus build --release
     if ($LASTEXITCODE -ne 0) { throw "La construction de Janus Studio a échoué." }
 } finally {
     Pop-Location

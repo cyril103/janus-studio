@@ -244,17 +244,34 @@ def setStatus(status : TextBuilder, message : string) : Unit {
     status.append(message)
 }
 
+private def acceptDecodedFile(
+text : string,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    buffer.load(text)
+    buffer.trackDiskContent(text)
+    buffer.moveFileStart()
+    setStatus(status, "Fichier chargé.")
+    return true
+}
+
+private def rejectInvalidTextFile(status : TextBuilder) : bool {
+    setStatus(status, "Impossible d'ouvrir ce fichier : UTF-8 invalide.")
+    return false
+}
+
 def acceptFile(
 data : FileData,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
-    buffer.load(data.view())
-    buffer.trackDiskContent(data.view())
-    buffer.moveFileStart()
+    val accepted : bool = match data.asText() {
+        Ok(text) => acceptDecodedFile(text, buffer, status),
+        Error(error) => rejectInvalidTextFile(status)
+    }
     delete data
-    setStatus(status, "Fichier chargé.")
-    return true
+    return accepted
 }
 
 def startEmptyFile(
@@ -333,13 +350,12 @@ status : TextBuilder
     }
 }
 
-private def acceptUnchangedFile(
-data : FileData,
+private def acceptUnchangedText(
+text : string,
 buffer : EditorBuffer,
 status : TextBuilder
 ) : bool {
-    val unchanged : bool = buffer.diskContentMatches(data.view())
-    delete data
+    val unchanged : bool = buffer.diskContentMatches(text)
     if !unchanged {
         setStatus(status, "Le fichier a été modifié sur le disque ; enregistrement refusé.")
     }
@@ -349,6 +365,19 @@ status : TextBuilder
 private def reportUnverifiableFile(status : TextBuilder) : bool {
     setStatus(status, "Impossible de vérifier le fichier avant enregistrement.")
     return false
+}
+
+private def acceptUnchangedFile(
+data : FileData,
+buffer : EditorBuffer,
+status : TextBuilder
+) : bool {
+    val unchanged : bool = match data.asText() {
+        Ok(text) => acceptUnchangedText(text, buffer, status),
+        Error(error) => reportUnverifiableFile(status)
+    }
+    delete data
+    return unchanged
 }
 
 private def currentDiskContentMatches(

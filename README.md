@@ -44,7 +44,7 @@ Cette première version fournit :
 
 ## Prérequis
 
-- Janus 0.18.0 ou plus récent, avec `janus-lsp` ;
+- Janus 0.21.0 ou plus récent, avec `janus-lsp` ;
 - raylib 6 disponible pour l'exécution de l'interface graphique.
 
 Le compilateur peut construire l'application sans raylib. Le backend graphique
@@ -75,10 +75,21 @@ Le préfixe peut être personnalisé avec `JANUS_STUDIO_PREFIX`. Sous Windows,
 l'équivalent PowerShell installe l'application dans
 `%LOCALAPPDATA%\JanusStudio` et ajoute son dossier `bin` au `PATH` utilisateur :
 
+Si plusieurs versions de Janus sont installées, `JANUS` permet de choisir le
+compilateur sans modifier le `PATH` :
+
+```bash
+JANUS=/chemin/vers/janus ./scripts/install.sh
+```
+
 ```powershell
+$env:JANUS = "C:\chemin\vers\janus.exe"
 .\scripts\install.ps1
 janus-studio C:\chemin\vers\un-projet
 ```
+
+Sous PowerShell, le même chemin peut aussi être fourni avec le paramètre
+`-Janus`.
 
 Pour désinstaller uniquement les fichiers créés par ces scripts :
 
