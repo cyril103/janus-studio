@@ -5,6 +5,7 @@ module editor.buffer
 
 import text.utf8
 import std.array
+import std.deque
 import std.text
 
 const historyLimit : usize = usize(100)
@@ -82,8 +83,8 @@ private val documentRevision : usize
 
 class BufferArchive(
 private val characters : Array[char],
-private val undoStates : Array[BufferSnapshot],
-private val redoStates : Array[BufferSnapshot],
+private val undoStates : Deque[BufferSnapshot],
+private val redoStates : Deque[BufferSnapshot],
 private val cursorPosition : usize,
 private val currentRevision : usize,
 private val savedRevision : usize,
@@ -112,15 +113,15 @@ private val tracksDiskContent : bool
     borrow def trackedDiskFingerprint() : usize { return diskFingerprint }
     borrow def hasTrackedDiskContent() : bool { return tracksDiskContent }
 
-    def moveUndoStates(output : Array[BufferSnapshot]) : Unit {
+    def moveUndoStates(output : Deque[BufferSnapshot]) : Unit {
         while !undoStates.isEmpty() {
-            output.push(undoStates.remove(usize(0)))
+            output.pushBack(undoStates.popFront())
         }
     }
 
-    def moveRedoStates(output : Array[BufferSnapshot]) : Unit {
+    def moveRedoStates(output : Deque[BufferSnapshot]) : Unit {
         while !redoStates.isEmpty() {
-            output.push(redoStates.remove(usize(0)))
+            output.pushBack(redoStates.popFront())
         }
     }
 
@@ -131,36 +132,32 @@ private val tracksDiskContent : bool
     }
 }
 
-private def copySnapshotArray(
-source : Array[BufferSnapshot],
-output : Array[BufferSnapshot]
+private def copySnapshotDeque(
+source : Deque[BufferSnapshot],
+output : Deque[BufferSnapshot]
 ) : Unit {
-    val retained : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
-    defer delete retained
-    while !source.isEmpty() {
-        val state : BufferSnapshot = source.remove(usize(0))
-        output.push(state.copy())
-        retained.push(move state)
-    }
-    while !retained.isEmpty() {
-        source.push(retained.remove(usize(0)))
+    val count : usize = source.size()
+    var index : usize = usize(0)
+    while index < count {
+        val state : BufferSnapshot = source.popFront()
+        output.pushBack(state.copy())
+        source.pushBack(move state)
+        index = index + usize(1)
     }
 }
 
-private def trimSnapshotArray(states : Array[BufferSnapshot]) : Unit {
+private def trimSnapshotDeque(states : Deque[BufferSnapshot]) : Unit {
     var characters : usize = usize(0)
-    val retained : Array[BufferSnapshot] = new Array[BufferSnapshot](states.size())
-    defer delete retained
-    while !states.isEmpty() {
-        val state : BufferSnapshot = states.remove(usize(0))
+    val count : usize = states.size()
+    var index : usize = usize(0)
+    while index < count {
+        val state : BufferSnapshot = states.popFront()
         characters = characters + state.size()
-        retained.push(move state)
-    }
-    while !retained.isEmpty() {
-        states.push(retained.remove(usize(0)))
+        states.pushBack(move state)
+        index = index + usize(1)
     }
     while characters > historyCharacterLimit && states.size() > usize(1) {
-        val oldest : BufferSnapshot = states.remove(usize(0))
+        val oldest : BufferSnapshot = states.popFront()
         characters = characters - oldest.size()
         delete oldest
     }
@@ -169,8 +166,8 @@ private def trimSnapshotArray(states : Array[BufferSnapshot]) : Unit {
 def emptyBufferArchive() : BufferArchive {
     return new BufferArchive(
     new Array[char](usize(0)),
-    new Array[BufferSnapshot](usize(0)),
-    new Array[BufferSnapshot](usize(0)),
+    new Deque[BufferSnapshot](usize(1)),
+    new Deque[BufferSnapshot](usize(1)),
     usize(0),
     usize(0),
     usize(0),
@@ -185,8 +182,8 @@ def emptyBufferArchive() : BufferArchive {
 
 class EditorBuffer(
 private val characters : Array[char],
-private val undoStates : Array[BufferSnapshot],
-private val redoStates : Array[BufferSnapshot]
+private val undoStates : Deque[BufferSnapshot],
+private val redoStates : Deque[BufferSnapshot]
 ) {
     private var cursorPosition : usize = usize(0)
     private var currentRevision : usize = usize(0)
@@ -199,10 +196,11 @@ private val redoStates : Array[BufferSnapshot]
     private var tracksDiskContent : bool = false
 
     private def copySnapshots(
-    source : Array[BufferSnapshot]
-    ) : Array[BufferSnapshot] {
-        val copied : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
-        copySnapshotArray(source, copied)
+    source : Deque[BufferSnapshot]
+    ) : Deque[BufferSnapshot] {
+        val copied : Deque[BufferSnapshot] =
+        new Deque[BufferSnapshot](source.size())
+        copySnapshotDeque(source, copied)
         return move copied
     }
 
@@ -312,12 +310,12 @@ private val redoStates : Array[BufferSnapshot]
 
     private def rememberChange() : Unit {
         val state : BufferSnapshot = this.snapshot()
-        undoStates.push(move state)
+        undoStates.pushBack(move state)
         if undoStates.size() > historyLimit {
-            val oldest : BufferSnapshot = undoStates.remove(usize(0))
+            val oldest : BufferSnapshot = undoStates.popFront()
             delete oldest
         }
-        trimSnapshotArray(undoStates)
+        trimSnapshotDeque(undoStates)
         redoStates.clear()
         currentRevision = nextRevision
         nextRevision = nextRevision + usize(1)
@@ -420,11 +418,9 @@ private val redoStates : Array[BufferSnapshot]
             return false
         }
         val current : BufferSnapshot = this.snapshot()
-        redoStates.push(move current)
-        trimSnapshotArray(redoStates)
-        val previous : BufferSnapshot = undoStates.remove(
-        undoStates.size() - usize(1)
-        )
+        redoStates.pushBack(move current)
+        trimSnapshotDeque(redoStates)
+        val previous : BufferSnapshot = undoStates.popBack()
         this.restore(move previous)
         return true
     }
@@ -434,11 +430,9 @@ private val redoStates : Array[BufferSnapshot]
             return false
         }
         val current : BufferSnapshot = this.snapshot()
-        undoStates.push(move current)
-        trimSnapshotArray(undoStates)
-        val next : BufferSnapshot = redoStates.remove(
-        redoStates.size() - usize(1)
-        )
+        undoStates.pushBack(move current)
+        trimSnapshotDeque(undoStates)
+        val next : BufferSnapshot = redoStates.popBack()
         this.restore(move next)
         return true
     }
@@ -1107,7 +1101,7 @@ private val redoStates : Array[BufferSnapshot]
 def emptyBuffer() : EditorBuffer {
     return new EditorBuffer(
     new Array[char](usize(256)),
-    new Array[BufferSnapshot](usize(32)),
-    new Array[BufferSnapshot](usize(32))
+    new Deque[BufferSnapshot](usize(32)),
+    new Deque[BufferSnapshot](usize(32))
     )
 }
