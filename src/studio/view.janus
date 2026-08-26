@@ -966,28 +966,36 @@ def drawRoundedOutline(
 }
 
 def syntaxColor(kind : SyntaxKind) : Color {
-    if kind == SyntaxKind.Keyword {
-        return rgb(198, 160, 246)
+    if kind == SyntaxKind.Namespace || kind == SyntaxKind.Type ||
+    kind == SyntaxKind.Class {
+        return rgb(78, 201, 176)
     }
-    if kind == SyntaxKind.Type {
-        return rgb(126, 200, 227)
+    if kind == SyntaxKind.Enum || kind == SyntaxKind.Interface {
+        return rgb(184, 215, 163)
+    }
+    if kind == SyntaxKind.Function || kind == SyntaxKind.Method {
+        return rgb(220, 220, 170)
+    }
+    if kind == SyntaxKind.Variable || kind == SyntaxKind.Parameter ||
+    kind == SyntaxKind.Property {
+        return rgb(156, 220, 254)
+    }
+    if kind == SyntaxKind.Keyword {
+        return rgb(197, 134, 192)
     }
     if kind == SyntaxKind.String {
-        return rgb(166, 218, 149)
-    }
-    if kind == SyntaxKind.Character {
-        return rgb(139, 213, 202)
+        return rgb(206, 145, 120)
     }
     if kind == SyntaxKind.Number {
-        return rgb(245, 194, 231)
+        return rgb(181, 206, 168)
     }
     if kind == SyntaxKind.Comment {
-        return rgb(108, 117, 145)
+        return rgb(106, 153, 85)
     }
     if kind == SyntaxKind.Operator {
-        return rgb(238, 212, 159)
+        return rgb(212, 212, 212)
     }
-    return rgb(205, 214, 244)
+    return rgb(212, 212, 212)
 }
 
 def modeColor(mode : EditorMode) : Color {

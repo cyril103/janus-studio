@@ -6,10 +6,18 @@ import std.text
 
 enum SyntaxKind derives Copy, Equality, Debug {
     Plain,
-    Keyword,
+    Namespace,
     Type,
+    Class,
+    Enum,
+    Interface,
+    Function,
+    Method,
+    Variable,
+    Parameter,
+    Property,
+    Keyword,
     String,
-    Character,
     Number,
     Comment,
     Operator
@@ -116,6 +124,81 @@ def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
     identifierEquals(source, start, end, "Array")
 }
 
+def previousNonWhitespace(source : Array[char], start : usize) : usize {
+    var index : usize = start
+    while index > usize(0) {
+        index = index - usize(1)
+        val value : char = source.get(index)
+        if value != ' ' && value != '\t' && value != '\r' {
+            return index
+        }
+    }
+    return usize(-1)
+}
+
+def nextNonWhitespace(source : Array[char], end : usize) : usize {
+    var index : usize = end
+    while index < source.size() {
+        val value : char = source.get(index)
+        if value != ' ' && value != '\t' && value != '\r' {
+            return index
+        }
+        index = index + usize(1)
+    }
+    return usize(-1)
+}
+
+def previousIdentifierEquals(
+    source : Array[char],
+    start : usize,
+    expected : string
+) : bool {
+    val previous : usize = previousNonWhitespace(source, start)
+    if previous == usize(-1) || !isIdentifierPart(source.get(previous)) {
+        return false
+    }
+    var wordStart : usize = previous
+    while wordStart > usize(0) && isIdentifierPart(
+        source.get(wordStart - usize(1))
+    ) {
+        wordStart = wordStart - usize(1)
+    }
+    return identifierEquals(source, wordStart, previous + usize(1), expected)
+}
+
+def lineStartsWith(
+    source : Array[char],
+    start : usize,
+    expected : string
+) : bool {
+    var lineStart : usize = start
+    while lineStart > usize(0) && source.get(lineStart - usize(1)) != '\n' {
+        lineStart = lineStart - usize(1)
+    }
+    while lineStart < start &&
+    (source.get(lineStart) == ' ' || source.get(lineStart) == '\t') {
+        lineStart = lineStart + usize(1)
+    }
+    val end : usize = lineStart + stringLength(expected)
+    return end <= start && identifierEquals(source, lineStart, end, expected) &&
+    (end == source.size() || !isIdentifierPart(source.get(end)))
+}
+
+def isNamespacePosition(source : Array[char], start : usize) : bool {
+    return lineStartsWith(source, start, "module") ||
+    lineStartsWith(source, start, "import")
+}
+
+def followsDot(source : Array[char], start : usize) : bool {
+    val previous : usize = previousNonWhitespace(source, start)
+    return previous != usize(-1) && source.get(previous) == '.'
+}
+
+def isCallablePosition(source : Array[char], end : usize) : bool {
+    val next : usize = nextNonWhitespace(source, end)
+    return next != usize(-1) && source.get(next) == '('
+}
+
 def identifierKind(
     source : Array[char],
     start : usize,
@@ -124,9 +207,33 @@ def identifierKind(
     if isKeyword(source, start, end) {
         return SyntaxKind.Keyword
     }
+    if previousIdentifierEquals(source, start, "class") {
+        return SyntaxKind.Class
+    }
+    if previousIdentifierEquals(source, start, "enum") {
+        return SyntaxKind.Enum
+    }
+    if previousIdentifierEquals(source, start, "trait") {
+        return SyntaxKind.Interface
+    }
+    if isNamespacePosition(source, start) {
+        return SyntaxKind.Namespace
+    }
     if isBuiltinType(source, start, end) ||
     (source.get(start) >= 'A' && source.get(start) <= 'Z') {
         return SyntaxKind.Type
+    }
+    if isCallablePosition(source, end) {
+        return if followsDot(source, start) {
+            SyntaxKind.Method
+        } else {
+            SyntaxKind.Function
+        }
+    }
+    if followsDot(source, start) { return SyntaxKind.Property }
+    if previousIdentifierEquals(source, start, "val") ||
+    previousIdentifierEquals(source, start, "var") {
+        return SyntaxKind.Variable
     }
     return SyntaxKind.Plain
 }
@@ -177,7 +284,7 @@ def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
                 output,
                 start,
                 index,
-                if delimiter == '"' { SyntaxKind.String } else { SyntaxKind.Character }
+                SyntaxKind.String
             )
         } else if value >= '0' && value <= '9' {
             index = index + usize(1)

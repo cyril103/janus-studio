@@ -25,7 +25,7 @@ def highlightsJanusTokens() : Unit {
     highlightedSource("val answer : int = 42 // note\n\"text\"", characters, spans)
 
     assertEqual[SyntaxKind](syntaxKindAt(spans, usize(0)), SyntaxKind.Keyword)
-    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(4)), SyntaxKind.Plain)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(4)), SyntaxKind.Variable)
     assertEqual[SyntaxKind](syntaxKindAt(spans, usize(13)), SyntaxKind.Type)
     assertEqual[SyntaxKind](syntaxKindAt(spans, usize(17)), SyntaxKind.Operator)
     assertEqual[SyntaxKind](syntaxKindAt(spans, usize(19)), SyntaxKind.Number)
@@ -53,7 +53,27 @@ def highlightsCharacterAndGenericTypes() : Unit {
     defer delete spans
     highlightedSource("'x' Array[char]", characters, spans)
 
-    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(0)), SyntaxKind.Character)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(0)), SyntaxKind.String)
     assertEqual[SyntaxKind](syntaxKindAt(spans, usize(4)), SyntaxKind.Type)
     assertEqual[SyntaxKind](syntaxKindAt(spans, usize(10)), SyntaxKind.Type)
+}
+
+/// @test
+def distinguishesSymbolsLikeVsCode() : Unit {
+    val characters : Array[char] = new Array[char](usize(128))
+    defer delete characters
+    val spans : Array[SyntaxSpan] = new Array[SyntaxSpan](usize(64))
+    defer delete spans
+    highlightedSource(
+        "import studio.view\nclass Editor {\ndef render() { app.buffer.clear() }\n}",
+        characters,
+        spans
+    )
+
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(7)), SyntaxKind.Namespace)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(14)), SyntaxKind.Namespace)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(25)), SyntaxKind.Class)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(38)), SyntaxKind.Function)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(53)), SyntaxKind.Property)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(60)), SyntaxKind.Method)
 }
