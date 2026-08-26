@@ -4,6 +4,7 @@ module tooling.lsp
 import editor.buffer
 import tooling.json
 import std.array
+import std.bytes
 import std.io
 import std.option
 import std.path
@@ -242,6 +243,75 @@ private enum PendingResponse derives Copy, Equality, Debug {
     Initialize,
     Completion,
     Signature
+}
+
+private struct LspFrameCopy(
+val state : int,
+val end : usize
+) derives Copy, Equality, Debug {}
+
+private def appendByteRange(
+borrow source : ByteView,
+start : usize,
+end : usize,
+output : ByteBuffer
+) : bool {
+    var index : usize = start
+    while index < end {
+        if !output.appendByte(source.get(index)) { return false }
+        index = index + usize(1)
+    }
+    return true
+}
+
+private def availableFrameBoundary(
+borrow source : ByteView,
+start : usize
+) : usize {
+    var index : usize = start
+    while index + usize(3) < source.size() {
+        if source.get(index) == byte(13) &&
+        source.get(index + usize(1)) == byte(10) &&
+        source.get(index + usize(2)) == byte(13) &&
+        source.get(index + usize(3)) == byte(10) {
+            return index + usize(4)
+        }
+        index = index + usize(1)
+    }
+    return usize(-1)
+}
+
+private def copyAvailableLspFrame(
+borrow source : ByteView,
+start : usize,
+header : TextBuilder,
+response : ByteBuffer,
+error : TextBuilder
+) : LspFrameCopy {
+    val bodyStart : usize = availableFrameBoundary(source, start)
+    if bodyStart == usize(-1) { return new LspFrameCopy(0, start) }
+    header.clear()
+    var headerIndex : usize = start
+    while headerIndex < bodyStart {
+        header.appendChar(char(source.get(headerIndex)))
+        headerIndex = headerIndex + usize(1)
+    }
+    val length : usize = parseContentLength(header.view())
+    if length == usize(0) {
+        error.clear()
+        error.append("Réponse LSP invalide.")
+        return new LspFrameCopy(-1, start)
+    }
+    if bodyStart + length > source.size() {
+        return new LspFrameCopy(0, start)
+    }
+    response.clear()
+    if !appendByteRange(source, bodyStart, bodyStart + length, response) {
+        error.clear()
+        error.append("Mémoire insuffisante pour décoder la réponse LSP.")
+        return new LspFrameCopy(-1, start)
+    }
+    return new LspFrameCopy(1, bodyStart + length)
 }
 
 private def appendFileUri(path : string, output : TextBuilder) : Unit {
@@ -514,13 +584,24 @@ private val responseJson : TextBuilder
         if incomingStart == usize(0) { return true }
         val compacted : ByteBuffer = new ByteBuffer(incoming.size() - incomingStart)
         defer delete compacted
-        var index : usize = incomingStart
-        while index < incoming.size() {
-            if !compacted.appendByte(incoming.data().load(index)) { return false }
-            index = index + usize(1)
-        }
+        val start : usize = incomingStart
+        val copied : bool = incoming.withView[bool](
+        (borrow view : ByteView) => appendByteRange(
+        view,
+        start,
+        view.size(),
+        compacted
+        ))
+        if !copied { return false }
         incoming.clear()
-        if !incoming.append(compacted.data(), compacted.size()) { return false }
+        val restored : bool = compacted.withView[bool](
+        (borrow view : ByteView) => appendByteRange(
+        view,
+        usize(0),
+        view.size(),
+        incoming
+        ))
+        if !restored { return false }
         incomingStart = usize(0)
         return true
     }
@@ -549,53 +630,23 @@ private val responseJson : TextBuilder
         return true
     }
 
-    private def headerBoundary() : usize {
-        borrow val data : Ptr[byte] = incoming.data()
-        var index : usize = incomingStart
-        while index + usize(3) < incoming.size() {
-            if data.load(index) == byte(13) &&
-            data.load(index + usize(1)) == byte(10) &&
-            data.load(index + usize(2)) == byte(13) &&
-            data.load(index + usize(3)) == byte(10) {
-                return index + usize(4)
-            }
-            index = index + usize(1)
-        }
-        return usize(-1)
-    }
-
     private def copyAvailableMessage(error : TextBuilder) : int {
-        val bodyStart : usize = this.headerBoundary()
-        if bodyStart == usize(-1) { return 0 }
-        header.clear()
-        var headerIndex : usize = incomingStart
-        while headerIndex < bodyStart {
-            header.appendChar(char(incoming.data().load(headerIndex)))
-            headerIndex = headerIndex + usize(1)
-        }
-        val length : usize = parseContentLength(header.view())
-        if length == usize(0) {
-            error.clear()
-            error.append("Réponse LSP invalide.")
-            return -1
-        }
-        if bodyStart + length > incoming.size() { return 0 }
-        response.clear()
-        var bodyIndex : usize = usize(0)
-        while bodyIndex < length {
-            if !response.appendByte(incoming.data().load(bodyStart + bodyIndex)) {
-                error.clear()
-                error.append("Mémoire insuffisante pour décoder la réponse LSP.")
-                return -1
-            }
-            bodyIndex = bodyIndex + usize(1)
-        }
-        incomingStart = bodyStart + length
+        val start : usize = incomingStart
+        val frame : LspFrameCopy = incoming.withView[LspFrameCopy](
+        (borrow view : ByteView) => copyAvailableLspFrame(
+        view,
+        start,
+        header,
+        response,
+        error
+        ))
+        if frame.state != 1 { return frame.state }
+        incomingStart = frame.end
         if incomingStart == incoming.size() {
             incoming.clear()
             incomingStart = usize(0)
         }
-        return 1
+        return frame.state
     }
 
     private def pollPendingResponse(error : TextBuilder) : int {
