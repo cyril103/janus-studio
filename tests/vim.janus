@@ -84,8 +84,8 @@ def pastesDeletedAndYankedLines() : Unit {
     output.clear()
     buffer.appendText(output)
     assertEqual[string](
-    output.view(),
-    "second\nsecond\nsecond\nfirst\nthird"
+        output.view(),
+        "second\nsecond\nsecond\nfirst\nthird"
     )
 }
 
@@ -111,8 +111,8 @@ def parsesColonCommands() : Unit {
     controller.appendCommandLine(commandLine)
     assertEqual[string](commandLine.view(), ":wq")
     assertEqual[EditorAction](
-    controller.executeCommand(),
-    EditorAction.SaveAndQuit
+        controller.executeCommand(),
+        EditorAction.SaveAndQuit
     )
     assertEqual[EditorMode](controller.mode(), EditorMode.Normal)
     controller.appendCommandLine(commandLine)
@@ -142,11 +142,11 @@ def entersSearchFromNormalMode() : Unit {
     assertEqual[EditorAction](controller.executeSearch(), EditorAction.Search)
     assertEqual[EditorMode](controller.mode(), EditorMode.Normal)
     assertEqual[EditorAction](
-    controller.handleNormal('n', buffer),
-    EditorAction.SearchNext
+        controller.handleNormal('n', buffer),
+        EditorAction.SearchNext
     )
     assertEqual[EditorAction](
-    controller.handleNormal('N', buffer),
-    EditorAction.SearchPrevious
+        controller.handleNormal('N', buffer),
+        EditorAction.SearchPrevious
     )
 }
