@@ -41,9 +41,9 @@ private def contentFingerprint(text : string) : usize {
 }
 
 class BufferSnapshot(
-private val characters : Array[char],
-private val cursorPosition : usize,
-private val documentRevision : usize
+    private val characters : Array[char],
+    private val cursorPosition : usize,
+    private val documentRevision : usize
 ) {
     borrow def size() : usize {
         return characters.size()
@@ -69,9 +69,9 @@ private val documentRevision : usize
             index = index + usize(1)
         }
         return new BufferSnapshot(
-        move copied,
-        cursorPosition,
-        documentRevision
+            move copied,
+            cursorPosition,
+            documentRevision
         )
     }
 
@@ -81,18 +81,18 @@ private val documentRevision : usize
 }
 
 class BufferArchive(
-private val characters : Array[char],
-private val undoStates : Array[BufferSnapshot],
-private val redoStates : Array[BufferSnapshot],
-private val cursorPosition : usize,
-private val currentRevision : usize,
-private val savedRevision : usize,
-private val nextRevision : usize,
-private val selectionAnchor : usize,
-private val selecting : bool,
-private val diskSize : usize,
-private val diskFingerprint : usize,
-private val tracksDiskContent : bool
+    private val characters : Array[char],
+    private val undoStates : Array[BufferSnapshot],
+    private val redoStates : Array[BufferSnapshot],
+    private val cursorPosition : usize,
+    private val currentRevision : usize,
+    private val savedRevision : usize,
+    private val nextRevision : usize,
+    private val selectionAnchor : usize,
+    private val selecting : bool,
+    private val diskSize : usize,
+    private val diskFingerprint : usize,
+    private val tracksDiskContent : bool
 ) {
     borrow def appendCharacters(output : Array[char]) : Unit {
         var index : usize = usize(0)
@@ -132,8 +132,8 @@ private val tracksDiskContent : bool
 }
 
 private def copySnapshotArray(
-source : Array[BufferSnapshot],
-output : Array[BufferSnapshot]
+    source : Array[BufferSnapshot],
+    output : Array[BufferSnapshot]
 ) : Unit {
     val retained : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
     defer delete retained
@@ -168,25 +168,25 @@ private def trimSnapshotArray(states : Array[BufferSnapshot]) : Unit {
 
 def emptyBufferArchive() : BufferArchive {
     return new BufferArchive(
-    new Array[char](usize(0)),
-    new Array[BufferSnapshot](usize(0)),
-    new Array[BufferSnapshot](usize(0)),
-    usize(0),
-    usize(0),
-    usize(0),
-    usize(1),
-    usize(0),
-    false,
-    usize(0),
-    usize(0),
-    false
+        new Array[char](usize(0)),
+        new Array[BufferSnapshot](usize(0)),
+        new Array[BufferSnapshot](usize(0)),
+        usize(0),
+        usize(0),
+        usize(0),
+        usize(1),
+        usize(0),
+        false,
+        usize(0),
+        usize(0),
+        false
     )
 }
 
 class EditorBuffer(
-private val characters : Array[char],
-private val undoStates : Array[BufferSnapshot],
-private val redoStates : Array[BufferSnapshot]
+    private val characters : Array[char],
+    private val undoStates : Array[BufferSnapshot],
+    private val redoStates : Array[BufferSnapshot]
 ) {
     private var cursorPosition : usize = usize(0)
     private var currentRevision : usize = usize(0)
@@ -199,7 +199,7 @@ private val redoStates : Array[BufferSnapshot]
     private var tracksDiskContent : bool = false
 
     private def copySnapshots(
-    source : Array[BufferSnapshot]
+        source : Array[BufferSnapshot]
     ) : Array[BufferSnapshot] {
         val copied : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
         copySnapshotArray(source, copied)
@@ -214,18 +214,18 @@ private val redoStates : Array[BufferSnapshot]
             index = index + usize(1)
         }
         return new BufferArchive(
-        move copiedCharacters,
-        this.copySnapshots(undoStates),
-        this.copySnapshots(redoStates),
-        cursorPosition,
-        currentRevision,
-        savedRevision,
-        nextRevision,
-        selectionAnchor,
-        selecting,
-        diskSize,
-        diskFingerprint,
-        tracksDiskContent
+            move copiedCharacters,
+            this.copySnapshots(undoStates),
+            this.copySnapshots(redoStates),
+            cursorPosition,
+            currentRevision,
+            savedRevision,
+            nextRevision,
+            selectionAnchor,
+            selecting,
+            diskSize,
+            diskFingerprint,
+            tracksDiskContent
         )
     }
 
@@ -339,8 +339,8 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     private def insertCharactersAt(
-    position : usize,
-    borrow inserted : Array[char]
+        position : usize,
+        borrow inserted : Array[char]
     ) : Unit {
         if inserted.isEmpty() { return }
         val previousSize : usize = characters.size()
@@ -423,7 +423,7 @@ private val redoStates : Array[BufferSnapshot]
         redoStates.push(move current)
         trimSnapshotArray(redoStates)
         val previous : BufferSnapshot = undoStates.remove(
-        undoStates.size() - usize(1)
+            undoStates.size() - usize(1)
         )
         this.restore(move previous)
         return true
@@ -437,7 +437,7 @@ private val redoStates : Array[BufferSnapshot]
         undoStates.push(move current)
         trimSnapshotArray(undoStates)
         val next : BufferSnapshot = redoStates.remove(
-        redoStates.size() - usize(1)
+            redoStates.size() - usize(1)
         )
         this.restore(move next)
         return true
@@ -564,7 +564,7 @@ private val redoStates : Array[BufferSnapshot]
         var indentation : usize = usize(0)
         while start + indentation < cursorPosition &&
         (characters.get(start + indentation) == ' ' ||
-        characters.get(start + indentation) == '\t') {
+            characters.get(start + indentation) == '\t') {
             indentation = indentation + usize(1)
         }
         val afterOpening : bool = cursorPosition > usize(0) &&
@@ -595,8 +595,8 @@ private val redoStates : Array[BufferSnapshot]
             index = usize(0)
             while index < indentation {
                 this.insertAt(
-                contentCursor + usize(1) + index,
-                characters.get(start + index)
+                    contentCursor + usize(1) + index,
+                    characters.get(start + index)
                 )
                 index = index + usize(1)
             }
@@ -1047,9 +1047,9 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     borrow def appendVisibleText(
-    output : TextBuilder,
-    firstLine : usize,
-    maximumLines : usize
+        output : TextBuilder,
+        firstLine : usize,
+        maximumLines : usize
     ) : Unit {
         var index : usize = usize(0)
         var lineIndex : usize = usize(0)
@@ -1072,9 +1072,9 @@ private val redoStates : Array[BufferSnapshot]
     }
 
     borrow def appendVisibleCharacters(
-    output : Array[char],
-    firstLine : usize,
-    maximumLines : usize
+        output : Array[char],
+        firstLine : usize,
+        maximumLines : usize
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -1106,8 +1106,8 @@ private val redoStates : Array[BufferSnapshot]
 
 def emptyBuffer() : EditorBuffer {
     return new EditorBuffer(
-    new Array[char](usize(256)),
-    new Array[BufferSnapshot](usize(32)),
-    new Array[BufferSnapshot](usize(32))
+        new Array[char](usize(256)),
+        new Array[BufferSnapshot](usize(32)),
+        new Array[BufferSnapshot](usize(32))
     )
 }

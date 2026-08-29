@@ -8,18 +8,18 @@ import std.array
 import std.text
 
 private struct DocumentState(
-val pathStart : usize,
-val pathLength : usize,
-val modified : bool,
-val firstLine : usize,
-val firstColumn : usize
+    val pathStart : usize,
+    val pathLength : usize,
+    val modified : bool,
+    val firstLine : usize,
+    val firstColumn : usize
 ) derives Copy, Equality, Debug {}
 
 class DocumentTabs(
-private val states : Array[DocumentState],
-private val archives : Array[BufferArchive],
-private val paths : Array[char],
-private val scratch : TextBuilder
+    private val states : Array[DocumentState],
+    private val archives : Array[BufferArchive],
+    private val paths : Array[char],
+    private val scratch : TextBuilder
 ) {
     private var active : usize = usize(0)
 
@@ -27,10 +27,10 @@ private val scratch : TextBuilder
     borrow def selected() : usize { return active }
 
     private borrow def appendRange(
-    borrow source : Array[char],
-    start : usize,
-    length : usize,
-    output : TextBuilder
+        borrow source : Array[char],
+        start : usize,
+        length : usize,
+        output : TextBuilder
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -44,11 +44,11 @@ private val scratch : TextBuilder
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8Characters(path, usize(0), paths)
         return new DocumentState(
-        pathStart,
-        pathLength,
-        false,
-        usize(0),
-        usize(0)
+            pathStart,
+            pathLength,
+            false,
+            usize(0),
+            usize(0)
         )
     }
 
@@ -75,11 +75,11 @@ private val scratch : TextBuilder
                 pathIndex = pathIndex + usize(1)
             }
             states.set(stateIndex, new DocumentState(
-            nextStart,
-            previous.pathLength,
-            previous.modified,
-            previous.firstLine,
-            previous.firstColumn
+                nextStart,
+                previous.pathLength,
+                previous.modified,
+                previous.firstLine,
+                previous.firstColumn
             ))
             stateIndex = stateIndex + usize(1)
         }
@@ -108,36 +108,36 @@ private val scratch : TextBuilder
     }
 
     private def snapshot(
-    buffer : EditorBuffer,
-    firstLine : usize,
-    firstColumn : usize
+        buffer : EditorBuffer,
+        firstLine : usize,
+        firstColumn : usize
     ) : Unit {
         val previous : DocumentState = states.get(active)
         states.set(active, new DocumentState(
-        previous.pathStart,
-        previous.pathLength,
-        buffer.isModified(),
-        firstLine,
-        firstColumn
+            previous.pathStart,
+            previous.pathLength,
+            buffer.isModified(),
+            firstLine,
+            firstColumn
         ))
         archives.set(active, buffer.archive())
     }
 
     private def restoreActive(
-    buffer : EditorBuffer,
-    activePath : TextBuilder
+        buffer : EditorBuffer,
+        activePath : TextBuilder
     ) : Unit {
         val state : DocumentState = states.get(active)
         val requestedArchive : BufferArchive = archives.replace(
-        active,
-        emptyBufferArchive()
+            active,
+            emptyBufferArchive()
         )
         buffer.restoreArchive(move requestedArchive)
         this.appendRange(
-        paths,
-        state.pathStart,
-        state.pathLength,
-        activePath
+            paths,
+            state.pathStart,
+            state.pathLength,
+            activePath
         )
     }
 
@@ -200,11 +200,11 @@ private val scratch : TextBuilder
     }
 
     def switchTo(
-    index : usize,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize
+        index : usize,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize
     ) : bool {
         if index >= states.size() || index == active { return false }
         this.snapshot(buffer, firstLine, firstColumn)
@@ -214,12 +214,12 @@ private val scratch : TextBuilder
     }
 
     def open(
-    path : string,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    status : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize
+        path : string,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        status : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize
     ) : bool {
         val existing : usize = this.find(path)
         if existing != usize(-1) {
@@ -229,11 +229,11 @@ private val scratch : TextBuilder
                 return true
             }
             val changed : bool = this.switchTo(
-            existing,
-            buffer,
-            activePath,
-            firstLine,
-            firstColumn
+                existing,
+                buffer,
+                activePath,
+                firstLine,
+                firstColumn
             )
             setStatus(status, "Onglet activé.")
             return changed
@@ -259,12 +259,12 @@ private val scratch : TextBuilder
     }
 
     def create(
-    path : string,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize,
-    status : TextBuilder
+        path : string,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize,
+        status : TextBuilder
     ) : bool {
         if this.find(path) != usize(-1) {
             setStatus(status, "Ce fichier est déjà ouvert dans un onglet.")
@@ -288,23 +288,23 @@ private val scratch : TextBuilder
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8Characters(path, usize(0), paths)
         states.set(active, new DocumentState(
-        pathStart,
-        pathLength,
-        previous.modified,
-        previous.firstLine,
-        previous.firstColumn
+            pathStart,
+            pathLength,
+            previous.modified,
+            previous.firstLine,
+            previous.firstColumn
         ))
         this.compactPaths()
         return true
     }
 
     def close(
-    index : usize,
-    buffer : EditorBuffer,
-    activePath : TextBuilder,
-    status : TextBuilder,
-    firstLine : usize,
-    firstColumn : usize
+        index : usize,
+        buffer : EditorBuffer,
+        activePath : TextBuilder,
+        status : TextBuilder,
+        firstLine : usize,
+        firstColumn : usize
     ) : bool {
         if index >= states.size() { return false }
         if this.isModified(index, buffer) {
@@ -357,18 +357,18 @@ def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
         val pathStart : usize = paths.size()
         val pathLength : usize = appendUtf8Characters(path, usize(0), paths)
         states.push(new DocumentState(
-        pathStart,
-        pathLength,
-        buffer.isModified(),
-        usize(0),
-        usize(0)
+            pathStart,
+            pathLength,
+            buffer.isModified(),
+            usize(0),
+            usize(0)
         ))
         archives.push(emptyBufferArchive())
     }
     return new DocumentTabs(
-    move states,
-    move archives,
-    move paths,
-    move scratch
+        move states,
+        move archives,
+        move paths,
+        move scratch
     )
 }

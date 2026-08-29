@@ -13,10 +13,10 @@ import std.system
 import std.text
 
 def containsLabel(
-labels : string,
-source : string,
-start : usize,
-end : usize
+    labels : string,
+    source : string,
+    start : usize,
+    end : usize
 ) : bool {
     val labelData : Ptr[byte] = stringData(labels)
     val sourceData : Ptr[byte] = stringData(source)
@@ -50,9 +50,9 @@ end : usize
 }
 
 private def appendCompletionItem(
-json : string,
-item : usize,
-output : TextBuilder
+    json : string,
+    item : usize,
+    output : TextBuilder
 ) : Unit {
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
@@ -60,16 +60,16 @@ output : TextBuilder
     val detail : usize = findJsonObjectProperty(json, "detail", item)
     if label < size && data.load(label) == byte(34) {
         val _labelEnd : usize = appendDecodedJsonString(
-        json,
-        label + usize(1),
-        output
+            json,
+            label + usize(1),
+            output
         )
         if detail < size && data.load(detail) == byte(34) {
             output.append("\t")
             val _detailEnd : usize = appendDecodedJsonString(
-            json,
-            detail + usize(1),
-            output
+                json,
+                detail + usize(1),
+                output
             )
         }
         output.append("\n")
@@ -120,9 +120,9 @@ def extractSignatureLabel(json : string, output : TextBuilder) : Unit {
     val label : usize = findJsonObjectProperty(json, "label", signature)
     if label < size && data.load(label) == byte(34) {
         val _labelEnd : usize = appendDecodedJsonString(
-        json,
-        label + usize(1),
-        output
+            json,
+            label + usize(1),
+            output
         )
     }
 }
@@ -134,7 +134,7 @@ private def unsignedByte(value : byte) : int {
 
 private def appendHexDigit(value : int, output : ByteBuffer) : bool {
     return output.appendByte(truncatingCast[byte](
-    if value < 10 { 48 + value } else { 55 + value }
+        if value < 10 { 48 + value } else { 55 + value }
     ))
 }
 
@@ -281,9 +281,9 @@ private def useDocumentPath(path : Path, output : TextBuilder) : bool {
 }
 
 private def documentUri(
-workspace : string,
-path : string,
-output : TextBuilder
+    workspace : string,
+    path : string,
+    output : TextBuilder
 ) : bool {
     val joined : Result[Path, SystemError] = joinPath(workspace, path)
     return match move joined {
@@ -293,19 +293,19 @@ output : TextBuilder
 }
 
 class LspClient(
-private var process : Option[ChildProcess],
-private val workspace : TextBuilder,
-private val body : ByteBuffer,
-private val response : ByteBuffer,
-private val incoming : ByteBuffer,
-private val outgoing : ByteBuffer,
-private val header : TextBuilder,
-private val number : TextBuilder,
-private val activeUri : TextBuilder,
-private val requestedUri : TextBuilder,
-private val pendingUri : TextBuilder,
-private val snapshot : TextBuilder,
-private val responseJson : TextBuilder
+    private var process : Option[ChildProcess],
+    private val workspace : TextBuilder,
+    private val body : ByteBuffer,
+    private val response : ByteBuffer,
+    private val incoming : ByteBuffer,
+    private val outgoing : ByteBuffer,
+    private val header : TextBuilder,
+    private val number : TextBuilder,
+    private val activeUri : TextBuilder,
+    private val requestedUri : TextBuilder,
+    private val pendingUri : TextBuilder,
+    private val snapshot : TextBuilder,
+    private val responseJson : TextBuilder
 ) {
     private var requestId : usize = usize(1)
     private var documentVersion : usize = usize(0)
@@ -353,7 +353,7 @@ private val responseJson : TextBuilder
     }
 
     private def useRestartedProcess(
-    started : Result[ChildProcess, SystemError]
+        started : Result[ChildProcess, SystemError]
     ) : bool {
         return match move started {
             Ok(child) => this.acceptRestartedProcess(move child),
@@ -366,7 +366,7 @@ private val responseJson : TextBuilder
         val arguments : Array[string] = new Array[string](usize(0))
         defer delete arguments
         if !this.useRestartedProcess(
-        spawnProcess("janus-lsp", arguments, workspace.view())
+            spawnProcess("janus-lsp", arguments, workspace.view())
         ) { return this.reportUnavailable(error) }
         return this.initialize(error)
     }
@@ -396,7 +396,7 @@ private val responseJson : TextBuilder
     }
 
     private def retainAvailableProcess(
-    previous : Option[ChildProcess]
+        previous : Option[ChildProcess]
     ) : bool {
         return match move previous {
             Some(child) => this.restoreProcess(move child),
@@ -410,8 +410,8 @@ private val responseJson : TextBuilder
     }
 
     private def flushChild(
-    child : ChildProcess,
-    error : TextBuilder
+        child : ChildProcess,
+        error : TextBuilder
     ) : bool {
         val chunk : Ptr[byte] = alloc[byte](usize(4096))
         defer free(chunk)
@@ -479,10 +479,10 @@ private val responseJson : TextBuilder
     }
 
     private def tryReadChild(
-    child : ChildProcess,
-    target : Ptr[byte],
-    capacity : usize,
-    error : TextBuilder
+        child : ChildProcess,
+        target : Ptr[byte],
+        capacity : usize,
+        error : TextBuilder
     ) : isize {
         val result : isize = match child.tryRead(target, capacity) {
             Ok(count) => truncatingCast[isize](count),
@@ -499,9 +499,9 @@ private val responseJson : TextBuilder
     }
 
     private def tryReadChunk(
-    target : Ptr[byte],
-    capacity : usize,
-    error : TextBuilder
+        target : Ptr[byte],
+        capacity : usize,
+        error : TextBuilder
     ) : isize {
         val previous : Option[ChildProcess] = this.takeProcess()
         return match move previous {
@@ -619,14 +619,14 @@ private val responseJson : TextBuilder
         header.appendUSize(body.size())
         header.append("\r\n\r\n")
         return outgoing.append(
-        stringData(header.view()),
-        stringLength(header.view())
+            stringData(header.view()),
+            stringLength(header.view())
         ) && outgoing.append(body.data(), body.size())
     }
 
     private def inspectResponse(
-    result : Result[string, TextDecodeError],
-    id : usize
+        result : Result[string, TextDecodeError],
+        id : usize
     ) : bool {
         return match result {
             Ok(json) => this.copyMatchingResponse(json, id),
@@ -650,7 +650,7 @@ private val responseJson : TextBuilder
     def initialize(error : TextBuilder) : bool {
         body.clear()
         if !body.appendText(
-        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootPath\":"
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootPath\":"
         ) || !appendJsonString(workspace.view(), body) ||
         !body.appendText("}}") || !this.sendBody(error) {
             this.disable()
@@ -667,7 +667,7 @@ private val responseJson : TextBuilder
     private def sendClose(error : TextBuilder) : bool {
         body.clear()
         return body.appendText(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":"
+            "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":"
         ) && appendJsonString(activeUri.view(), body) &&
         body.appendText("}}}") && this.sendBody(error)
     }
@@ -677,7 +677,7 @@ private val responseJson : TextBuilder
         buffer.appendText(snapshot)
         body.clear()
         return body.appendText(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":"
+            "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":"
         ) && appendJsonString(activeUri.view(), body) &&
         body.appendText(",\"languageId\":\"janus\",\"version\":1,\"text\":") &&
         appendJsonString(snapshot.view(), body) &&
@@ -689,7 +689,7 @@ private val responseJson : TextBuilder
         buffer.appendText(snapshot)
         body.clear()
         if !body.appendText(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":"
+            "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":{\"textDocument\":{\"uri\":"
         ) || !appendJsonString(activeUri.view(), body) ||
         !body.appendText(",\"version\":") ||
         !this.appendNumber(documentVersion) ||
@@ -700,9 +700,9 @@ private val responseJson : TextBuilder
     }
 
     private def synchronizeDocument(
-    path : string,
-    buffer : EditorBuffer,
-    error : TextBuilder
+        path : string,
+        buffer : EditorBuffer,
+        error : TextBuilder
     ) : bool {
         if !documentUri(workspace.view(), path, requestedUri) {
             error.clear()
@@ -729,8 +729,8 @@ private val responseJson : TextBuilder
     }
 
     private def pendingDocumentMatches(
-    path : string,
-    buffer : EditorBuffer
+        path : string,
+        buffer : EditorBuffer
     ) : bool {
         if !documentUri(workspace.view(), path, requestedUri) { return false }
         return requestedUri.view() == pendingUri.view() &&
@@ -738,12 +738,12 @@ private val responseJson : TextBuilder
     }
 
     def requestCompletion(
-    path : string,
-    buffer : EditorBuffer,
-    line : usize,
-    column : usize,
-    labels : TextBuilder,
-    error : TextBuilder
+        path : string,
+        buffer : EditorBuffer,
+        line : usize,
+        column : usize,
+        labels : TextBuilder,
+        error : TextBuilder
     ) : bool {
         labels.clear()
         error.clear()
@@ -758,7 +758,7 @@ private val responseJson : TextBuilder
         body.clear()
         if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
         !this.appendNumber(id) || !body.appendText(
-        ",\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":"
+            ",\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":"
         ) || !appendJsonString(activeUri.view(), body) ||
         !body.appendText("},\"position\":{\"line\":") ||
         !this.appendNumber(line) || !body.appendText(",\"character\":") ||
@@ -771,12 +771,12 @@ private val responseJson : TextBuilder
     }
 
     def requestSignatureHelp(
-    path : string,
-    buffer : EditorBuffer,
-    line : usize,
-    column : usize,
-    signature : TextBuilder,
-    error : TextBuilder
+        path : string,
+        buffer : EditorBuffer,
+        line : usize,
+        column : usize,
+        signature : TextBuilder,
+        error : TextBuilder
     ) : bool {
         signature.clear()
         error.clear()
@@ -791,7 +791,7 @@ private val responseJson : TextBuilder
         body.clear()
         if !body.appendText("{\"jsonrpc\":\"2.0\",\"id\":") ||
         !this.appendNumber(id) || !body.appendText(
-        ",\"method\":\"textDocument/signatureHelp\",\"params\":{\"textDocument\":{\"uri\":"
+            ",\"method\":\"textDocument/signatureHelp\",\"params\":{\"textDocument\":{\"uri\":"
         ) || !appendJsonString(activeUri.view(), body) ||
         !body.appendText("},\"position\":{\"line\":") ||
         !this.appendNumber(line) || !body.appendText(",\"character\":") ||
@@ -804,11 +804,11 @@ private val responseJson : TextBuilder
     }
 
     def poll(
-    path : string,
-    buffer : EditorBuffer,
-    labels : TextBuilder,
-    signature : TextBuilder,
-    error : TextBuilder
+        path : string,
+        buffer : EditorBuffer,
+        labels : TextBuilder,
+        signature : TextBuilder,
+        error : TextBuilder
     ) : LspResponseKind {
         val state : int = this.pollPendingResponse(error)
         if state == 0 { return LspResponseKind.None }
@@ -850,7 +850,7 @@ private val responseJson : TextBuilder
         }
         body.clear()
         val sent : bool = body.appendText(
-        "{\"jsonrpc\":\"2.0\",\"method\":\"exit\",\"params\":null}"
+            "{\"jsonrpc\":\"2.0\",\"method\":\"exit\",\"params\":null}"
         ) && this.sendBody(error) && this.flushOutgoing(error)
         this.disable()
         return sent
@@ -874,27 +874,27 @@ private val responseJson : TextBuilder
 }
 
 private def clientWithProcess(
-result : Result[ChildProcess, SystemError],
-workspace : TextBuilder
+    result : Result[ChildProcess, SystemError],
+    workspace : TextBuilder
 ) : LspClient {
     val state : Option[ChildProcess] = match move result {
         Ok(child) => Option.Some[ChildProcess](move child),
         Error(error) => Option.None[ChildProcess]()
     }
     return new LspClient(
-    move state,
-    move workspace,
-    new ByteBuffer(usize(4096)),
-    new ByteBuffer(usize(4096)),
-    new ByteBuffer(usize(4096)),
-    new ByteBuffer(usize(4096)),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder()
+        move state,
+        move workspace,
+        new ByteBuffer(usize(4096)),
+        new ByteBuffer(usize(4096)),
+        new ByteBuffer(usize(4096)),
+        new ByteBuffer(usize(4096)),
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder()
     )
 }
 
@@ -908,8 +908,8 @@ def lspClient(workspacePath : string, error : TextBuilder) : LspClient {
     val arguments : Array[string] = new Array[string](usize(0))
     defer delete arguments
     val client : LspClient = clientWithProcess(
-    spawnProcess("janus-lsp", arguments, workspace.view()),
-    move workspace
+        spawnProcess("janus-lsp", arguments, workspace.view()),
+        move workspace
     )
     client.initialize(error)
     return move client

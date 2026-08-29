@@ -5,8 +5,8 @@ import std.array
 import std.text
 
 struct Utf8Codepoint(
-val value : char,
-val width : usize
+    val value : char,
+    val width : usize
 ) derives Copy, Equality, Debug {}
 
 def unsignedUtf8Byte(value : byte) : int {
@@ -61,18 +61,18 @@ def decodeUtf8At(text : string, index : usize) : Utf8Codepoint {
 }
 
 def appendUtf8Characters(
-text : string,
-start : usize,
-output : Array[char]
+    text : string,
+    start : usize,
+    output : Array[char]
 ) : usize {
     return appendUtf8CharacterRange(text, start, stringLength(text), output)
 }
 
 def appendUtf8CharacterRange(
-text : string,
-start : usize,
-end : usize,
-output : Array[char]
+    text : string,
+    start : usize,
+    end : usize,
+    output : Array[char]
 ) : usize {
     val firstOutput : usize = output.size()
     var index : usize = start
@@ -85,10 +85,10 @@ output : Array[char]
 }
 
 def appendUtf8TextRange(
-text : string,
-start : usize,
-end : usize,
-output : TextBuilder
+    text : string,
+    start : usize,
+    end : usize,
+    output : TextBuilder
 ) : Unit {
     var index : usize = start
     while index < end {

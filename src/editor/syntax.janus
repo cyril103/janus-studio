@@ -16,9 +16,9 @@ enum SyntaxKind derives Copy, Equality, Debug {
 }
 
 struct SyntaxSpan(
-val start : usize,
-val length : usize,
-val kind : SyntaxKind
+    val start : usize,
+    val length : usize,
+    val kind : SyntaxKind
 ) derives Copy {}
 
 def isIdentifierStart(value : char) : bool {
@@ -39,10 +39,10 @@ def isOperator(value : char) : bool {
 }
 
 def identifierEquals(
-source : Array[char],
-start : usize,
-end : usize,
-expected : string
+    source : Array[char],
+    start : usize,
+    end : usize,
+    expected : string
 ) : bool {
     if end - start != stringLength(expected) {
         return false
@@ -117,9 +117,9 @@ def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
 }
 
 def identifierKind(
-source : Array[char],
-start : usize,
-end : usize
+    source : Array[char],
+    start : usize,
+    end : usize
 ) : SyntaxKind {
     if isKeyword(source, start, end) {
         return SyntaxKind.Keyword
@@ -132,10 +132,10 @@ end : usize
 }
 
 def appendSpan(
-output : Array[SyntaxSpan],
-start : usize,
-end : usize,
-kind : SyntaxKind
+    output : Array[SyntaxSpan],
+    start : usize,
+    end : usize,
+    kind : SyntaxKind
 ) : Unit {
     if end > start {
         output.push(new SyntaxSpan(start, end - start, kind))
@@ -174,10 +174,10 @@ def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
                 }
             }
             appendSpan(
-            output,
-            start,
-            index,
-            if delimiter == '"' { SyntaxKind.String } else { SyntaxKind.Character }
+                output,
+                start,
+                index,
+                if delimiter == '"' { SyntaxKind.String } else { SyntaxKind.Character }
             )
         } else if value >= '0' && value <= '9' {
             index = index + usize(1)

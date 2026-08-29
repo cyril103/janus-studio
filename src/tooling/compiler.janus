@@ -70,9 +70,9 @@ def runRequestedCompilerWorker() : int {
 }
 
 class CompilerJob(
-private var process : Option[ChildProcess],
-private val executable : TextBuilder,
-private val received : ByteBuffer
+    private var process : Option[ChildProcess],
+    private val executable : TextBuilder,
+    private val received : ByteBuffer
 ) {
     private def takeProcess() : Option[ChildProcess] {
         val previous : Option[ChildProcess] = move process
@@ -94,9 +94,9 @@ private val received : ByteBuffer
     }
 
     def start(
-    path : string,
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+        path : string,
+        output : TextBuilder,
+        diagnostics : EditorDiagnostics
     ) : bool {
         if this.isRunning() { return false }
         received.clear()
@@ -129,10 +129,10 @@ private val received : ByteBuffer
     }
 
     private def finish(
-    child : ChildProcess,
-    exitCode : int,
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+        child : ChildProcess,
+        exitCode : int,
+        output : TextBuilder,
+        diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         delete child
         val decoded : Result[string, TextDecodeError] = received.asText()
@@ -143,9 +143,9 @@ private val received : ByteBuffer
         if !loaded {
             output.clear()
             output.append(if exitCode == 0 {
-                "Aucun diagnostic."
-            } else {
-                "La commande a échoué sans diagnostic structuré."
+                    "Aucun diagnostic."
+                } else {
+                    "La commande a échoué sans diagnostic structuré."
             })
         }
         return if exitCode == 0 {
@@ -156,9 +156,9 @@ private val received : ByteBuffer
     }
 
     private def loadDiagnostics(
-    json : string,
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+        json : string,
+        output : TextBuilder,
+        diagnostics : EditorDiagnostics
     ) : bool {
         diagnostics.load(json)
         diagnostics.appendAll(output)
@@ -180,10 +180,10 @@ private val received : ByteBuffer
     }
 
     private def handleWait(
-    child : ChildProcess,
-    result : Result[Option[int], SystemError],
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+        child : ChildProcess,
+        result : Result[Option[int], SystemError],
+        output : TextBuilder,
+        diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         val state : int = this.waitState(result)
         if state == -2 { return this.keepRunning(move child) }
@@ -192,8 +192,8 @@ private val received : ByteBuffer
     }
 
     private def failChild(
-    child : ChildProcess,
-    output : TextBuilder
+        child : ChildProcess,
+        output : TextBuilder
     ) : CompilerCheckState {
         delete child
         output.clear()
@@ -202,9 +202,9 @@ private val received : ByteBuffer
     }
 
     private def pollChild(
-    child : ChildProcess,
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+        child : ChildProcess,
+        output : TextBuilder,
+        diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         val chunk : Ptr[byte] = alloc[byte](usize(4096))
         defer free(chunk)
@@ -238,16 +238,16 @@ private val received : ByteBuffer
         if reading { return this.keepRunning(move child) }
         val wait : Result[Option[int], SystemError] = child.tryWait()
         return this.handleWait(
-        move child,
-        wait,
-        output,
-        diagnostics
+            move child,
+            wait,
+            output,
+            diagnostics
         )
     }
 
     def poll(
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+        output : TextBuilder,
+        diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         val previous : Option[ChildProcess] = this.takeProcess()
         return match move previous {
@@ -267,9 +267,9 @@ def compilerJob(executablePath : string) : CompilerJob {
     val executable : TextBuilder = new TextBuilder()
     executable.append(executablePath)
     return new CompilerJob(
-    Option.None[ChildProcess](),
-    move executable,
-    new ByteBuffer(usize(4096))
+        Option.None[ChildProcess](),
+        move executable,
+        new ByteBuffer(usize(4096))
     )
 }
 
@@ -285,8 +285,8 @@ def compilerJobForProgram() : CompilerJob {
 }
 
 private def collectProcessResult(
-process : ProcessResult,
-output : TextBuilder
+    process : ProcessResult,
+    output : TextBuilder
 ) : bool {
     val succeeded : bool = process.exitCode() == 0
     if process.stdoutSize() > usize(0) {
@@ -329,9 +329,9 @@ def checkFile(path : string, output : TextBuilder) : bool {
 }
 
 private def collectStructuredResult(
-process : ProcessResult,
-output : TextBuilder,
-diagnostics : EditorDiagnostics
+    process : ProcessResult,
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
 ) : bool {
     val succeeded : bool = process.exitCode() == 0
     val json : TextBuilder = new TextBuilder()
@@ -352,9 +352,9 @@ diagnostics : EditorDiagnostics
 }
 
 def checkFileWithDiagnostics(
-path : string,
-output : TextBuilder,
-diagnostics : EditorDiagnostics
+    path : string,
+    output : TextBuilder,
+    diagnostics : EditorDiagnostics
 ) : bool {
     output.clear()
     diagnostics.clear()

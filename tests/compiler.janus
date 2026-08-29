@@ -12,16 +12,16 @@ def checksTheWelcomeSample() : Unit {
     val diagnostics : EditorDiagnostics = editorDiagnostics()
     defer delete diagnostics
     assertTrue(checkFileWithDiagnostics(
-    "samples/welcome.janus",
-    output,
-    diagnostics
+        "samples/welcome.janus",
+        output,
+        diagnostics
     ))
     assertEqual[usize](diagnostics.size(), usize(0))
 
     assertTrue(!checkFileWithDiagnostics(
-    "tests/invalid-diagnostic.txt",
-    output,
-    diagnostics
+        "tests/invalid-diagnostic.txt",
+        output,
+        diagnostics
     ))
     assertTrue(diagnostics.size() > usize(0))
     assertTrue(diagnostics.isError(usize(0)))

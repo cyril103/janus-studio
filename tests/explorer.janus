@@ -4,9 +4,9 @@ import std.testing
 import std.text
 
 def findExplorerEntry(
-explorer : ProjectExplorer,
-label : string,
-scratch : TextBuilder
+    explorer : ProjectExplorer,
+    label : string,
+    scratch : TextBuilder
 ) : usize {
     var index : usize = usize(0)
     while index < explorer.size() {
@@ -53,8 +53,8 @@ def loadsAndTogglesProjectDirectories() : Unit {
     assertTrue(explorer.toggle(source))
     assertEqual[usize](explorer.storageSize(), collapsedStorage)
     assertEqual[usize](
-    findExplorerEntry(explorer, "main.janus", scratch),
-    usize(-1)
+        findExplorerEntry(explorer, "main.janus", scratch),
+        usize(-1)
     )
 }
 

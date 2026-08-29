@@ -9,18 +9,18 @@ def keepsTheCursorInsideTheHorizontalViewport() : Unit {
     buffer.load("012345678901234567890123456789")
 
     assertEqual[usize](
-    maximumEditorFirstColumn(buffer, usize(10)),
-    usize(21)
+        maximumEditorFirstColumn(buffer, usize(10)),
+        usize(21)
     )
     buffer.moveTo(usize(0), usize(25))
     assertEqual[usize](
-    keepCursorHorizontallyVisible(buffer, usize(0), usize(10)),
-    usize(16)
+        keepCursorHorizontallyVisible(buffer, usize(0), usize(10)),
+        usize(16)
     )
     buffer.moveTo(usize(0), usize(2))
     assertEqual[usize](
-    keepCursorHorizontallyVisible(buffer, usize(10), usize(10)),
-    usize(2)
+        keepCursorHorizontallyVisible(buffer, usize(10), usize(10)),
+        usize(2)
     )
 }
 
@@ -31,11 +31,11 @@ def measuresScrollableOutputText() : Unit {
     assertEqual[usize](outputLineCount(output), usize(3))
     assertEqual[usize](outputMaximumColumns(output), usize(11))
     assertEqual[usize](
-    maximumOutputFirstLine(output, usize(2)),
-    usize(1)
+        maximumOutputFirstLine(output, usize(2)),
+        usize(1)
     )
     assertEqual[usize](
-    maximumOutputFirstColumn(output, usize(8)),
-    usize(3)
+        maximumOutputFirstColumn(output, usize(8)),
+        usize(3)
     )
 }

@@ -6,12 +6,12 @@ import std.testing
 import std.text
 
 def awaitLspResponse(
-client : LspClient,
-path : string,
-buffer : EditorBuffer,
-labels : TextBuilder,
-signature : TextBuilder,
-error : TextBuilder
+    client : LspClient,
+    path : string,
+    buffer : EditorBuffer,
+    labels : TextBuilder,
+    signature : TextBuilder,
+    error : TextBuilder
 ) : LspResponseKind {
     var attempts : usize = usize(0)
     var response : LspResponseKind = LspResponseKind.None
@@ -27,12 +27,12 @@ def extractsCompletionLabels() : Unit {
     val labels : TextBuilder = new TextBuilder()
     defer delete labels
     extractCompletionLabels(
-    "{\"items\":[{\"detail\":\"def get(index : usize) : int\",\"label\":\"get\"},{\"detail\":\"def size() : usize\",\"label\":\"size\"},{\"detail\":\"def get(index : int) : int\",\"label\":\"get\"}]}",
-    labels
+        "{\"items\":[{\"detail\":\"def get(index : usize) : int\",\"label\":\"get\"},{\"detail\":\"def size() : usize\",\"label\":\"size\"},{\"detail\":\"def get(index : int) : int\",\"label\":\"get\"}]}",
+        labels
     )
     assertEqual[string](
-    labels.view(),
-    "get\tdef get(index : usize) : int\nsize\tdef size() : usize\nget\tdef get(index : int) : int\n"
+        labels.view(),
+        "get\tdef get(index : usize) : int\nsize\tdef size() : usize\nget\tdef get(index : int) : int\n"
     )
     assertTrue(containsLabel(labels.view(), "size", usize(0), usize(4)))
 }
@@ -42,12 +42,12 @@ def decodesStructuredUnicodeCompletionFields() : Unit {
     val labels : TextBuilder = new TextBuilder()
     defer delete labels
     extractCompletionLabels(
-    "{\"items\":[{\"detail\":\"café \\\"label\\\":\\\"piège\\\"\",\"label\":\"élément \\uD83D\\uDE00\"}]}",
-    labels
+        "{\"items\":[{\"detail\":\"café \\\"label\\\":\\\"piège\\\"\",\"label\":\"élément \\uD83D\\uDE00\"}]}",
+        labels
     )
     assertEqual[string](
-    labels.view(),
-    "élément 😀\tcafé \"label\":\"piège\"\n"
+        labels.view(),
+        "élément 😀\tcafé \"label\":\"piège\"\n"
     )
 }
 
@@ -56,8 +56,8 @@ def acceptsReorderedCompletionFields() : Unit {
     val labels : TextBuilder = new TextBuilder()
     defer delete labels
     extractCompletionLabels(
-    "{\"result\":{\"items\":[{\"label\":\"size\",\"kind\":2,\"detail\":\"def size() : usize\"}]}}",
-    labels
+        "{\"result\":{\"items\":[{\"label\":\"size\",\"kind\":2,\"detail\":\"def size() : usize\"}]}}",
+        labels
     )
     assertEqual[string](labels.view(), "size\tdef size() : usize\n")
 }
@@ -67,8 +67,8 @@ def replacesUnpairedJsonSurrogates() : Unit {
     val labels : TextBuilder = new TextBuilder()
     defer delete labels
     extractCompletionLabels(
-    "{\"items\":[{\"label\":\"invalid \\uD800\"}]}",
-    labels
+        "{\"items\":[{\"label\":\"invalid \\uD800\"}]}",
+        labels
     )
     assertEqual[string](labels.view(), "invalid �\n")
 }
@@ -78,12 +78,12 @@ def extractsSignatureLabel() : Unit {
     val signature : TextBuilder = new TextBuilder()
     defer delete signature
     extractSignatureLabel(
-    "{\"activeParameter\":1,\"activeSignature\":0,\"signatures\":[{\"label\":\"combine(left : int, right : int) : int\",\"parameters\":[{\"label\":\"left : int\"},{\"label\":\"right : int\"}]}]}",
-    signature
+        "{\"activeParameter\":1,\"activeSignature\":0,\"signatures\":[{\"label\":\"combine(left : int, right : int) : int\",\"parameters\":[{\"label\":\"left : int\"},{\"label\":\"right : int\"}]}]}",
+        signature
     )
     assertEqual[string](
-    signature.view(),
-    "combine(left : int, right : int) : int"
+        signature.view(),
+        "combine(left : int, right : int) : int"
     )
 }
 
@@ -92,8 +92,8 @@ def acceptsReorderedSignatureFields() : Unit {
     val signature : TextBuilder = new TextBuilder()
     defer delete signature
     extractSignatureLabel(
-    "{\"result\":{\"signatures\":[{\"parameters\":[{\"label\":\"wrong\"}],\"label\":\"right(value : int) : int\"}]}}",
-    signature
+        "{\"result\":{\"signatures\":[{\"parameters\":[{\"label\":\"wrong\"}],\"label\":\"right(value : int) : int\"}]}}",
+        signature
     )
     assertEqual[string](signature.view(), "right(value : int) : int")
 }
@@ -101,15 +101,15 @@ def acceptsReorderedSignatureFields() : Unit {
 /// @test
 def parsesLspFramesAndResponseIds() : Unit {
     assertEqual[usize](
-    parseContentLength("Content-Length: 123\r\n\r\n"),
-    usize(123)
+        parseContentLength("Content-Length: 123\r\n\r\n"),
+        usize(123)
     )
     assertEqual[usize](parseContentLength("Missing: 12\r\n\r\n"), usize(0))
     assertTrue(messageHasId("{\"jsonrpc\":\"2.0\",\"id\":12,\"result\":[]}", usize(12)))
     assertTrue(!messageHasId("{\"id\":120,\"result\":[]}", usize(12)))
     assertTrue(!messageHasId(
-    "{\"jsonrpc\":\"2.0\",\"result\":{\"id\":12}}",
-    usize(12)
+        "{\"jsonrpc\":\"2.0\",\"result\":{\"id\":12}}",
+        usize(12)
     ))
 }
 
@@ -135,7 +135,7 @@ def reusesPersistentLspSession() : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer
     buffer.load(
-    "import std.array\n\ndef main() : int {\n    val xs = [1]\n    xs.\n    return 0\n}"
+        "import std.array\n\ndef main() : int {\n    val xs = [1]\n    xs.\n    return 0\n}"
     )
     val labels : TextBuilder = new TextBuilder()
     defer delete labels
@@ -143,100 +143,100 @@ def reusesPersistentLspSession() : Unit {
     defer delete signature
 
     assertEqual[LspResponseKind](
-    awaitLspResponse(client, ".", buffer, labels, signature, error),
-    LspResponseKind.Ready
+        awaitLspResponse(client, ".", buffer, labels, signature, error),
+        LspResponseKind.Ready
     )
 
     assertTrue(client.requestCompletion(
-    "samples/persistent-completion.janus",
-    buffer,
-    usize(4),
-    usize(7),
-    labels,
-    error
+        "samples/persistent-completion.janus",
+        buffer,
+        usize(4),
+        usize(7),
+        labels,
+        error
     ))
     assertEqual[LspResponseKind](
-    awaitLspResponse(
-    client,
-    "samples/persistent-completion.janus",
-    buffer,
-    labels,
-    signature,
-    error
-    ),
-    LspResponseKind.Completion
+        awaitLspResponse(
+        client,
+        "samples/persistent-completion.janus",
+        buffer,
+        labels,
+        signature,
+        error
+        ),
+        LspResponseKind.Completion
     )
     assertTrue(containsLabel(labels.view(), "get", usize(0), usize(3)))
 
     assertTrue(client.restart("samples", error))
     assertEqual[LspResponseKind](
-    awaitLspResponse(client, "samples", buffer, labels, signature, error),
-    LspResponseKind.Ready
+        awaitLspResponse(client, "samples", buffer, labels, signature, error),
+        LspResponseKind.Ready
     )
     labels.clear()
     assertTrue(client.requestCompletion(
-    "persistent-completion.janus",
-    buffer,
-    usize(4),
-    usize(7),
-    labels,
-    error
+        "persistent-completion.janus",
+        buffer,
+        usize(4),
+        usize(7),
+        labels,
+        error
     ))
     assertEqual[LspResponseKind](
-    awaitLspResponse(
-    client,
-    "persistent-completion.janus",
-    buffer,
-    labels,
-    signature,
-    error
-    ),
-    LspResponseKind.Completion
+        awaitLspResponse(
+        client,
+        "persistent-completion.janus",
+        buffer,
+        labels,
+        signature,
+        error
+        ),
+        LspResponseKind.Completion
     )
     assertTrue(containsLabel(labels.view(), "size", usize(0), usize(4)))
 
     assertTrue(client.requestCompletion(
-    "persistent-completion.janus",
-    buffer,
-    usize(4),
-    usize(7),
-    labels,
-    error
+        "persistent-completion.janus",
+        buffer,
+        usize(4),
+        usize(7),
+        labels,
+        error
     ))
     buffer.insert(' ')
     assertEqual[LspResponseKind](
-    awaitLspResponse(
-    client,
-    "persistent-completion.janus",
-    buffer,
-    labels,
-    signature,
-    error
-    ),
-    LspResponseKind.Discarded
+        awaitLspResponse(
+        client,
+        "persistent-completion.janus",
+        buffer,
+        labels,
+        signature,
+        error
+        ),
+        LspResponseKind.Discarded
     )
 
     buffer.load(
-    "class Values() {\n    def get(index : usize) : int { return 0 }\n}\n\ndef main() : int {\n    val xs : Values = new Values()\n    xs.get(0)\n    return 0\n}"
+        "class Values() {\n    def get(index : usize) : int { return 0 }\n}\n\ndef main() : int {\n    val xs : Values = new Values()\n    xs.get(0)\n    return 0\n}"
     )
     assertTrue(client.requestSignatureHelp(
-    "persistent-completion.janus",
-    buffer,
-    usize(6),
-    usize(11),
-    signature,
-    error
+        "persistent-completion.janus",
+        buffer,
+        usize(6),
+        usize(11),
+        signature,
+        error
     ))
     assertEqual[LspResponseKind](
-    awaitLspResponse(
-    client,
-    "persistent-completion.janus",
-    buffer,
-    labels,
-    signature,
-    error
-    ),
-    LspResponseKind.Signature
+        awaitLspResponse(
+        client,
+        "persistent-completion.janus",
+        buffer,
+        labels,
+        signature,
+        error
+        ),
+        LspResponseKind.Signature
     )
     assertEqual[string](signature.view(), "get(index : usize) : int")
     assertTrue(client.shutdown(error))
@@ -259,7 +259,7 @@ def navigatesAndAcceptsCompletion() : Unit {
     assertEqual[string](selected.view(), "size")
 
     completion.load(
-    "get\tdef get(index : usize) : int\nsize\tdef size() : usize\n"
+        "get\tdef get(index : usize) : int\nsize\tdef size() : usize\n"
     )
     completion.selectNext()
     completion.appendDisplayItem(completion.selected(), selected)
@@ -283,7 +283,7 @@ def filtersCompletionWhileTyping() : Unit {
     val completion : CompletionModel = completionModel()
     defer delete completion
     completion.load(
-    "get\tdef get(index : usize) : int\ngrow\tdef grow() : Unit\nsize\tdef size() : usize\n"
+        "get\tdef get(index : usize) : int\ngrow\tdef grow() : Unit\nsize\tdef size() : usize\n"
     )
     completion.refine('g')
     assertEqual[usize](completion.size(), usize(2))

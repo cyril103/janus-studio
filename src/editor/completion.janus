@@ -7,12 +7,12 @@ import std.array
 import std.text
 
 class CompletionModel(
-private val allLabels : TextBuilder,
-private val labels : TextBuilder,
-private val selectedLabel : TextBuilder,
-private val insertionLabel : TextBuilder,
-private val prefix : Array[char],
-private val candidate : Array[char]
+    private val allLabels : TextBuilder,
+    private val labels : TextBuilder,
+    private val selectedLabel : TextBuilder,
+    private val insertionLabel : TextBuilder,
+    private val prefix : Array[char],
+    private val candidate : Array[char]
 ) {
     private var itemCount : usize = usize(0)
     private var selectedIndex : usize = usize(0)
@@ -49,10 +49,10 @@ private val candidate : Array[char]
             }
             candidate.clear()
             val _decoded : usize = appendUtf8CharacterRange(
-            source,
-            lineStart,
-            labelEnd,
-            candidate
+                source,
+                lineStart,
+                labelEnd,
+                candidate
             )
             var matches : bool = prefix.size() <= candidate.size()
             var prefixIndex : usize = usize(0)
@@ -207,10 +207,10 @@ private val candidate : Array[char]
         insertionLabel.clear()
         val selected : string = selectedLabel.view()
         appendUtf8TextRange(
-        selected,
-        utf8ByteOffset(selected, prefix.size()),
-        stringLength(selected),
-        insertionLabel
+            selected,
+            utf8ByteOffset(selected, prefix.size()),
+            stringLength(selected),
+            insertionLabel
         )
         buffer.insertText(insertionLabel.view())
         visible = false
@@ -230,11 +230,11 @@ private val candidate : Array[char]
 
 def completionModel() : CompletionModel {
     return new CompletionModel(
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new TextBuilder(),
-    new Array[char](usize(8)),
-    new Array[char](usize(64))
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        new TextBuilder(),
+        new Array[char](usize(8)),
+        new Array[char](usize(64))
     )
 }

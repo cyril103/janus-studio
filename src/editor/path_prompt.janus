@@ -19,8 +19,8 @@ enum PathPromptAction derives Copy, Equality, Debug {
 }
 
 private def startsWithCharacters(
-value : Array[char],
-prefix : Array[char]
+    value : Array[char],
+    prefix : Array[char]
 ) : bool {
     if value.size() < prefix.size() {
         return false
@@ -36,8 +36,8 @@ prefix : Array[char]
 }
 
 private def keepCommonPrefix(
-common : Array[char],
-candidate : Array[char]
+    common : Array[char],
+    candidate : Array[char]
 ) : Unit {
     var shared : usize = usize(0)
     while shared < common.size() && shared < candidate.size() &&
@@ -59,7 +59,7 @@ private def consumeDirectoryPath(path : Path) : bool {
 }
 
 private def joinedPathIsDirectory(
-result : Result[Path, SystemError]
+    result : Result[Path, SystemError]
 ) : bool {
     return match move result {
         Ok(path) => consumeDirectoryPath(move path),
@@ -68,10 +68,10 @@ result : Result[Path, SystemError]
 }
 
 private class PathCompletionState(
-private val directory : string,
-private val partial : Array[char],
-private val common : Array[char],
-private val candidate : Array[char]
+    private val directory : string,
+    private val partial : Array[char],
+    private val common : Array[char],
+    private val candidate : Array[char]
 ) {
     private var matches : usize = usize(0)
     private var uniqueDirectory : bool = false
@@ -87,8 +87,8 @@ private val candidate : Array[char]
                     index = index + usize(1)
                 }
                 uniqueDirectory = joinedPathIsDirectory(joinPath(
-                directory,
-                name.view()
+                    directory,
+                    name.view()
                 ))
             } else {
                 keepCommonPrefix(common, candidate)
@@ -124,23 +124,23 @@ private val candidate : Array[char]
 }
 
 private def pathCompletionState(
-directory : string,
-partialText : string
+    directory : string,
+    partialText : string
 ) : PathCompletionState {
     val partial : Array[char] = new Array[char](usize(32))
     appendUtf8Characters(partialText, usize(0), partial)
     return new PathCompletionState(
-    directory,
-    move partial,
-    new Array[char](usize(64)),
-    new Array[char](usize(64))
+        directory,
+        move partial,
+        new Array[char](usize(64)),
+        new Array[char](usize(64))
     )
 }
 
 class PathPrompt(
-private var currentAction : PathPromptAction,
-private val text : TextBuilder,
-private val characters : Array[char]
+    private var currentAction : PathPromptAction,
+    private val text : TextBuilder,
+    private val characters : Array[char]
 ) {
     private var cursorIndex : usize = usize(0)
 
@@ -231,14 +231,14 @@ private val characters : Array[char]
     }
 
     private def completeFromDirectory(
-    iterator : DirectoryIterator,
-    directory : string,
-    partialText : string,
-    segmentStart : usize
+        iterator : DirectoryIterator,
+        directory : string,
+        partialText : string,
+        segmentStart : usize
     ) : usize {
         val state : PathCompletionState = pathCompletionState(
-        directory,
-        partialText
+            directory,
+            partialText
         )
         defer delete state
         var reading : bool = true
@@ -307,10 +307,10 @@ private val characters : Array[char]
         readDirectory(directoryText.view())
         return match move iteratorResult {
             Ok(iterator) => this.completeFromDirectory(
-            move iterator,
-            directoryText.view(),
-            partialText.view(),
-            segmentStart
+                move iterator,
+                directoryText.view(),
+                partialText.view(),
+                segmentStart
             ),
             Error(error) => usize(0)
         }
@@ -331,8 +331,8 @@ private val characters : Array[char]
 
 def pathPrompt() : PathPrompt {
     return new PathPrompt(
-    PathPromptAction.None,
-    new TextBuilder(),
-    new Array[char](usize(128))
+        PathPromptAction.None,
+        new TextBuilder(),
+        new Array[char](usize(128))
     )
 }
