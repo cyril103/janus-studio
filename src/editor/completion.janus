@@ -127,7 +127,7 @@ class CompletionModel(
         }
     }
 
-    def appendItem(index : usize, output : TextBuilder) : Unit {
+    def appendItem(index : usize, borrow var output : TextBuilder) : Unit {
         output.clear()
         if index >= itemCount {
             return
@@ -150,7 +150,7 @@ class CompletionModel(
         appendUtf8TextRange(source, itemStart, position, output)
     }
 
-    def appendDisplayItem(index : usize, output : TextBuilder) : Unit {
+    def appendDisplayItem(index : usize, borrow var output : TextBuilder) : Unit {
         output.clear()
         if index >= itemCount {
             return
@@ -182,7 +182,7 @@ class CompletionModel(
         appendUtf8TextRange(source, displayStart, position, output)
     }
 
-    def appendVisible(output : TextBuilder, maximumItems : usize) : Unit {
+    def appendVisible(borrow var output : TextBuilder, maximumItems : usize) : Unit {
         output.clear()
         val first : usize = if selectedIndex < maximumItems {
             usize(0)
@@ -199,7 +199,7 @@ class CompletionModel(
         }
     }
 
-    def accept(buffer : EditorBuffer) : bool {
+    def accept(borrow var buffer : EditorBuffer) : bool {
         if !visible {
             return false
         }

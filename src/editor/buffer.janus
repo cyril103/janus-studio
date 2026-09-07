@@ -10,7 +10,7 @@ import std.text
 const historyLimit : usize = usize(100)
 const historyCharacterLimit : usize = usize(4000000)
 
-private def decodeUtf8(text : string, output : Array[char]) : Unit {
+private def decodeUtf8(text : string, borrow var output : Array[char]) : Unit {
     var index : usize = usize(0)
     while index < stringLength(text) {
         val decoded : Utf8Codepoint = decodeUtf8At(text, index)
@@ -94,7 +94,7 @@ class BufferArchive(
     private val diskFingerprint : usize,
     private val tracksDiskContent : bool
 ) {
-    borrow def appendCharacters(output : Array[char]) : Unit {
+    borrow def appendCharacters(borrow var output : Array[char]) : Unit {
         var index : usize = usize(0)
         while index < characters.size() {
             output.push(characters.get(index))
@@ -112,13 +112,13 @@ class BufferArchive(
     borrow def trackedDiskFingerprint() : usize { return diskFingerprint }
     borrow def hasTrackedDiskContent() : bool { return tracksDiskContent }
 
-    def moveUndoStates(output : Array[BufferSnapshot]) : Unit {
+    def moveUndoStates(borrow var output : Array[BufferSnapshot]) : Unit {
         while !undoStates.isEmpty() {
             output.push(undoStates.remove(usize(0)))
         }
     }
 
-    def moveRedoStates(output : Array[BufferSnapshot]) : Unit {
+    def moveRedoStates(borrow var output : Array[BufferSnapshot]) : Unit {
         while !redoStates.isEmpty() {
             output.push(redoStates.remove(usize(0)))
         }
@@ -132,8 +132,8 @@ class BufferArchive(
 }
 
 private def copySnapshotArray(
-    source : Array[BufferSnapshot],
-    output : Array[BufferSnapshot]
+    borrow var source : Array[BufferSnapshot],
+    borrow var output : Array[BufferSnapshot]
 ) : Unit {
     val retained : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
     defer delete retained
@@ -147,7 +147,7 @@ private def copySnapshotArray(
     }
 }
 
-private def trimSnapshotArray(states : Array[BufferSnapshot]) : Unit {
+private def trimSnapshotArray(borrow var states : Array[BufferSnapshot]) : Unit {
     var characters : usize = usize(0)
     val retained : Array[BufferSnapshot] = new Array[BufferSnapshot](states.size())
     defer delete retained
@@ -199,7 +199,7 @@ class EditorBuffer(
     private var tracksDiskContent : bool = false
 
     private def copySnapshots(
-        source : Array[BufferSnapshot]
+        borrow var source : Array[BufferSnapshot]
     ) : Array[BufferSnapshot] {
         val copied : Array[BufferSnapshot] = new Array[BufferSnapshot](source.size())
         copySnapshotArray(source, copied)
@@ -372,7 +372,7 @@ class EditorBuffer(
         characters.set(position, value)
     }
 
-    private def insertLineAt(position : usize, line : Array[char]) : Unit {
+    private def insertLineAt(position : usize, borrow line : Array[char]) : Unit {
         val inserted : Array[char] = new Array[char](line.size() + usize(1))
         defer delete inserted
         var index : usize = usize(0)
@@ -855,7 +855,7 @@ class EditorBuffer(
         this.eraseRange(start, end)
     }
 
-    borrow def copyCurrentLine(output : Array[char]) : bool {
+    borrow def copyCurrentLine(borrow var output : Array[char]) : bool {
         output.clear()
         if characters.isEmpty() {
             return false
@@ -870,7 +870,7 @@ class EditorBuffer(
         return true
     }
 
-    def pasteLineBelow(line : Array[char]) : Unit {
+    def pasteLineBelow(borrow line : Array[char]) : Unit {
         if characters.isEmpty() {
             this.rememberChange()
             this.insertLineAt(usize(0), line)
@@ -897,7 +897,7 @@ class EditorBuffer(
         }
     }
 
-    def pasteLineAbove(line : Array[char]) : Unit {
+    def pasteLineAbove(borrow line : Array[char]) : Unit {
         val insertion : usize = this.lineStart(cursorPosition)
         this.rememberChange()
         this.insertLineAt(insertion, line)
@@ -942,7 +942,7 @@ class EditorBuffer(
         if requestedColumn < nextLength { requestedColumn } else { nextLength }
     }
 
-    borrow def appendText(output : TextBuilder) : Unit {
+    borrow def appendText(borrow var output : TextBuilder) : Unit {
         var index : usize = usize(0)
         while index < characters.size() {
             output.appendChar(characters.get(index))
@@ -950,7 +950,7 @@ class EditorBuffer(
         }
     }
 
-    borrow def appendCharacters(output : Array[char]) : Unit {
+    borrow def appendCharacters(borrow var output : Array[char]) : Unit {
         output.clear()
         var index : usize = usize(0)
         while index < characters.size() {
@@ -959,7 +959,7 @@ class EditorBuffer(
         }
     }
 
-    borrow def findMatches(query : string, output : Array[usize]) : usize {
+    borrow def findMatches(query : string, borrow var output : Array[usize]) : usize {
         output.clear()
         val requested : Array[char] = new Array[char](stringLength(query))
         defer delete requested
@@ -1000,7 +1000,7 @@ class EditorBuffer(
         return this.lineEnd(start) - start
     }
 
-    borrow def appendSelection(output : TextBuilder) : bool {
+    borrow def appendSelection(borrow var output : TextBuilder) : bool {
         output.clear()
         if !this.hasSelection() { return false }
         var index : usize = this.selectionStart()
@@ -1047,7 +1047,7 @@ class EditorBuffer(
     }
 
     borrow def appendVisibleText(
-        output : TextBuilder,
+        borrow var output : TextBuilder,
         firstLine : usize,
         maximumLines : usize
     ) : Unit {
@@ -1072,7 +1072,7 @@ class EditorBuffer(
     }
 
     borrow def appendVisibleCharacters(
-        output : Array[char],
+        borrow var output : Array[char],
         firstLine : usize,
         maximumLines : usize
     ) : Unit {

@@ -4,9 +4,9 @@ import std.testing
 import std.text
 
 def findExplorerEntry(
-    explorer : ProjectExplorer,
+    borrow var explorer : ProjectExplorer,
     label : string,
-    scratch : TextBuilder
+    borrow var scratch : TextBuilder
 ) : usize {
     var index : usize = usize(0)
     while index < explorer.size() {

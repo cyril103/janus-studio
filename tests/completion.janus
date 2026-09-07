@@ -6,12 +6,12 @@ import std.testing
 import std.text
 
 def awaitLspResponse(
-    client : LspClient,
+    borrow var client : LspClient,
     path : string,
-    buffer : EditorBuffer,
-    labels : TextBuilder,
-    signature : TextBuilder,
-    error : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var labels : TextBuilder,
+    borrow var signature : TextBuilder,
+    borrow var error : TextBuilder
 ) : LspResponseKind {
     var attempts : usize = usize(0)
     var response : LspResponseKind = LspResponseKind.None

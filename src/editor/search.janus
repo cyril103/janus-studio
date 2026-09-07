@@ -24,13 +24,13 @@ class SearchModel(
         queryLength = usize(0)
     }
 
-    private def moveToSelected(buffer : EditorBuffer) : Unit {
+    private def moveToSelected(borrow var buffer : EditorBuffer) : Unit {
         if matches.size() > usize(0) {
             buffer.moveToOffset(matches.get(selectedIndex))
         }
     }
 
-    def begin(buffer : EditorBuffer, value : string) : Unit {
+    def begin(borrow var buffer : EditorBuffer, value : string) : Unit {
         query.clear()
         query.append(value)
         queryLength = buffer.findMatches(value, matches)
@@ -43,13 +43,13 @@ class SearchModel(
         this.moveToSelected(buffer)
     }
 
-    def selectNext(buffer : EditorBuffer) : Unit {
+    def selectNext(borrow var buffer : EditorBuffer) : Unit {
         if matches.size() == usize(0) { return }
         selectedIndex = (selectedIndex + usize(1)) % matches.size()
         this.moveToSelected(buffer)
     }
 
-    def selectPrevious(buffer : EditorBuffer) : Unit {
+    def selectPrevious(borrow var buffer : EditorBuffer) : Unit {
         if matches.size() == usize(0) { return }
         selectedIndex = if selectedIndex == usize(0) {
             matches.size() - usize(1)
@@ -59,7 +59,7 @@ class SearchModel(
         this.moveToSelected(buffer)
     }
 
-    def appendStatus(output : TextBuilder) : Unit {
+    def appendStatus(borrow var output : TextBuilder) : Unit {
         output.clear()
         if query.size() == usize(0) {
             output.append("Recherche vide.")

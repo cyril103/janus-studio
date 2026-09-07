@@ -63,7 +63,7 @@ def decodeUtf8At(text : string, index : usize) : Utf8Codepoint {
 def appendUtf8Characters(
     text : string,
     start : usize,
-    output : Array[char]
+    borrow var output : Array[char]
 ) : usize {
     return appendUtf8CharacterRange(text, start, stringLength(text), output)
 }
@@ -72,7 +72,7 @@ def appendUtf8CharacterRange(
     text : string,
     start : usize,
     end : usize,
-    output : Array[char]
+    borrow var output : Array[char]
 ) : usize {
     val firstOutput : usize = output.size()
     var index : usize = start
@@ -88,7 +88,7 @@ def appendUtf8TextRange(
     text : string,
     start : usize,
     end : usize,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : Unit {
     var index : usize = start
     while index < end {

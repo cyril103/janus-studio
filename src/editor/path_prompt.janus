@@ -19,8 +19,8 @@ enum PathPromptAction derives Copy, Equality, Debug {
 }
 
 private def startsWithCharacters(
-    value : Array[char],
-    prefix : Array[char]
+    borrow value : Array[char],
+    borrow prefix : Array[char]
 ) : bool {
     if value.size() < prefix.size() {
         return false
@@ -36,8 +36,8 @@ private def startsWithCharacters(
 }
 
 private def keepCommonPrefix(
-    common : Array[char],
-    candidate : Array[char]
+    borrow var common : Array[char],
+    borrow candidate : Array[char]
 ) : Unit {
     var shared : usize = usize(0)
     while shared < common.size() && shared < candidate.size() &&

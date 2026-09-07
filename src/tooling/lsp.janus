@@ -52,7 +52,7 @@ def containsLabel(
 private def appendCompletionItem(
     json : string,
     item : usize,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : Unit {
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
@@ -87,7 +87,7 @@ private def completionArray(json : string) : usize {
     return findJsonObjectProperty(json, "items", result)
 }
 
-def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
+def extractCompletionLabels(json : string, borrow var output : TextBuilder) : Unit {
     output.clear()
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
@@ -105,7 +105,7 @@ def extractCompletionLabels(json : string, output : TextBuilder) : Unit {
     }
 }
 
-def extractSignatureLabel(json : string, output : TextBuilder) : Unit {
+def extractSignatureLabel(json : string, borrow var output : TextBuilder) : Unit {
     output.clear()
     val data : Ptr[byte] = stringData(json)
     val size : usize = stringLength(json)
@@ -132,13 +132,13 @@ private def unsignedByte(value : byte) : int {
     return if numeric < 0 { numeric + 256 } else { numeric }
 }
 
-private def appendHexDigit(value : int, output : ByteBuffer) : bool {
+private def appendHexDigit(value : int, borrow var output : ByteBuffer) : bool {
     return output.appendByte(truncatingCast[byte](
         if value < 10 { 48 + value } else { 55 + value }
     ))
 }
 
-def appendJsonString(value : string, output : ByteBuffer) : bool {
+def appendJsonString(value : string, borrow var output : ByteBuffer) : bool {
     if !output.appendByte(byte(34)) { return false }
     val data : Ptr[byte] = stringData(value)
     var index : usize = usize(0)
@@ -244,7 +244,7 @@ private enum PendingResponse derives Copy, Equality, Debug {
     Signature
 }
 
-private def appendFileUri(path : string, output : TextBuilder) : Unit {
+private def appendFileUri(path : string, borrow var output : TextBuilder) : Unit {
     output.clear()
     output.append("file://")
     val data : Ptr[byte] = stringData(path)
@@ -274,7 +274,7 @@ private def appendFileUri(path : string, output : TextBuilder) : Unit {
     }
 }
 
-private def useDocumentPath(path : Path, output : TextBuilder) : bool {
+private def useDocumentPath(path : Path, borrow var output : TextBuilder) : bool {
     appendFileUri(path.view(), output)
     delete path
     return true
@@ -283,7 +283,7 @@ private def useDocumentPath(path : Path, output : TextBuilder) : bool {
 private def documentUri(
     workspace : string,
     path : string,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     val joined : Result[Path, SystemError] = joinPath(workspace, path)
     return match move joined {
@@ -361,7 +361,7 @@ class LspClient(
         }
     }
 
-    def restart(workspacePath : string, error : TextBuilder) : bool {
+    def restart(workspacePath : string, borrow var error : TextBuilder) : bool {
         this.resetSession(workspacePath)
         val arguments : Array[string] = new Array[string](usize(0))
         defer delete arguments
@@ -377,13 +377,13 @@ class LspClient(
         return move previous
     }
 
-    private def reportTransportFailure(error : TextBuilder) : bool {
+    private def reportTransportFailure(borrow var error : TextBuilder) : bool {
         error.clear()
         error.append("La connexion à `janus-lsp` a été interrompue.")
         return false
     }
 
-    private def reportUnavailable(error : TextBuilder) : bool {
+    private def reportUnavailable(borrow var error : TextBuilder) : bool {
         error.clear()
         error.append("Impossible de lancer `janus-lsp`.")
         return false
@@ -411,7 +411,7 @@ class LspClient(
 
     private def flushChild(
         child : ChildProcess,
-        error : TextBuilder
+        borrow var error : TextBuilder
     ) : bool {
         val chunk : Ptr[byte] = alloc[byte](usize(4096))
         defer free(chunk)
@@ -459,7 +459,7 @@ class LspClient(
         return true
     }
 
-    private def flushOutgoing(error : TextBuilder) : bool {
+    private def flushOutgoing(borrow var error : TextBuilder) : bool {
         if outgoingStart >= outgoing.size() { return true }
         val previous : Option[ChildProcess] = this.takeProcess()
         return match move previous {
@@ -468,12 +468,12 @@ class LspClient(
         }
     }
 
-    private def reportReadFailure(error : TextBuilder) : isize {
+    private def reportReadFailure(borrow var error : TextBuilder) : isize {
         this.reportTransportFailure(error)
         return isize(-1)
     }
 
-    private def reportReadUnavailable(error : TextBuilder) : isize {
+    private def reportReadUnavailable(borrow var error : TextBuilder) : isize {
         this.reportUnavailable(error)
         return isize(-1)
     }
@@ -482,7 +482,7 @@ class LspClient(
         child : ChildProcess,
         target : Ptr[byte],
         capacity : usize,
-        error : TextBuilder
+        borrow var error : TextBuilder
     ) : isize {
         val result : isize = match child.tryRead(target, capacity) {
             Ok(count) => truncatingCast[isize](count),
@@ -501,7 +501,7 @@ class LspClient(
     private def tryReadChunk(
         target : Ptr[byte],
         capacity : usize,
-        error : TextBuilder
+        borrow var error : TextBuilder
     ) : isize {
         val previous : Option[ChildProcess] = this.takeProcess()
         return match move previous {
@@ -525,7 +525,7 @@ class LspClient(
         return true
     }
 
-    private def collectAvailable(error : TextBuilder) : bool {
+    private def collectAvailable(borrow var error : TextBuilder) : bool {
         if !this.compactIncoming() {
             error.clear()
             error.append("Mémoire insuffisante pour compacter les réponses LSP.")
@@ -564,7 +564,7 @@ class LspClient(
         return usize(-1)
     }
 
-    private def copyAvailableMessage(error : TextBuilder) : int {
+    private def copyAvailableMessage(borrow var error : TextBuilder) : int {
         val bodyStart : usize = this.headerBoundary()
         if bodyStart == usize(-1) { return 0 }
         header.clear()
@@ -598,7 +598,7 @@ class LspClient(
         return 1
     }
 
-    private def pollPendingResponse(error : TextBuilder) : int {
+    private def pollPendingResponse(borrow var error : TextBuilder) : int {
         if pendingResponse == PendingResponse.None { return 0 }
         if !this.flushOutgoing(error) { return -1 }
         if !this.collectAvailable(error) { return -1 }
@@ -612,7 +612,7 @@ class LspClient(
         return 0
     }
 
-    private def sendBody(error : TextBuilder) : bool {
+    private def sendBody(borrow var error : TextBuilder) : bool {
         if !this.processAvailable() { return this.reportUnavailable(error) }
         header.clear()
         header.append("Content-Length: ")
@@ -647,7 +647,7 @@ class LspClient(
         return body.appendText(number.view())
     }
 
-    def initialize(error : TextBuilder) : bool {
+    def initialize(borrow var error : TextBuilder) : bool {
         body.clear()
         if !body.appendText(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootPath\":"
@@ -664,7 +664,7 @@ class LspClient(
 
     borrow def isReady() : bool { return ready }
 
-    private def sendClose(error : TextBuilder) : bool {
+    private def sendClose(borrow var error : TextBuilder) : bool {
         body.clear()
         return body.appendText(
             "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":{\"textDocument\":{\"uri\":"
@@ -672,7 +672,7 @@ class LspClient(
         body.appendText("}}}") && this.sendBody(error)
     }
 
-    private def sendOpen(buffer : EditorBuffer, error : TextBuilder) : bool {
+    private def sendOpen(borrow var buffer : EditorBuffer, borrow var error : TextBuilder) : bool {
         snapshot.clear()
         buffer.appendText(snapshot)
         body.clear()
@@ -684,7 +684,7 @@ class LspClient(
         body.appendText("}}}") && this.sendBody(error)
     }
 
-    private def sendChange(buffer : EditorBuffer, error : TextBuilder) : bool {
+    private def sendChange(borrow var buffer : EditorBuffer, borrow var error : TextBuilder) : bool {
         snapshot.clear()
         buffer.appendText(snapshot)
         body.clear()
@@ -701,8 +701,8 @@ class LspClient(
 
     private def synchronizeDocument(
         path : string,
-        buffer : EditorBuffer,
-        error : TextBuilder
+        borrow var buffer : EditorBuffer,
+        borrow var error : TextBuilder
     ) : bool {
         if !documentUri(workspace.view(), path, requestedUri) {
             error.clear()
@@ -722,7 +722,7 @@ class LspClient(
         return this.sendChange(buffer, error)
     }
 
-    private def rememberPendingDocument(buffer : EditorBuffer) : Unit {
+    private def rememberPendingDocument(borrow var buffer : EditorBuffer) : Unit {
         pendingUri.clear()
         pendingUri.append(activeUri.view())
         pendingRevision = buffer.revision()
@@ -730,7 +730,7 @@ class LspClient(
 
     private def pendingDocumentMatches(
         path : string,
-        buffer : EditorBuffer
+        borrow var buffer : EditorBuffer
     ) : bool {
         if !documentUri(workspace.view(), path, requestedUri) { return false }
         return requestedUri.view() == pendingUri.view() &&
@@ -739,11 +739,11 @@ class LspClient(
 
     def requestCompletion(
         path : string,
-        buffer : EditorBuffer,
+        borrow var buffer : EditorBuffer,
         line : usize,
         column : usize,
-        labels : TextBuilder,
-        error : TextBuilder
+        borrow var labels : TextBuilder,
+        borrow var error : TextBuilder
     ) : bool {
         labels.clear()
         error.clear()
@@ -772,11 +772,11 @@ class LspClient(
 
     def requestSignatureHelp(
         path : string,
-        buffer : EditorBuffer,
+        borrow var buffer : EditorBuffer,
         line : usize,
         column : usize,
-        signature : TextBuilder,
-        error : TextBuilder
+        borrow var signature : TextBuilder,
+        borrow var error : TextBuilder
     ) : bool {
         signature.clear()
         error.clear()
@@ -805,10 +805,10 @@ class LspClient(
 
     def poll(
         path : string,
-        buffer : EditorBuffer,
-        labels : TextBuilder,
-        signature : TextBuilder,
-        error : TextBuilder
+        borrow var buffer : EditorBuffer,
+        borrow var labels : TextBuilder,
+        borrow var signature : TextBuilder,
+        borrow var error : TextBuilder
     ) : LspResponseKind {
         val state : int = this.pollPendingResponse(error)
         if state == 0 { return LspResponseKind.None }
@@ -834,7 +834,7 @@ class LspClient(
         return LspResponseKind.Signature
     }
 
-    def shutdown(error : TextBuilder) : bool {
+    def shutdown(borrow var error : TextBuilder) : bool {
         if activeUri.size() > usize(0) && !this.sendClose(error) {
             this.disable()
             return false
@@ -898,7 +898,7 @@ private def clientWithProcess(
     )
 }
 
-def lspClient(workspacePath : string, error : TextBuilder) : LspClient {
+def lspClient(workspacePath : string, borrow var error : TextBuilder) : LspClient {
     val workspace : TextBuilder = new TextBuilder()
     if workspacePath == "" {
         workspace.append(".")

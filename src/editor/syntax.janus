@@ -39,7 +39,7 @@ def isOperator(value : char) : bool {
 }
 
 def identifierEquals(
-    source : Array[char],
+    borrow source : Array[char],
     start : usize,
     end : usize,
     expected : string
@@ -58,7 +58,7 @@ def identifierEquals(
     return true
 }
 
-def isKeyword(source : Array[char], start : usize, end : usize) : bool {
+def isKeyword(borrow source : Array[char], start : usize, end : usize) : bool {
     return identifierEquals(source, start, end, "module") ||
     identifierEquals(source, start, end, "import") ||
     identifierEquals(source, start, end, "as") ||
@@ -96,7 +96,7 @@ def isKeyword(source : Array[char], start : usize, end : usize) : bool {
     identifierEquals(source, start, end, "false")
 }
 
-def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
+def isBuiltinType(borrow source : Array[char], start : usize, end : usize) : bool {
     return identifierEquals(source, start, end, "Unit") ||
     identifierEquals(source, start, end, "bool") ||
     identifierEquals(source, start, end, "byte") ||
@@ -117,7 +117,7 @@ def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
 }
 
 def identifierKind(
-    source : Array[char],
+    borrow source : Array[char],
     start : usize,
     end : usize
 ) : SyntaxKind {
@@ -132,7 +132,7 @@ def identifierKind(
 }
 
 def appendSpan(
-    output : Array[SyntaxSpan],
+    borrow var output : Array[SyntaxSpan],
     start : usize,
     end : usize,
     kind : SyntaxKind
@@ -143,7 +143,7 @@ def appendSpan(
 }
 
 /// Classe chaque portion du texte visible sans modifier son contenu.
-def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
+def highlight(borrow source : Array[char], borrow var output : Array[SyntaxSpan]) : Unit {
     output.clear()
     var index : usize = usize(0)
     while index < source.size() {
@@ -206,7 +206,7 @@ def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
 }
 
 /// Retourne le style d'un caractère, principalement utile aux tests et au rendu.
-def syntaxKindAt(spans : Array[SyntaxSpan], index : usize) : SyntaxKind {
+def syntaxKindAt(borrow var spans : Array[SyntaxSpan], index : usize) : SyntaxKind {
     var spanIndex : usize = usize(0)
     while spanIndex < spans.size() {
         val span : SyntaxSpan = spans.get(spanIndex)

@@ -30,7 +30,7 @@ class DocumentTabs(
         borrow source : Array[char],
         start : usize,
         length : usize,
-        output : TextBuilder
+        borrow var output : TextBuilder
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -108,7 +108,7 @@ class DocumentTabs(
     }
 
     private def snapshot(
-        buffer : EditorBuffer,
+        borrow var buffer : EditorBuffer,
         firstLine : usize,
         firstColumn : usize
     ) : Unit {
@@ -124,8 +124,8 @@ class DocumentTabs(
     }
 
     private def restoreActive(
-        buffer : EditorBuffer,
-        activePath : TextBuilder
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder
     ) : Unit {
         val state : DocumentState = states.get(active)
         val requestedArchive : BufferArchive = archives.replace(
@@ -157,12 +157,12 @@ class DocumentTabs(
         }
     }
 
-    borrow def appendPath(index : usize, output : TextBuilder) : Unit {
+    borrow def appendPath(index : usize, borrow var output : TextBuilder) : Unit {
         val state : DocumentState = states.get(index)
         this.appendRange(paths, state.pathStart, state.pathLength, output)
     }
 
-    borrow def appendLabel(index : usize, output : TextBuilder) : Unit {
+    borrow def appendLabel(index : usize, borrow var output : TextBuilder) : Unit {
         val state : DocumentState = states.get(index)
         var start : usize = state.pathStart
         var cursor : usize = usize(0)
@@ -182,7 +182,7 @@ class DocumentTabs(
         }
     }
 
-    borrow def isModified(index : usize, buffer : EditorBuffer) : bool {
+    borrow def isModified(index : usize, borrow var buffer : EditorBuffer) : bool {
         return if index == active {
             buffer.isModified()
         } else {
@@ -190,7 +190,7 @@ class DocumentTabs(
         }
     }
 
-    borrow def anyModified(buffer : EditorBuffer) : bool {
+    borrow def anyModified(borrow var buffer : EditorBuffer) : bool {
         var index : usize = usize(0)
         while index < states.size() {
             if this.isModified(index, buffer) { return true }
@@ -201,8 +201,8 @@ class DocumentTabs(
 
     def switchTo(
         index : usize,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
         firstLine : usize,
         firstColumn : usize
     ) : bool {
@@ -215,9 +215,9 @@ class DocumentTabs(
 
     def open(
         path : string,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
-        status : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
+        borrow var status : TextBuilder,
         firstLine : usize,
         firstColumn : usize
     ) : bool {
@@ -260,11 +260,11 @@ class DocumentTabs(
 
     def create(
         path : string,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
         firstLine : usize,
         firstColumn : usize,
-        status : TextBuilder
+        borrow var status : TextBuilder
     ) : bool {
         if this.find(path) != usize(-1) {
             setStatus(status, "Ce fichier est déjà ouvert dans un onglet.")
@@ -300,9 +300,9 @@ class DocumentTabs(
 
     def close(
         index : usize,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
-        status : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
+        borrow var status : TextBuilder,
         firstLine : usize,
         firstColumn : usize
     ) : bool {
@@ -348,7 +348,7 @@ class DocumentTabs(
     }
 }
 
-def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
+def documentTabs(path : string, borrow var buffer : EditorBuffer) : DocumentTabs {
     val states : Array[DocumentState] = new Array[DocumentState](usize(8))
     val archives : Array[BufferArchive] = new Array[BufferArchive](usize(8))
     val paths : Array[char] = new Array[char](usize(256))

@@ -52,7 +52,7 @@ class EditorDiagnostics(
     borrow def column(index : usize) : usize { return columns.get(index) }
     borrow def isError(index : usize) : bool { return severities.get(index) == 2 }
 
-    def appendForLine(requestedLine : usize, output : TextBuilder) : bool {
+    def appendForLine(requestedLine : usize, borrow var output : TextBuilder) : bool {
         output.clear()
         val source : string = messages.view()
         var index : usize = usize(0)
@@ -125,7 +125,7 @@ class EditorDiagnostics(
         }
     }
 
-    def appendAll(output : TextBuilder) : Unit {
+    def appendAll(borrow var output : TextBuilder) : Unit {
         output.clear()
         val source : string = messages.view()
         var index : usize = usize(0)

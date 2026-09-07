@@ -5,8 +5,8 @@ import std.testing
 
 def highlightedSource(
     text : string,
-    characters : Array[char],
-    spans : Array[SyntaxSpan]
+    borrow var characters : Array[char],
+    borrow var spans : Array[SyntaxSpan]
 ) : Unit {
     val buffer : EditorBuffer = emptyBuffer()
     defer delete buffer

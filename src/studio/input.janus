@@ -33,7 +33,7 @@ def resolveQuitRequest(
     return requested || nativeClose
 }
 
-def handlePathPromptKeys(prompt : PathPrompt) : bool {
+def handlePathPromptKeys(borrow var prompt : PathPrompt) : bool {
     if isKeyPressed(Key.Escape) {
         prompt.dismiss()
         return false
@@ -73,8 +73,8 @@ def handlePathPromptKeys(prompt : PathPrompt) : bool {
 }
 
 def handleModeKeys(
-    controller : VimController,
-    buffer : EditorBuffer
+    borrow var controller : VimController,
+    borrow var buffer : EditorBuffer
 ) : EditorAction {
     if isKeyPressed(Key.Escape) {
         controller.escape()
@@ -148,9 +148,9 @@ def handleModeKeys(
 }
 
 def handlePrintableKeys(
-    controller : VimController,
-    buffer : EditorBuffer,
-    completion : CompletionModel
+    borrow var controller : VimController,
+    borrow var buffer : EditorBuffer,
+    borrow var completion : CompletionModel
 ) : EditorAction {
     val control : bool = controlDown()
     var action : EditorAction = EditorAction.None
@@ -189,9 +189,9 @@ def handlePrintableKeys(
 }
 
 def handleCompletionKeys(
-    completion : CompletionModel,
-    buffer : EditorBuffer,
-    pendingSignature : TextBuilder
+    borrow var completion : CompletionModel,
+    borrow var buffer : EditorBuffer,
+    borrow var pendingSignature : TextBuilder
 ) : bool {
     if !completion.isVisible() {
         return false
@@ -217,13 +217,13 @@ def handleCompletionKeys(
 }
 
 def refreshCompletion(
-    lsp : LspClient,
+    borrow var lsp : LspClient,
     path : string,
-    buffer : EditorBuffer,
-    completion : CompletionModel,
-    labels : TextBuilder,
-    error : TextBuilder,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var completion : CompletionModel,
+    borrow var labels : TextBuilder,
+    borrow var error : TextBuilder,
+    borrow var status : TextBuilder
 ) : Unit {
     if lsp.requestCompletion(
         path,
@@ -249,12 +249,12 @@ def refreshCompletion(
 }
 
 def refreshSignatureHelp(
-    lsp : LspClient,
+    borrow var lsp : LspClient,
     path : string,
-    buffer : EditorBuffer,
-    signature : TextBuilder,
-    fallback : TextBuilder,
-    error : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var signature : TextBuilder,
+    borrow var fallback : TextBuilder,
+    borrow var error : TextBuilder
 ) : Unit {
     if !lsp.requestSignatureHelp(
         path,
@@ -269,15 +269,15 @@ def refreshSignatureHelp(
 }
 
 def pollLanguageServer(
-    lsp : LspClient,
+    borrow var lsp : LspClient,
     path : string,
-    buffer : EditorBuffer,
-    completion : CompletionModel,
-    labels : TextBuilder,
-    signature : TextBuilder,
-    fallback : TextBuilder,
-    error : TextBuilder,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var completion : CompletionModel,
+    borrow var labels : TextBuilder,
+    borrow var signature : TextBuilder,
+    borrow var fallback : TextBuilder,
+    borrow var error : TextBuilder,
+    borrow var status : TextBuilder
 ) : Unit {
     val response : LspResponseKind = lsp.poll(
         path,
@@ -310,8 +310,8 @@ def pollLanguageServer(
 def applyEditorAction(
     action : EditorAction,
     path : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     if action == EditorAction.Save {
         saveFile(path, buffer, status)
