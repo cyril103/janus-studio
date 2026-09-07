@@ -409,7 +409,7 @@ def saveFileAs(
 
 def openProjectFolder(
     path : string,
-    projectRoot : TextBuilder,
+    borrow var projectRoot : TextBuilder,
     borrow var explorer : ProjectExplorer,
     borrow var status : TextBuilder
 ) : bool {
@@ -430,7 +430,7 @@ def openProjectFolder(
 def applyPathPrompt(
     borrow var prompt : PathPrompt,
     path : string,
-    activePath : TextBuilder,
+    borrow var activePath : TextBuilder,
     borrow var buffer : EditorBuffer,
     borrow var diagnostics : EditorDiagnostics,
     borrow var search : SearchModel,

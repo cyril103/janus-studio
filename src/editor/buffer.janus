@@ -108,7 +108,7 @@ class BufferArchive(
     }
 }
 
-private def trimSnapshotDeque(states : Deque[BufferSnapshot]) : Unit {
+private def trimSnapshotDeque(borrow var states : Deque[BufferSnapshot]) : Unit {
     var characters : usize = usize(0)
     val count : usize = states.size()
     var index : usize = usize(0)
@@ -985,7 +985,7 @@ class EditorBuffer(
     }
 
     borrow def appendVisibleText(
-        output : TextBuilder,
+        borrow var output : TextBuilder,
         firstLine : usize,
         maximumLines : usize
     ) : Unit {
@@ -1010,7 +1010,7 @@ class EditorBuffer(
     }
 
     borrow def appendVisibleCharacters(
-        output : Array[char],
+        borrow var output : Array[char],
         firstLine : usize,
         maximumLines : usize
     ) : Unit {

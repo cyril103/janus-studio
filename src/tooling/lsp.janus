@@ -264,7 +264,7 @@ private def parseUnsignedJsonNumber(source : string, start : usize) : usize {
 /// Décode le format delta de textDocument/semanticTokens/full.
 def extractSemanticTokens(
     json : string,
-    output : Array[SemanticToken]
+    borrow var output : Array[SemanticToken]
 ) : Unit {
     output.clear()
     val size : usize = stringLength(json)

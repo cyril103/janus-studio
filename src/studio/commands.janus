@@ -12,9 +12,9 @@ import tooling.compiler
 import std.graphics
 
 def handleFileCommands(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
     consumeOpenFileMenu(ui, frame)
     if app.filePrompt.isVisible() {
@@ -30,54 +30,63 @@ def handleFileCommands(
     handleSaveShortcut(app, ui, frame)
 }
 
-def consumeOpenFileMenu(ui : StudioUiState, frame : StudioFrame) : Unit {
+def consumeOpenFileMenu(borrow var ui : StudioUiState, borrow var frame : StudioFrame) : Unit {
     if !ui.fileMenuOpen { return }
     if isKeyPressed(Key.Escape) { ui.fileMenuOpen = false }
     frame.fileInputConsumed = true
 }
 
-def submitPathPrompt(app : StudioAppState, ui : StudioUiState) : Unit {
-    if !handlePathPromptKeys(app.filePrompt) { return }
-    if app.filePrompt.action() == PathPromptAction.OpenFolder {
+def submitPathPrompt(borrow var app : StudioAppState, borrow var ui : StudioUiState) : Unit {
+    borrow var filePrompt = app.filePrompt
+    if !handlePathPromptKeys(filePrompt) { return }
+    if filePrompt.action() == PathPromptAction.OpenFolder {
         submitFolderPrompt(app, ui)
         return
     }
     submitDocumentPrompt(app, ui)
 }
 
-def submitFolderPrompt(app : StudioAppState, ui : StudioUiState) : Unit {
+def submitFolderPrompt(borrow var app : StudioAppState, borrow var ui : StudioUiState) : Unit {
+    borrow var filePrompt = app.filePrompt
+    borrow var projectRoot = app.projectRoot
+    borrow var explorer = app.explorer
+    borrow var status = app.status
+    borrow var completionError = app.tooling.completionError
     if !openProjectFolder(
-        app.filePrompt.value(),
-        app.projectRoot,
-        app.explorer,
-        app.status
+        filePrompt.value(),
+        projectRoot,
+        explorer,
+        status
     ) {
         return
     }
-    app.filePrompt.dismiss()
+    filePrompt.dismiss()
     ui.firstExplorerEntry = usize(0)
     ui.explorerHorizontalOffset = 0
     if !app.tooling.languageServer.restart(
-        app.projectRoot.view(),
-        app.tooling.completionError
+        projectRoot.view(),
+        completionError
     ) {
-        setStatus(app.status, app.tooling.completionError.view())
+        setStatus(status, completionError.view())
     }
 }
 
-def capturePromptedDocument(app : StudioAppState) : bool {
-    if app.filePrompt.value() == "" {
-        setStatus(app.status, "Saisissez un chemin de fichier.")
+def capturePromptedDocument(borrow var app : StudioAppState) : bool {
+    borrow var filePrompt = app.filePrompt
+    borrow var promptedPath = app.promptedPath
+    borrow var status = app.status
+    if filePrompt.value() == "" {
+        setStatus(status, "Saisissez un chemin de fichier.")
         return false
     }
-    if captureDocumentPath(app.filePrompt.value(), app.promptedPath) {
+    if captureDocumentPath(filePrompt.value(), promptedPath) {
         return true
     }
-    setStatus(app.status, "Chemin de fichier invalide.")
+    setStatus(status, "Chemin de fichier invalide.")
     return false
 }
 
-def submitDocumentPrompt(app : StudioAppState, ui : StudioUiState) : Unit {
+def submitDocumentPrompt(borrow var app : StudioAppState, borrow var ui : StudioUiState) : Unit {
     if !capturePromptedDocument(app) { return }
     val action : PathPromptAction = app.filePrompt.action()
     val applied : bool = if action == PathPromptAction.Open {
@@ -96,12 +105,17 @@ def submitDocumentPrompt(app : StudioAppState, ui : StudioUiState) : Unit {
     }
 }
 
-def openPromptedDocument(app : StudioAppState, ui : StudioUiState) : bool {
-    val opened : bool = app.tabs.open(
-        app.promptedPath.view(),
-        app.buffer,
-        app.activePath,
-        app.status,
+def openPromptedDocument(borrow var app : StudioAppState, borrow var ui : StudioUiState) : bool {
+    borrow var tabs = app.tabs
+    borrow var promptedPath = app.promptedPath
+    borrow var buffer = app.buffer
+    borrow var activePath = app.activePath
+    borrow var status = app.status
+    val opened : bool = tabs.open(
+        promptedPath.view(),
+        buffer,
+        activePath,
+        status,
         ui.firstLine,
         ui.firstColumn
     )
@@ -109,46 +123,59 @@ def openPromptedDocument(app : StudioAppState, ui : StudioUiState) : bool {
     return opened
 }
 
-def createPromptedDocument(app : StudioAppState, ui : StudioUiState) : bool {
-    if !validateNewPath(app.promptedPath.view(), app.status) { return false }
-    val created : bool = app.tabs.create(
-        app.promptedPath.view(),
-        app.buffer,
-        app.activePath,
+def createPromptedDocument(borrow var app : StudioAppState, borrow var ui : StudioUiState) : bool {
+    borrow var promptedPath = app.promptedPath
+    borrow var status = app.status
+    borrow var tabs = app.tabs
+    borrow var buffer = app.buffer
+    borrow var activePath = app.activePath
+    if !validateNewPath(promptedPath.view(), status) { return false }
+    val created : bool = tabs.create(
+        promptedPath.view(),
+        buffer,
+        activePath,
         ui.firstLine,
         ui.firstColumn,
-        app.status
+        status
     )
     if created {
-        setStatus(app.status, "Nouveau fichier : Ctrl+S pour le créer.")
+        setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
         app.filePrompt.dismiss()
     }
     return created
 }
 
-def saveAsPromptedDocument(app : StudioAppState) : bool {
-    if !app.tabs.pathAvailableForActive(app.promptedPath.view()) {
+def saveAsPromptedDocument(borrow var app : StudioAppState) : bool {
+    borrow var tabs = app.tabs
+    borrow var promptedPath = app.promptedPath
+    borrow var status = app.status
+    borrow var filePrompt = app.filePrompt
+    borrow var activePath = app.activePath
+    borrow var buffer = app.buffer
+    borrow var diagnostics = app.tooling.diagnostics
+    borrow var search = app.search
+    if !tabs.pathAvailableForActive(promptedPath.view()) {
         setStatus(
-            app.status,
+            status,
             "Ce fichier est déjà ouvert dans un autre onglet."
         )
         return false
     }
     if !applyPathPrompt(
-        app.filePrompt,
-        app.promptedPath.view(),
-        app.activePath,
-        app.buffer,
-        app.tooling.diagnostics,
-        app.search,
-        app.status
+        filePrompt,
+        promptedPath.view(),
+        activePath,
+        buffer,
+        diagnostics,
+        search,
+        status
     ) {
         return false
     }
-    return app.tabs.updateActivePath(app.activePath.view())
+    return tabs.updateActivePath(activePath.view())
 }
 
-def beginPathPromptShortcut(app : StudioAppState, frame : StudioFrame) : bool {
+def beginPathPromptShortcut(borrow var app : StudioAppState, borrow var frame : StudioFrame) : bool {
     if app.tabs.size() > usize(0) && frame.control && frame.shift &&
     isKeyPressed(Key.S) {
         app.filePrompt.begin(PathPromptAction.SaveAs, app.activePath.view())
@@ -165,19 +192,23 @@ def beginPathPromptShortcut(app : StudioAppState, frame : StudioFrame) : bool {
 }
 
 def closeTabShortcut(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : bool {
-    if app.tabs.size() == usize(0) || !frame.control ||
+    borrow var tabs = app.tabs
+    borrow var buffer = app.buffer
+    borrow var activePath = app.activePath
+    borrow var status = app.status
+    if tabs.size() == usize(0) || !frame.control ||
     !isKeyPressed(Key.W) {
         return false
     }
-    if app.tabs.close(
-        app.tabs.selected(),
-        app.buffer,
-        app.activePath,
-        app.status,
+    if tabs.close(
+        tabs.selected(),
+        buffer,
+        activePath,
+        status,
         ui.firstLine,
         ui.firstColumn
     ) {
@@ -189,27 +220,30 @@ def closeTabShortcut(
 }
 
 def switchTabShortcut(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : bool {
-    if app.tabs.size() == usize(0) || !frame.control ||
+    borrow var tabs = app.tabs
+    borrow var buffer = app.buffer
+    borrow var activePath = app.activePath
+    if tabs.size() == usize(0) || !frame.control ||
     !isKeyPressed(Key.Tab) {
         return false
     }
     val next : usize = if frame.shift {
-        if app.tabs.selected() == usize(0) {
-            app.tabs.size() - usize(1)
+        if tabs.selected() == usize(0) {
+            tabs.size() - usize(1)
         } else {
-            app.tabs.selected() - usize(1)
+            tabs.selected() - usize(1)
         }
     } else {
-        (app.tabs.selected() + usize(1)) % app.tabs.size()
+        (tabs.selected() + usize(1)) % tabs.size()
     }
-    if app.tabs.switchTo(
+    if tabs.switchTo(
         next,
-        app.buffer,
-        app.activePath,
+        buffer,
+        activePath,
         ui.firstLine,
         ui.firstColumn
     ) {
@@ -220,15 +254,18 @@ def switchTabShortcut(
     return true
 }
 
-def handleClipboardShortcut(app : StudioAppState, frame : StudioFrame) : bool {
+def handleClipboardShortcut(borrow var app : StudioAppState, borrow var frame : StudioFrame) : bool {
+    borrow var buffer = app.buffer
+    borrow var clipboard = app.clipboard
+    borrow var status = app.status
     if app.tabs.size() == usize(0) || !frame.control { return false }
-    if isKeyPressed(Key.C) && app.buffer.appendSelection(app.clipboard) {
-        setClipboardText(app.clipboard.view())
-        setStatus(app.status, "Sélection copiée.")
-    } else if isKeyPressed(Key.X) && app.buffer.appendSelection(app.clipboard) {
-        setClipboardText(app.clipboard.view())
-        app.buffer.deleteSelection()
-        setStatus(app.status, "Sélection coupée.")
+    if isKeyPressed(Key.C) && buffer.appendSelection(clipboard) {
+        setClipboardText(clipboard.view())
+        setStatus(status, "Sélection copiée.")
+    } else if isKeyPressed(Key.X) && buffer.appendSelection(clipboard) {
+        setClipboardText(clipboard.view())
+        buffer.deleteSelection()
+        setStatus(status, "Sélection coupée.")
     } else if isKeyPressed(Key.V) &&
     app.controller.mode() == EditorMode.Insert {
         pasteClipboard(app)
@@ -239,24 +276,27 @@ def handleClipboardShortcut(app : StudioAppState, frame : StudioFrame) : bool {
     return true
 }
 
-def pasteClipboard(app : StudioAppState) : Unit {
+def pasteClipboard(borrow var app : StudioAppState) : Unit {
+    borrow var status = app.status
     val systemClipboard : string = clipboardText()
     if systemClipboard != "" {
         app.buffer.insertText(systemClipboard)
     } else if app.clipboard.size() > usize(0) {
         app.buffer.insertText(app.clipboard.view())
     }
-    setStatus(app.status, "Presse-papiers collé.")
+    setStatus(status, "Presse-papiers collé.")
 }
 
 def handleSaveShortcut(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
+    borrow var buffer = app.buffer
+    borrow var status = app.status
     if app.tabs.size() == usize(0) { return }
     if frame.control && isKeyPressed(Key.S) {
-        saveFile(app.activePath.view(), app.buffer, app.status)
+        saveFile(app.activePath.view(), buffer, status)
     } else if isKeyPressed(Key.F5) {
         runCompilerCheck(app, ui)
     } else {
@@ -265,13 +305,17 @@ def handleSaveShortcut(
     frame.fileInputConsumed = true
 }
 
-def runCompilerCheck(app : StudioAppState, ui : StudioUiState) : Unit {
-    if saveFile(app.activePath.view(), app.buffer, app.status) {
+def runCompilerCheck(borrow var app : StudioAppState, borrow var ui : StudioUiState) : Unit {
+    borrow var buffer = app.buffer
+    borrow var status = app.status
+    borrow var toolOutput = app.tooling.toolOutput
+    borrow var diagnostics = app.tooling.diagnostics
+    if saveFile(app.activePath.view(), buffer, status) {
         app.tooling.compiler.start(
             app.activePath.view(),
             app.projectRoot.view(),
-            app.tooling.toolOutput,
-            app.tooling.diagnostics
+            toolOutput,
+            diagnostics
         )
     }
     ui.firstOutputLine = usize(0)
@@ -279,19 +323,22 @@ def runCompilerCheck(app : StudioAppState, ui : StudioUiState) : Unit {
 }
 
 def handleEditorCommands(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
     val completionConsumed : bool = completionConsumesInput(app, frame)
     var keyAction : EditorAction = EditorAction.None
     var characterAction : EditorAction = EditorAction.None
     if !completionConsumed {
-        keyAction = handleModeKeys(app.controller, app.buffer)
+        borrow var controller = app.controller
+        borrow var buffer = app.buffer
+        borrow var completion = app.tooling.completion
+        keyAction = handleModeKeys(controller, buffer)
         characterAction = handlePrintableKeys(
-            app.controller,
-            app.buffer,
-            app.tooling.completion
+            controller,
+            buffer,
+            completion
         )
     }
     updateCompletionFilter(app, completionConsumed)
@@ -307,19 +354,22 @@ def handleEditorCommands(
 }
 
 def completionConsumesInput(
-    app : StudioAppState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var frame : StudioFrame
 ) : bool {
+    borrow var completion = app.tooling.completion
+    borrow var buffer = app.buffer
+    borrow var pendingSignature = app.tooling.pendingSignature
     if frame.fileInputConsumed || app.tabs.size() == usize(0) { return true }
     return handleCompletionKeys(
-        app.tooling.completion,
-        app.buffer,
-        app.tooling.pendingSignature
+        completion,
+        buffer,
+        pendingSignature
     )
 }
 
 def updateCompletionFilter(
-    app : StudioAppState,
+    borrow var app : StudioAppState,
     completionConsumed : bool
 ) : Unit {
     if !completionConsumed && isKeyPressed(Key.Backspace) &&
@@ -329,44 +379,52 @@ def updateCompletionFilter(
 }
 
 def resolveLanguageFeatureAction(
-    app : StudioAppState,
-    frame : StudioFrame,
+    borrow var app : StudioAppState,
+    borrow var frame : StudioFrame,
     action : EditorAction
 ) : EditorAction {
+    borrow var languageServer = app.tooling.languageServer
+    borrow var buffer = app.buffer
+    borrow var completion = app.tooling.completion
+    borrow var completionLabels = app.tooling.completionLabels
+    borrow var completionError = app.tooling.completionError
+    borrow var status = app.status
+    borrow var signatureText = app.tooling.signatureText
+    borrow var pendingSignature = app.tooling.pendingSignature
     val manualCompletion : bool = app.controller.mode() == EditorMode.Insert &&
     frame.control && isKeyPressed(Key.Space)
     if action == EditorAction.Complete || manualCompletion {
         refreshCompletion(
-            app.tooling.languageServer,
+            languageServer,
             app.activePath.view(),
-            app.buffer,
-            app.tooling.completion,
-            app.tooling.completionLabels,
-            app.tooling.completionError,
-            app.status
+            buffer,
+            completion,
+            completionLabels,
+            completionError,
+            status
         )
         return EditorAction.None
     }
     if action == EditorAction.SignatureHelp {
-        app.tooling.completion.dismiss()
+        completion.dismiss()
         refreshSignatureHelp(
-            app.tooling.languageServer,
+            languageServer,
             app.activePath.view(),
-            app.buffer,
-            app.tooling.signatureText,
-            app.tooling.pendingSignature,
-            app.tooling.completionError
+            buffer,
+            signatureText,
+            pendingSignature,
+            completionError
         )
         return EditorAction.None
     }
     if action == EditorAction.DismissSignatureHelp {
-        app.tooling.completion.dismiss()
-        app.tooling.signatureText.clear()
-        app.tooling.pendingSignature.clear()
+        completion.dismiss()
+        signatureText.clear()
+        pendingSignature.clear()
         return EditorAction.None
     }
     if action == EditorAction.DismissCompletion {
-        app.tooling.completion.dismiss()
+        completion.dismiss()
         return EditorAction.None
     }
     return action
@@ -379,7 +437,7 @@ def completionInvalidatedByNavigation() : bool {
     isKeyPressed(Key.Tab)
 }
 
-def signatureInvalidated(app : StudioAppState) : bool {
+def signatureInvalidated(borrow var app : StudioAppState) : bool {
     return app.controller.mode() != EditorMode.Insert ||
     isKeyPressed(Key.Escape) || isKeyPressed(Key.Backspace) ||
     isKeyPressed(Key.Delete) || isKeyPressed(Key.Left) ||
@@ -388,7 +446,7 @@ def signatureInvalidated(app : StudioAppState) : bool {
 }
 
 def dismissStaleLanguageHints(
-    app : StudioAppState,
+    borrow var app : StudioAppState,
     completionConsumed : bool
 ) : Unit {
     if !completionConsumed && app.tooling.completion.isFiltering() &&
@@ -398,24 +456,37 @@ def dismissStaleLanguageHints(
     if signatureInvalidated(app) { app.tooling.signatureText.clear() }
 }
 
-def pollTooling(app : StudioAppState, ui : StudioUiState) : Unit {
+def pollTooling(borrow var app : StudioAppState, borrow var ui : StudioUiState) : Unit {
+    borrow var languageServer = app.tooling.languageServer
+    borrow var buffer = app.buffer
+    borrow var completion = app.tooling.completion
+    borrow var completionLabels = app.tooling.completionLabels
+    borrow var signatureText = app.tooling.signatureText
+    borrow var pendingSignature = app.tooling.pendingSignature
+    borrow var semanticTokens = app.tooling.semanticTokens
+    borrow var completionError = app.tooling.completionError
+    borrow var status = app.status
+    borrow var toolOutput = app.tooling.toolOutput
+    borrow var diagnostics = app.tooling.diagnostics
+    borrow var storedSemanticRevision = app.tooling.semanticRevision
+    borrow var compiler = app.tooling.compiler
     val semanticRevision : usize = pollLanguageServer(
-        app.tooling.languageServer,
+        languageServer,
         app.activePath.view(),
-        app.buffer,
-        app.tooling.completion,
-        app.tooling.completionLabels,
-        app.tooling.signatureText,
-        app.tooling.pendingSignature,
-        app.tooling.semanticTokens,
-        app.tooling.semanticRevision,
-        app.tooling.completionError,
-        app.status
+        buffer,
+        completion,
+        completionLabels,
+        signatureText,
+        pendingSignature,
+        semanticTokens,
+        storedSemanticRevision,
+        completionError,
+        status
     )
-    app.tooling.updateSemanticRevision(semanticRevision)
-    val compilerState : CompilerCheckState = app.tooling.compiler.poll(
-        app.tooling.toolOutput,
-        app.tooling.diagnostics
+    storedSemanticRevision = semanticRevision
+    val compilerState : CompilerCheckState = compiler.poll(
+        toolOutput,
+        diagnostics
     )
     if compilerState == CompilerCheckState.Completed ||
     compilerState == CompilerCheckState.Failed {
@@ -425,43 +496,49 @@ def pollTooling(app : StudioAppState, ui : StudioUiState) : Unit {
 }
 
 def resolveSearchAction(
-    app : StudioAppState,
+    borrow var app : StudioAppState,
     keyAction : EditorAction,
     characterAction : EditorAction
 ) : EditorAction {
+    borrow var search = app.search
+    borrow var buffer = app.buffer
+    borrow var status = app.status
     if keyAction == EditorAction.Search {
-        app.search.begin(app.buffer, app.controller.commandView())
-        app.search.appendStatus(app.status)
+        search.begin(buffer, app.controller.commandView())
+        search.appendStatus(status)
         return EditorAction.None
     }
     if keyAction == EditorAction.SearchNext ||
     characterAction == EditorAction.SearchNext {
-        app.search.selectNext(app.buffer)
-        app.search.appendStatus(app.status)
+        search.selectNext(buffer)
+        search.appendStatus(status)
         return EditorAction.None
     }
     if keyAction == EditorAction.SearchPrevious ||
     characterAction == EditorAction.SearchPrevious {
-        app.search.selectPrevious(app.buffer)
-        app.search.appendStatus(app.status)
+        search.selectPrevious(buffer)
+        search.appendStatus(status)
         return EditorAction.None
     }
     return if keyAction != EditorAction.None { keyAction } else { characterAction }
 }
 
 def applyEditorCommand(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
     requestedAction : EditorAction
 ) : Unit {
+    borrow var buffer = app.buffer
+    borrow var status = app.status
+    borrow var tabs = app.tabs
     val editorQuitRequested : bool = applyEditorAction(
         requestedAction,
         app.activePath.view(),
-        app.buffer,
-        app.status
+        buffer,
+        status
     )
-    val hasModifiedDocuments : bool = app.tabs.anyModified(app.buffer)
+    val hasModifiedDocuments : bool = tabs.anyModified(buffer)
     ui.quitRequested = resolveQuitRequest(
         editorQuitRequested,
         requestedAction == EditorAction.ForceQuit,
@@ -471,7 +548,7 @@ def applyEditorCommand(
     if (editorQuitRequested || frame.nativeCloseRequested) &&
     !ui.quitRequested && hasModifiedDocuments {
         setStatus(
-            app.status,
+            status,
             "Des onglets contiennent des modifications non enregistrées."
         )
     }

@@ -11,20 +11,21 @@ def main() : int {
     }
     defer closeWindow()
 
-    val display : StudioDisplay = studioDisplay()
+    var display : StudioDisplay = studioDisplay()
     defer delete display
     if !display.isValid() {
         println("Impossible de charger les polices de Janus Studio.")
         return 1
     }
-    val app : StudioAppState = studioAppState()
+    var app : StudioAppState = studioAppState()
     defer delete app
     val ui : StudioUiState = studioUiState()
     defer delete ui
 
     runStudioSession(app, ui, display)
+    borrow var completionError = app.tooling.completionError
     val _serverStopped : bool = app.tooling.languageServer.shutdown(
-        app.tooling.completionError
+        completionError
     )
     return 0
 }

@@ -29,7 +29,7 @@ class StudioFrame(
 ) {}
 
 def beginStudioFrame(
-    app : StudioAppState,
+    borrow var app : StudioAppState,
     glyphAdvance : float,
     lineAdvance : float,
     outputGlyphAdvance : float,
@@ -63,7 +63,8 @@ def visibleEditorLines(lineAdvance : float) : usize {
 
 pure def minimum(left : usize, right : usize) : usize => if left < right { left } else { right }
 
-def restoreSelectedDocument(app : StudioAppState, ui : StudioUiState) : Unit {
+def restoreSelectedDocument(borrow var app : StudioAppState, borrow var ui : StudioUiState) : Unit {
+    borrow val tabs = app.tabs
     ui.firstLine = app.tabs.firstLine()
     ui.firstColumn = app.tabs.firstColumn()
     app.tooling.diagnostics.clear()
@@ -72,22 +73,26 @@ def restoreSelectedDocument(app : StudioAppState, ui : StudioUiState) : Unit {
     app.controller.escape()
     app.tooling.invalidateSemanticTokens()
     ui.firstDocumentTab = keepSelectedDocumentTabVisible(
-        app.tabs,
+        tabs,
         ui.firstDocumentTab
     )
 }
 
 def handleDocumentTabs(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
-    if frame.leftMousePressed && documentTabScrollbarHovered(app.tabs) {
+    borrow var tabs = app.tabs
+    borrow var buffer = app.buffer
+    borrow var activePath = app.activePath
+    borrow var status = app.status
+    if frame.leftMousePressed && documentTabScrollbarHovered(tabs) {
         ui.documentTabScrollbarDragging = true
     }
     if ui.documentTabScrollbarDragging {
         if isMouseButtonDown(MouseButton.Left) {
-            ui.firstDocumentTab = documentTabScrollAtMouse(app.tabs)
+            ui.firstDocumentTab = documentTabScrollAtMouse(tabs)
             frame.layoutMouseConsumed = true
         } else {
             ui.documentTabScrollbarDragging = false
@@ -95,29 +100,29 @@ def handleDocumentTabs(
     }
     if !frame.leftMousePressed { return }
 
-    val clickedTab : usize = documentTabAtMouse(app.tabs, ui.firstDocumentTab)
+    val clickedTab : usize = documentTabAtMouse(tabs, ui.firstDocumentTab)
     if clickedTab == usize(-1) { return }
 
-    val previouslySelected : usize = app.tabs.selected()
+    val previouslySelected : usize = tabs.selected()
     val closingTab : bool = documentTabCloseHovered(
-        app.tabs,
+        tabs,
         ui.firstDocumentTab,
         clickedTab
     )
     val changed : bool = if closingTab {
-        app.tabs.close(
+        tabs.close(
             clickedTab,
-            app.buffer,
-            app.activePath,
-            app.status,
+            buffer,
+            activePath,
+            status,
             ui.firstLine,
             ui.firstColumn
         )
     } else {
-        app.tabs.switchTo(
+        tabs.switchTo(
             clickedTab,
-            app.buffer,
-            app.activePath,
+            buffer,
+            activePath,
             ui.firstLine,
             ui.firstColumn
         )
@@ -131,11 +136,13 @@ def handleDocumentTabs(
 }
 
 def beginScrollbarDragging(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    uiFont : Font
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var uiFont : Font
 ) : Unit {
+    borrow var explorer = app.explorer
+    borrow var explorerLabel = app.explorerLabel
     if !frame.leftMousePressed { return }
     if !ui.documentTabScrollbarDragging && outputVerticalScrollbarHovered(
         app.tooling.toolOutput.view(),
@@ -152,11 +159,11 @@ def beginScrollbarDragging(
     ui.outputHorizontalScrollbarDragging {
         return
     }
-    if explorerVerticalScrollbarHovered(app.explorer, frame.visibleExplorerRows) {
+    if explorerVerticalScrollbarHovered(explorer, frame.visibleExplorerRows) {
         ui.explorerVerticalScrollbarDragging = true
     } else if explorerHorizontalScrollbarHovered(
-        app.explorer,
-        app.explorerLabel,
+        explorer,
+        explorerLabel,
         uiFont
     ) {
         ui.explorerHorizontalScrollbarDragging = true
@@ -164,9 +171,9 @@ def beginScrollbarDragging(
 }
 
 def dragOutputScrollbars(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
     if ui.outputVerticalScrollbarDragging {
         if isMouseButtonDown(MouseButton.Left) {
@@ -193,15 +200,17 @@ def dragOutputScrollbars(
 }
 
 def dragExplorerScrollbars(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    uiFont : Font
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var uiFont : Font
 ) : Unit {
+    borrow var explorer = app.explorer
+    borrow var explorerLabel = app.explorerLabel
     if ui.explorerVerticalScrollbarDragging {
         if isMouseButtonDown(MouseButton.Left) {
             ui.firstExplorerEntry = explorerVerticalScrollAtMouse(
-                app.explorer,
+                explorer,
                 frame.visibleExplorerRows
             )
             frame.layoutMouseConsumed = true
@@ -212,8 +221,8 @@ def dragExplorerScrollbars(
     if ui.explorerHorizontalScrollbarDragging {
         if isMouseButtonDown(MouseButton.Left) {
             ui.explorerHorizontalOffset = explorerHorizontalScrollAtMouse(
-                app.explorer,
-                app.explorerLabel,
+                explorer,
+                explorerLabel,
                 uiFont
             )
             frame.layoutMouseConsumed = true
@@ -223,7 +232,7 @@ def dragExplorerScrollbars(
     }
 }
 
-def anyPanelScrollbarDragging(ui : StudioUiState) : bool {
+def anyPanelScrollbarDragging(borrow var ui : StudioUiState) : bool {
     return ui.outputVerticalScrollbarDragging ||
     ui.outputHorizontalScrollbarDragging ||
     ui.explorerVerticalScrollbarDragging ||
@@ -231,13 +240,14 @@ def anyPanelScrollbarDragging(ui : StudioUiState) : bool {
 }
 
 def handleEditorScrollbar(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
+    borrow var buffer = app.buffer
     if ui.paneResize == PaneResize.None && !anyPanelScrollbarDragging(ui) &&
     frame.leftMousePressed && horizontalScrollbarHovered(
-        app.buffer,
+        buffer,
         frame.visibleColumns
     ) {
         ui.horizontalScrollbarDragging = true
@@ -247,13 +257,13 @@ def handleEditorScrollbar(
         ui.horizontalScrollbarDragging = false
         return
     }
-    ui.firstColumn = horizontalScrollAtMouse(app.buffer, frame.visibleColumns)
+    ui.firstColumn = horizontalScrollAtMouse(buffer, frame.visibleColumns)
     ui.horizontalScrollDetached = true
     app.tooling.completion.dismiss()
     frame.layoutMouseConsumed = true
 }
 
-def handlePaneResize(ui : StudioUiState, frame : StudioFrame) : Unit {
+def handlePaneResize(borrow var ui : StudioUiState, borrow var frame : StudioFrame) : Unit {
     if ui.paneResize == PaneResize.None &&
     !ui.horizontalScrollbarDragging && !anyPanelScrollbarDragging(ui) &&
     frame.leftMousePressed {
@@ -277,24 +287,28 @@ def handlePaneResize(ui : StudioUiState, frame : StudioFrame) : Unit {
 }
 
 def updateLayoutCursor(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    uiFont : Font
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var uiFont : Font
 ) : Unit {
+    borrow var explorer = app.explorer
+    borrow var explorerLabel = app.explorerLabel
+    borrow val tabs = app.tabs
+    borrow var buffer = app.buffer
     if ui.explorerVerticalScrollbarDragging ||
-    explorerVerticalScrollbarHovered(app.explorer, frame.visibleExplorerRows) ||
+    explorerVerticalScrollbarHovered(explorer, frame.visibleExplorerRows) ||
     ui.outputVerticalScrollbarDragging ||
     outputVerticalScrollbarHovered(app.tooling.toolOutput.view(), frame.outputRows) {
         setMouseCursor(MouseCursor.ResizeNorthSouth)
     } else if ui.documentTabScrollbarDragging ||
-    documentTabScrollbarHovered(app.tabs) ||
+    documentTabScrollbarHovered(tabs) ||
     ui.explorerHorizontalScrollbarDragging ||
-    explorerHorizontalScrollbarHovered(app.explorer, app.explorerLabel, uiFont) ||
+    explorerHorizontalScrollbarHovered(explorer, explorerLabel, uiFont) ||
     ui.outputHorizontalScrollbarDragging ||
     outputHorizontalScrollbarHovered(app.tooling.toolOutput.view(), frame.outputColumns) ||
     ui.horizontalScrollbarDragging ||
-    horizontalScrollbarHovered(app.buffer, frame.visibleColumns) {
+    horizontalScrollbarHovered(buffer, frame.visibleColumns) {
         setMouseCursor(MouseCursor.ResizeEastWest)
     } else if ui.paneResize == PaneResize.Explorer || explorerSeparatorHovered() {
         setMouseCursor(MouseCursor.ResizeEastWest)
@@ -306,10 +320,10 @@ def updateLayoutCursor(
 }
 
 def handleLayoutMouse(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    uiFont : Font
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var uiFont : Font
 ) : Unit {
     handleDocumentTabs(app, ui, frame)
     beginScrollbarDragging(app, ui, frame, uiFont)
@@ -321,15 +335,19 @@ def handleLayoutMouse(
 }
 
 def clampLayoutOffsets(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    uiFont : Font,
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var uiFont : Font,
     glyphAdvance : float,
     lineAdvance : float,
     outputGlyphAdvance : float,
     outputLineAdvance : float
 ) : Unit {
+    borrow var buffer = app.buffer
+    borrow var explorer = app.explorer
+    borrow var explorerLabel = app.explorerLabel
+    borrow val tabs = app.tabs
     frame.maximumLines = visibleEditorLines(lineAdvance)
     frame.visibleColumns = visibleEditorColumns(glyphAdvance)
     frame.outputRows = visibleOutputRows(outputLineAdvance)
@@ -337,11 +355,11 @@ def clampLayoutOffsets(
     frame.visibleExplorerRows = explorerVisibleRows()
     ui.firstLine = minimum(
         ui.firstLine,
-        maximumEditorFirst(app.buffer, frame.maximumLines)
+        maximumEditorFirst(buffer, frame.maximumLines)
     )
     ui.firstColumn = minimum(
         ui.firstColumn,
-        maximumEditorFirstColumn(app.buffer, frame.visibleColumns)
+        maximumEditorFirstColumn(buffer, frame.visibleColumns)
     )
     ui.firstOutputLine = minimum(
         ui.firstOutputLine,
@@ -353,11 +371,11 @@ def clampLayoutOffsets(
     )
     ui.firstExplorerEntry = minimum(
         ui.firstExplorerEntry,
-        maximumExplorerFirst(app.explorer, frame.visibleExplorerRows)
+        maximumExplorerFirst(explorer, frame.visibleExplorerRows)
     )
     val maximumExplorerOffset : int = maximumExplorerHorizontalOffset(
-        app.explorer,
-        app.explorerLabel,
+        explorer,
+        explorerLabel,
         uiFont
     )
     if ui.explorerHorizontalOffset > maximumExplorerOffset {
@@ -365,29 +383,33 @@ def clampLayoutOffsets(
     }
     ui.firstDocumentTab = minimum(
         ui.firstDocumentTab,
-        maximumFirstDocumentTab(app.tabs)
+        maximumFirstDocumentTab(tabs)
     )
 }
 
 def handleWheelScrolling(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    uiFont : Font
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var uiFont : Font
 ) : Unit {
+    borrow val tabs = app.tabs
+    borrow var explorer = app.explorer
+    borrow var explorerLabel = app.explorerLabel
+    borrow var buffer = app.buffer
     if app.filePrompt.isVisible() || ui.fileMenuOpen { return }
     if mouseInDocumentTabs() {
-        ui.firstDocumentTab = scrollDocumentTabs(app.tabs, ui.firstDocumentTab)
+        ui.firstDocumentTab = scrollDocumentTabs(tabs, ui.firstDocumentTab)
     } else if mouseInExplorerPanel() && frame.shift {
         ui.explorerHorizontalOffset = scrollExplorerHorizontally(
-            app.explorer,
-            app.explorerLabel,
+            explorer,
+            explorerLabel,
             uiFont,
             ui.explorerHorizontalOffset
         )
     } else if mouseInExplorerPanel() {
         ui.firstExplorerEntry = scrollExplorer(
-            app.explorer,
+            explorer,
             ui.firstExplorerEntry,
             frame.visibleExplorerRows
         )
@@ -411,12 +433,13 @@ def handleWheelScrolling(
 }
 
 def scrollEditorColumns(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
+    borrow var buffer = app.buffer
     val requested : usize = scrollEditorHorizontally(
-        app.buffer,
+        buffer,
         ui.firstColumn,
         frame.visibleColumns
     )
@@ -427,12 +450,13 @@ def scrollEditorColumns(
 }
 
 def scrollEditorLines(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
+    borrow var buffer = app.buffer
     val requested : usize = scrollEditor(
-        app.buffer,
+        buffer,
         ui.firstLine,
         frame.maximumLines
     )
@@ -443,9 +467,9 @@ def scrollEditorLines(
 }
 
 def handleFileMenuClick(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : bool {
     if frame.layoutMouseConsumed || app.filePrompt.isVisible() ||
     !frame.leftMousePressed {
@@ -471,45 +495,49 @@ def handleFileMenuClick(
     return true
 }
 
-def closeProjectFolder(app : StudioAppState, ui : StudioUiState) : Unit {
+def closeProjectFolder(borrow var app : StudioAppState, borrow var ui : StudioUiState) : Unit {
+    borrow var promptedPath = app.promptedPath
+    borrow var completionError = app.tooling.completionError
+    borrow var status = app.status
     app.explorer.close()
     app.projectRoot.clear()
     ui.firstExplorerEntry = usize(0)
     ui.explorerHorizontalOffset = 0
-    app.promptedPath.clear()
+    promptedPath.clear()
     if app.activePath.view() != "" {
         val _captured : bool = captureParentDirectory(
             app.activePath.view(),
-            app.promptedPath
+            promptedPath
         )
     }
     if app.tooling.languageServer.restart(
-        app.promptedPath.view(),
-        app.tooling.completionError
+        promptedPath.view(),
+        completionError
     ) {
-        setStatus(app.status, "Dossier fermé.")
+        setStatus(status, "Dossier fermé.")
     } else {
-        setStatus(app.status, app.tooling.completionError.view())
+        setStatus(status, completionError.view())
     }
 }
 
 def handleExplorerClick(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : bool {
+    borrow var explorer = app.explorer
     if frame.layoutMouseConsumed || app.filePrompt.isVisible() ||
     !frame.leftMousePressed || mouseX() < 0 || mouseX() >= editorLeft - 12 {
         return false
     }
     val clicked : usize = explorerEntryAtMouse(
-        app.explorer,
+        explorer,
         ui.firstExplorerEntry,
         frame.visibleExplorerRows
     )
     if clicked == usize(-1) { return false }
-    app.explorer.select(clicked)
-    if app.explorer.isDirectory(clicked) {
+    explorer.select(clicked)
+    if explorer.isDirectory(clicked) {
         toggleExplorerDirectory(app, ui, frame, clicked)
     } else {
         selectExplorerFile(app, ui, clicked)
@@ -518,24 +546,31 @@ def handleExplorerClick(
 }
 
 def toggleExplorerDirectory(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
     clicked : usize
 ) : Unit {
-    app.explorer.toggle(clicked)
+    borrow var explorer = app.explorer
+    explorer.toggle(clicked)
     ui.firstExplorerEntry = minimum(
         ui.firstExplorerEntry,
-        maximumExplorerFirst(app.explorer, frame.visibleExplorerRows)
+        maximumExplorerFirst(explorer, frame.visibleExplorerRows)
     )
     ui.lastExplorerClick = usize(-1)
 }
 
 def selectExplorerFile(
-    app : StudioAppState,
-    ui : StudioUiState,
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
     clicked : usize
 ) : Unit {
+    borrow var explorer = app.explorer
+    borrow var explorerPath = app.explorerPath
+    borrow var tabs = app.tabs
+    borrow var buffer = app.buffer
+    borrow var activePath = app.activePath
+    borrow var status = app.status
     val clickedAt : usize = wallNow().unixMilliseconds()
     val isDoubleClick : bool = clicked == ui.lastExplorerClick &&
     clickedAt >= ui.lastExplorerClickAt &&
@@ -545,12 +580,12 @@ def selectExplorerFile(
         ui.lastExplorerClickAt = clickedAt
         return
     }
-    app.explorer.appendPath(clicked, app.explorerPath)
-    if app.tabs.open(
-        app.explorerPath.view(),
-        app.buffer,
-        app.activePath,
-        app.status,
+    explorer.appendPath(clicked, explorerPath)
+    if tabs.open(
+        explorerPath.view(),
+        buffer,
+        activePath,
+        status,
         ui.firstLine,
         ui.firstColumn
     ) {
@@ -571,12 +606,13 @@ def mouseInEditor() : bool {
 }
 
 def handleEditorMouse(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
     glyphAdvance : float,
     lineAdvance : float
 ) : bool {
+    borrow var buffer = app.buffer
     if ui.mouseSelecting {
         return continueEditorSelection(app, ui, frame, glyphAdvance, lineAdvance)
     }
@@ -585,15 +621,15 @@ def handleEditorMouse(
         return false
     }
     moveCursorToEditorMouse(
-        app.buffer,
+        buffer,
         ui.firstLine,
         ui.firstColumn,
         glyphAdvance,
         lineAdvance,
         frame.maximumLines
     )
-    app.buffer.clearSelection()
-    app.buffer.beginSelection()
+    buffer.clearSelection()
+    buffer.beginSelection()
     ui.mouseSelecting = true
     ui.editorScrollDetached = false
     ui.horizontalScrollDetached = false
@@ -602,18 +638,19 @@ def handleEditorMouse(
 }
 
 def continueEditorSelection(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
     glyphAdvance : float,
     lineAdvance : float
 ) : bool {
+    borrow var buffer = app.buffer
     if !isMouseButtonDown(MouseButton.Left) || !mouseInEditor() {
         ui.mouseSelecting = false
         return false
     }
     moveCursorToEditorMouse(
-        app.buffer,
+        buffer,
         ui.firstLine,
         ui.firstColumn,
         glyphAdvance,
@@ -626,9 +663,9 @@ def continueEditorSelection(
 }
 
 def handleWorkspaceMouse(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
     glyphAdvance : float,
     lineAdvance : float
 ) : Unit {

@@ -72,20 +72,20 @@ def studioUiState() : StudioUiState {
     )
 }
 
-class StudioToolingState(
-    val diagnostics : EditorDiagnostics,
-    val diagnosticText : TextBuilder,
-    val completion : CompletionModel,
-    val completionLabels : TextBuilder,
-    val completionError : TextBuilder,
-    val languageServer : LspClient,
-    val completionText : TextBuilder,
-    val signatureText : TextBuilder,
-    val pendingSignature : TextBuilder,
-    val semanticTokens : Array[SemanticToken],
+struct StudioToolingState(
+    var diagnostics : EditorDiagnostics,
+    var diagnosticText : TextBuilder,
+    var completion : CompletionModel,
+    var completionLabels : TextBuilder,
+    var completionError : TextBuilder,
+    var languageServer : LspClient,
+    var completionText : TextBuilder,
+    var signatureText : TextBuilder,
+    var pendingSignature : TextBuilder,
+    var semanticTokens : Array[SemanticToken],
     var semanticRevision : usize,
-    val toolOutput : TextBuilder,
-    val compiler : CompilerJob
+    var toolOutput : TextBuilder,
+    var compiler : CompilerJob
 ) {
     def updateSemanticRevision(value : usize) : Unit {
         semanticRevision = value
@@ -96,20 +96,6 @@ class StudioToolingState(
         semanticRevision = usize(-1)
     }
 
-    destructor {
-        delete diagnostics
-        delete diagnosticText
-        delete completion
-        delete completionLabels
-        delete completionError
-        delete languageServer
-        delete completionText
-        delete signatureText
-        delete pendingSignature
-        delete semanticTokens
-        delete toolOutput
-        delete compiler
-    }
 }
 
 def studioToolingState(workspacePath : string) : StudioToolingState {
@@ -135,53 +121,29 @@ def studioToolingState(workspacePath : string) : StudioToolingState {
     )
 }
 
-class StudioAppState(
-    val projectRoot : TextBuilder,
-    val explorer : ProjectExplorer,
-    val explorerLabel : TextBuilder,
-    val tabLabel : TextBuilder,
-    val explorerPath : TextBuilder,
-    val activePath : TextBuilder,
-    val promptedPath : TextBuilder,
-    val buffer : EditorBuffer,
-    val status : TextBuilder,
-    val visibleCharacters : Array[char],
-    val syntaxSpans : Array[SyntaxSpan],
-    val glyph : TextBuilder,
-    val search : SearchModel,
-    val tooling : StudioToolingState,
-    val filePrompt : PathPrompt,
-    val statusLine : TextBuilder,
-    val modeLine : TextBuilder,
-    val commandLine : TextBuilder,
-    val clipboard : TextBuilder,
-    val controller : VimController,
-    val tabs : DocumentTabs
-) {
-    destructor {
-        delete projectRoot
-        delete explorer
-        delete explorerLabel
-        delete tabLabel
-        delete explorerPath
-        delete activePath
-        delete promptedPath
-        delete tabs
-        delete buffer
-        delete status
-        delete visibleCharacters
-        delete syntaxSpans
-        delete glyph
-        delete search
-        delete tooling
-        delete filePrompt
-        delete statusLine
-        delete modeLine
-        delete commandLine
-        delete clipboard
-        delete controller
-    }
-}
+struct StudioAppState(
+    var projectRoot : TextBuilder,
+    var explorer : ProjectExplorer,
+    var explorerLabel : TextBuilder,
+    var tabLabel : TextBuilder,
+    var explorerPath : TextBuilder,
+    var activePath : TextBuilder,
+    var promptedPath : TextBuilder,
+    var buffer : EditorBuffer,
+    var status : TextBuilder,
+    var visibleCharacters : Array[char],
+    var syntaxSpans : Array[SyntaxSpan],
+    var glyph : TextBuilder,
+    var search : SearchModel,
+    var tooling : StudioToolingState,
+    var filePrompt : PathPrompt,
+    var statusLine : TextBuilder,
+    var modeLine : TextBuilder,
+    var commandLine : TextBuilder,
+    var clipboard : TextBuilder,
+    var controller : VimController,
+    var tabs : DocumentTabs
+) {}
 
 def studioAppState() : StudioAppState {
     val projectRoot : TextBuilder = new TextBuilder()

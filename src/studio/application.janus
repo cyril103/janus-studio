@@ -11,20 +11,15 @@ import studio.view
 import std.graphics
 import std.text
 
-class StudioDisplay(
-    val uiFont : Font,
-    val codeFont : Font,
+struct StudioDisplay(
+    var uiFont : Font,
+    var codeFont : Font,
     val glyphAdvance : float,
     val lineAdvance : float,
     val outputGlyphAdvance : float,
     val outputLineAdvance : float
 ) {
     def isValid() : bool => uiFont.isValid() && codeFont.isValid()
-
-    destructor {
-        delete uiFont
-        delete codeFont
-    }
 }
 
 def openStudioWindow() : bool {
@@ -92,16 +87,16 @@ def studioDisplay() : StudioDisplay {
     )
 }
 
-def glyphWidth(font : Font, oneGlyph : Vector2, size : float) : float =>
+def glyphWidth(borrow var font : Font, oneGlyph : Vector2, size : float) : float =>
     font.measure("MM", size, codeFontSpacing).x - oneGlyph.x
 
-def lineHeight(font : Font, oneGlyph : Vector2, size : float) : float =>
+def lineHeight(borrow var font : Font, oneGlyph : Vector2, size : float) : float =>
     font.measure("M\nM", size, codeFontSpacing).y - oneGlyph.y
 
 def runStudioSession(
-    app : StudioAppState,
-    ui : StudioUiState,
-    display : StudioDisplay
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var display : StudioDisplay
 ) : Unit {
     while !ui.quitRequested {
         val frame : StudioFrame = beginStudioFrame(
@@ -117,23 +112,24 @@ def runStudioSession(
 }
 
 def handleFrame(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    display : StudioDisplay
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var display : StudioDisplay
 ) : Unit {
-    handleLayoutMouse(app, ui, frame, display.uiFont)
+    borrow var uiFont = display.uiFont
+    handleLayoutMouse(app, ui, frame, uiFont)
     clampLayoutOffsets(
         app,
         ui,
         frame,
-        display.uiFont,
+        uiFont,
         display.glyphAdvance,
         display.lineAdvance,
         display.outputGlyphAdvance,
         display.outputLineAdvance
     )
-    handleWheelScrolling(app, ui, frame, display.uiFont)
+    handleWheelScrolling(app, ui, frame, uiFont)
     handleWorkspaceMouse(
         app,
         ui,
@@ -148,9 +144,9 @@ def handleFrame(
 }
 
 def synchronizeDocumentState(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame
 ) : Unit {
     if app.buffer.isModified() { app.tooling.diagnostics.clear() }
     if app.buffer.size() != frame.bufferSizeBeforeInput { app.search.clear() }
@@ -159,70 +155,95 @@ def synchronizeDocumentState(
         ui.editorScrollDetached = false
         ui.horizontalScrollDetached = false
     }
+    borrow var buffer = app.buffer
     if !ui.editorScrollDetached {
         ui.firstLine = keepCursorVisible(
-            app.buffer,
+            buffer,
             ui.firstLine,
             frame.maximumLines
         )
     }
     if !ui.horizontalScrollDetached {
         ui.firstColumn = keepCursorHorizontallyVisible(
-            app.buffer,
+            buffer,
             ui.firstColumn,
             frame.visibleColumns
         )
     }
 }
 
-def searchModeEnded(app : StudioAppState, frame : StudioFrame) : bool {
+def searchModeEnded(borrow var app : StudioAppState, borrow var frame : StudioFrame) : bool {
     if app.controller.mode() == frame.editorModeBeforeInput { return false }
     return app.controller.mode() != EditorMode.Normal ||
     (frame.editorModeBeforeInput == EditorMode.Search &&
         isKeyPressed(Key.Escape))
 }
 
-def cursorMoved(app : StudioAppState, frame : StudioFrame) : bool {
+def cursorMoved(borrow var app : StudioAppState, borrow var frame : StudioFrame) : bool {
     return app.buffer.line() != frame.cursorLineBeforeInput ||
     app.buffer.column() != frame.cursorColumnBeforeInput
 }
 
 def drawStudioFrame(
-    app : StudioAppState,
-    ui : StudioUiState,
-    frame : StudioFrame,
-    display : StudioDisplay
+    borrow var app : StudioAppState,
+    borrow var ui : StudioUiState,
+    borrow var frame : StudioFrame,
+    borrow var display : StudioDisplay
 ) : Unit {
-    app.controller.appendStatus(app.modeLine)
-    app.controller.appendCommandLine(app.commandLine)
+    borrow var controller = app.controller
+    borrow var modeLine = app.modeLine
+    borrow var commandLine = app.commandLine
+    borrow var buffer = app.buffer
+    borrow var tabs = app.tabs
+    borrow var tabLabel = app.tabLabel
+    borrow var visibleCharacters = app.visibleCharacters
+    borrow var syntaxSpans = app.syntaxSpans
+    borrow var semanticTokens = app.tooling.semanticTokens
+    borrow var glyph = app.glyph
+    borrow var diagnostics = app.tooling.diagnostics
+    borrow var diagnosticText = app.tooling.diagnosticText
+    borrow var search = app.search
+    borrow var completion = app.tooling.completion
+    borrow var completionText = app.tooling.completionText
+    borrow var signatureText = app.tooling.signatureText
+    borrow var filePrompt = app.filePrompt
+    borrow var statusLine = app.statusLine
+    borrow var status = app.status
+    borrow var toolOutput = app.tooling.toolOutput
+    borrow var explorer = app.explorer
+    borrow var explorerLabel = app.explorerLabel
+    borrow var uiFont = display.uiFont
+    borrow var codeFont = display.codeFont
+    controller.appendStatus(modeLine)
+    controller.appendCommandLine(commandLine)
     drawStudio(
         app.activePath.view(),
-        app.buffer,
-        app.tabs,
-        app.tabLabel,
+        buffer,
+        tabs,
+        tabLabel,
         ui,
-        app.visibleCharacters,
-        app.syntaxSpans,
-        app.tooling.semanticTokens,
-        app.glyph,
-        app.tooling.diagnostics,
-        app.tooling.diagnosticText,
-        app.search,
-        app.tooling.completion,
-        app.tooling.completionText,
-        app.tooling.signatureText,
-        app.filePrompt,
-        app.statusLine,
-        app.status,
-        app.tooling.toolOutput,
-        app.modeLine,
-        app.commandLine,
-        app.explorer,
+        visibleCharacters,
+        syntaxSpans,
+        semanticTokens,
+        glyph,
+        diagnostics,
+        diagnosticText,
+        search,
+        completion,
+        completionText,
+        signatureText,
+        filePrompt,
+        statusLine,
+        status,
+        toolOutput,
+        modeLine,
+        commandLine,
+        explorer,
         frame.visibleExplorerRows,
-        app.explorerLabel,
-        app.controller.mode(),
-        display.uiFont,
-        display.codeFont,
+        explorerLabel,
+        controller.mode(),
+        uiFont,
+        codeFont,
         display.glyphAdvance,
         display.lineAdvance,
         display.outputGlyphAdvance,
