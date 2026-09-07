@@ -30,7 +30,7 @@ def resolveQuitRequest(
     return requested || nativeClose
 }
 
-def handlePathPromptKeys(prompt : PathPrompt) : bool {
+def handlePathPromptKeys(borrow var prompt : PathPrompt) : bool {
     if isKeyPressed(Key.Escape) {
         prompt.dismiss()
         return false

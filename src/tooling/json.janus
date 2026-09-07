@@ -4,7 +4,7 @@ module tooling.json
 import text.utf8
 import std.text
 
-private def appendUtf8At(source : string, index : usize, output : TextBuilder) : usize {
+private def appendUtf8At(source : string, index : usize, borrow var output : TextBuilder) : usize {
     val decoded : Utf8Codepoint = decodeUtf8At(source, index)
     output.appendChar(decoded.value)
     return index + decoded.width
@@ -34,7 +34,7 @@ private def unicodeEscape(source : string, start : usize) : int {
 def appendDecodedJsonString(
     source : string,
     start : usize,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : usize {
     val data : Ptr[byte] = stringData(source)
     var index : usize = start
@@ -217,7 +217,7 @@ def appendDecodedUtf8Range(
     source : string,
     start : usize,
     length : usize,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : Unit {
     var index : usize = start
     val end : usize = start + length

@@ -49,7 +49,7 @@ private def isTestSourcePath(path : string) : bool {
 
 private def appendCheckTarget(
     path : string,
-    arguments : Array[string]
+    borrow var arguments : Array[string]
 ) : Unit {
     if isTestSourcePath(path) {
         arguments.push("--all")
@@ -140,8 +140,8 @@ class CompilerJob(
     def start(
         path : string,
         workspace : string,
-        output : TextBuilder,
-        diagnostics : EditorDiagnostics
+        borrow var output : TextBuilder,
+        borrow var diagnostics : EditorDiagnostics
     ) : bool {
         if this.isRunning() { return false }
         received.clear()
@@ -176,8 +176,8 @@ class CompilerJob(
     private def finish(
         child : ChildProcess,
         exitCode : int,
-        output : TextBuilder,
-        diagnostics : EditorDiagnostics
+        borrow var output : TextBuilder,
+        borrow var diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         delete child
         val decoded : Result[string, TextDecodeError] = received.asText()
@@ -202,8 +202,8 @@ class CompilerJob(
 
     private def loadDiagnostics(
         json : string,
-        output : TextBuilder,
-        diagnostics : EditorDiagnostics
+        borrow var output : TextBuilder,
+        borrow var diagnostics : EditorDiagnostics
     ) : bool {
         diagnostics.load(json)
         diagnostics.appendAll(output)
@@ -227,8 +227,8 @@ class CompilerJob(
     private def handleWait(
         child : ChildProcess,
         result : Result[Option[int], SystemError],
-        output : TextBuilder,
-        diagnostics : EditorDiagnostics
+        borrow var output : TextBuilder,
+        borrow var diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         val state : int = this.waitState(result)
         if state == -2 { return this.keepRunning(move child) }
@@ -238,7 +238,7 @@ class CompilerJob(
 
     private def failChild(
         child : ChildProcess,
-        output : TextBuilder
+        borrow var output : TextBuilder
     ) : CompilerCheckState {
         delete child
         output.clear()
@@ -248,8 +248,8 @@ class CompilerJob(
 
     private def pollChild(
         child : ChildProcess,
-        output : TextBuilder,
-        diagnostics : EditorDiagnostics
+        borrow var output : TextBuilder,
+        borrow var diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         val chunk : Ptr[byte] = alloc[byte](usize(4096))
         defer free(chunk)
@@ -291,8 +291,8 @@ class CompilerJob(
     }
 
     def poll(
-        output : TextBuilder,
-        diagnostics : EditorDiagnostics
+        borrow var output : TextBuilder,
+        borrow var diagnostics : EditorDiagnostics
     ) : CompilerCheckState {
         val previous : Option[ChildProcess] = this.takeProcess()
         return match move previous {
@@ -329,7 +329,7 @@ def compilerJobForProgram() : CompilerJob => jobForExecutable(programArgument(us
 
 private def collectProcessResult(
     process : ProcessResult,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     val succeeded : bool = process.exitCode() == 0
     if process.stdoutSize() > usize(0) {
@@ -348,13 +348,13 @@ private def collectProcessResult(
     return succeeded
 }
 
-private def reportStartFailure(output : TextBuilder) : bool {
+private def reportStartFailure(borrow var output : TextBuilder) : bool {
     output.append("Impossible de lancer `janus`. Vérifiez que le binaire est dans PATH.")
     return false
 }
 
 /// Exécute `janus check` sur le fichier actif et copie ses diagnostics.
-def checkFile(path : string, output : TextBuilder) : bool {
+def checkFile(path : string, borrow var output : TextBuilder) : bool {
     output.clear()
     val arguments : Array[string] = new Array[string](usize(4))
     defer delete arguments
@@ -373,8 +373,8 @@ def checkFile(path : string, output : TextBuilder) : bool {
 
 private def collectStructuredResult(
     process : ProcessResult,
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+    borrow var output : TextBuilder,
+    borrow var diagnostics : EditorDiagnostics
 ) : bool {
     val succeeded : bool = process.exitCode() == 0
     val json : TextBuilder = new TextBuilder()
@@ -396,8 +396,8 @@ private def collectStructuredResult(
 
 def checkFileWithDiagnostics(
     path : string,
-    output : TextBuilder,
-    diagnostics : EditorDiagnostics
+    borrow var output : TextBuilder,
+    borrow var diagnostics : EditorDiagnostics
 ) : bool {
     output.clear()
     diagnostics.clear()

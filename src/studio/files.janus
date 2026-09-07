@@ -22,7 +22,7 @@ def isDirectory(path : string) : bool =>
 
 def pathExists(path : string) : bool => metadata(path).isOk()
 
-def validateNewPath(path : string, status : TextBuilder) : bool {
+def validateNewPath(path : string, borrow var status : TextBuilder) : bool {
     if pathExists(path) {
         setStatus(status, "Ce chemin existe déjà : utilisez Ouvrir ou Enregistrer sous.")
         return false
@@ -33,7 +33,7 @@ def validateNewPath(path : string, status : TextBuilder) : bool {
 def validateSaveAsPath(
     path : string,
     currentPath : string,
-    status : TextBuilder
+    borrow var status : TextBuilder
 ) : bool {
     if path != currentPath && pathExists(path) {
         setStatus(status, "Le fichier cible existe déjà ; écrasement refusé.")
@@ -47,7 +47,7 @@ pure def codeFontPath() : string => "assets/fonts/DejaVuSansMono.ttf"
 private def useAssetRoot(
     root : string,
     relativePath : string,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     val joined : Result[Path, SystemError] = joinPath(root, relativePath)
     return match move joined {
@@ -59,7 +59,7 @@ private def useAssetRoot(
 private def captureConfiguredAssetPath(
     root : Option[EnvironmentValue],
     relativePath : string,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     return match move root {
         Some(path) => useConfiguredAssetRoot(move path, relativePath, output),
@@ -70,7 +70,7 @@ private def captureConfiguredAssetPath(
 private def useConfiguredAssetRoot(
     root : EnvironmentValue,
     relativePath : string,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     val captured : bool = useAssetRoot(root.view(), relativePath, output)
     delete root
@@ -80,7 +80,7 @@ private def useConfiguredAssetRoot(
 private def captureAssetEnvironment(
     result : Result[Option[EnvironmentValue], SystemError],
     relativePath : string,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     return match move result {
         Ok(root) => captureConfiguredAssetPath(move root, relativePath, output),
@@ -88,7 +88,7 @@ private def captureAssetEnvironment(
     }
 }
 
-def captureAssetPath(relativePath : string, output : TextBuilder) : bool {
+def captureAssetPath(relativePath : string, borrow var output : TextBuilder) : bool {
     output.clear()
     return captureAssetEnvironment(
         environmentVariable("JANUS_STUDIO_RESOURCE_DIR"),
@@ -100,7 +100,7 @@ def captureAssetPath(relativePath : string, output : TextBuilder) : bool {
 private def appendCharacterRange(
     first : int,
     last : int,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : Unit {
     var value : int = first
     while value <= last {
@@ -130,14 +130,14 @@ def selectedPath() : string {
 
 def useWorkingDirectory(
     directory : WorkingDirectory,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     output.append(directory.view())
     delete directory
     return true
 }
 
-def captureWorkingDirectory(output : TextBuilder) : bool {
+def captureWorkingDirectory(borrow var output : TextBuilder) : bool {
     val directory : Result[WorkingDirectory, SystemError] =
     currentWorkingDirectory()
     return match move directory {
@@ -146,12 +146,12 @@ def captureWorkingDirectory(output : TextBuilder) : bool {
     }
 }
 
-def useProjectDirectory(path : string, output : TextBuilder) : bool {
+def useProjectDirectory(path : string, borrow var output : TextBuilder) : bool {
     output.append(path)
     return true
 }
 
-def useNormalizedProjectDirectory(path : Path, output : TextBuilder) : bool {
+def useNormalizedProjectDirectory(path : Path, borrow var output : TextBuilder) : bool {
     output.append(path.view())
     delete path
     return true
@@ -160,7 +160,7 @@ def useNormalizedProjectDirectory(path : Path, output : TextBuilder) : bool {
 def joinProjectDirectory(
     directory : WorkingDirectory,
     path : string,
-    output : TextBuilder
+    borrow var output : TextBuilder
 ) : bool {
     val joined : Result[Path, SystemError] = joinPath(directory.view(), path)
     delete directory
@@ -170,7 +170,7 @@ def joinProjectDirectory(
     }
 }
 
-def captureProjectDirectory(path : string, output : TextBuilder) : bool {
+def captureProjectDirectory(path : string, borrow var output : TextBuilder) : bool {
     output.clear()
     val directory : Result[WorkingDirectory, SystemError] =
     currentWorkingDirectory()
@@ -180,7 +180,7 @@ def captureProjectDirectory(path : string, output : TextBuilder) : bool {
     }
 }
 
-def captureDocumentPath(path : string, output : TextBuilder) : bool {
+def captureDocumentPath(path : string, borrow var output : TextBuilder) : bool {
     if path == "" {
         output.clear()
         return false
@@ -188,7 +188,7 @@ def captureDocumentPath(path : string, output : TextBuilder) : bool {
     return captureProjectDirectory(path, output)
 }
 
-def captureParentDirectory(path : string, output : TextBuilder) : bool {
+def captureParentDirectory(path : string, borrow var output : TextBuilder) : bool {
     val normalized : TextBuilder = new TextBuilder()
     defer delete normalized
     if !captureProjectDirectory(path, normalized) { return false }
@@ -213,7 +213,7 @@ def captureParentDirectory(path : string, output : TextBuilder) : bool {
     return true
 }
 
-def captureProjectRoot(output : TextBuilder) : bool {
+def captureProjectRoot(borrow var output : TextBuilder) : bool {
     return match programArgument(usize(1)) {
         Some(path) => if isDirectory(path) {
             captureProjectDirectory(path, output)
@@ -224,15 +224,15 @@ def captureProjectRoot(output : TextBuilder) : bool {
     }
 }
 
-def setStatus(status : TextBuilder, message : string) : Unit {
+def setStatus(borrow var status : TextBuilder, message : string) : Unit {
     status.clear()
     status.append(message)
 }
 
 private def acceptDecodedFile(
     text : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     buffer.load(text)
     buffer.trackDiskContent(text)
@@ -241,15 +241,15 @@ private def acceptDecodedFile(
     return true
 }
 
-private def rejectInvalidTextFile(status : TextBuilder) : bool {
+private def rejectInvalidTextFile(borrow var status : TextBuilder) : bool {
     setStatus(status, "Impossible d'ouvrir ce fichier : UTF-8 invalide.")
     return false
 }
 
 def acceptFile(
     data : FileData,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     val accepted : bool = match data.asText() {
         Ok(text) => acceptDecodedFile(text, buffer, status),
@@ -260,8 +260,8 @@ def acceptFile(
 }
 
 def startEmptyFile(
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     buffer.clear()
     setStatus(status, "Nouveau fichier : Ctrl+S pour le créer.")
@@ -270,8 +270,8 @@ def startEmptyFile(
 
 def loadFile(
     path : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     val result : Result[FileData, SystemError] = readFile(path)
     return match move result {
@@ -284,15 +284,15 @@ def loadFile(
     }
 }
 
-def openFailed(status : TextBuilder) : bool {
+def openFailed(borrow var status : TextBuilder) : bool {
     setStatus(status, "Impossible d'ouvrir ce fichier.")
     return false
 }
 
 def openExistingFile(
     path : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     val result : Result[FileData, SystemError] = readFile(path)
     return match move result {
@@ -302,9 +302,9 @@ def openExistingFile(
 }
 
 def saveSucceeded(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     content : string,
-    status : TextBuilder
+    borrow var status : TextBuilder
 ) : bool {
     buffer.markSaved()
     buffer.trackDiskContent(content)
@@ -312,15 +312,15 @@ def saveSucceeded(
     return true
 }
 
-def saveFailed(status : TextBuilder) : bool {
+def saveFailed(borrow var status : TextBuilder) : bool {
     setStatus(status, "Échec de l'enregistrement.")
     return false
 }
 
 private def writeBuffer(
     path : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     val content : TextBuilder = new TextBuilder()
     defer delete content
@@ -337,8 +337,8 @@ private def writeBuffer(
 
 private def acceptUnchangedText(
     text : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     val unchanged : bool = buffer.diskContentMatches(text)
     if !unchanged {
@@ -347,15 +347,15 @@ private def acceptUnchangedText(
     return unchanged
 }
 
-private def reportUnverifiableFile(status : TextBuilder) : bool {
+private def reportUnverifiableFile(borrow var status : TextBuilder) : bool {
     setStatus(status, "Impossible de vérifier le fichier avant enregistrement.")
     return false
 }
 
 private def acceptUnchangedFile(
     data : FileData,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     val unchanged : bool = match data.asText() {
         Ok(text) => acceptUnchangedText(text, buffer, status),
@@ -367,8 +367,8 @@ private def acceptUnchangedFile(
 
 private def currentDiskContentMatches(
     path : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     if !buffer.hasDiskContent() {
         if pathExists(path) {
@@ -386,8 +386,8 @@ private def currentDiskContentMatches(
 
 def saveFile(
     path : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     if !currentDiskContentMatches(path, buffer, status) { return false }
     return writeBuffer(path, buffer, status)
@@ -396,8 +396,8 @@ def saveFile(
 def saveFileAs(
     path : string,
     currentPath : string,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     if path == currentPath { return saveFile(path, buffer, status) }
     if pathExists(path) {
@@ -410,8 +410,8 @@ def saveFileAs(
 def openProjectFolder(
     path : string,
     projectRoot : TextBuilder,
-    explorer : ProjectExplorer,
-    status : TextBuilder
+    borrow var explorer : ProjectExplorer,
+    borrow var status : TextBuilder
 ) : bool {
     if path == "" {
         setStatus(status, "Saisissez un chemin de dossier.")
@@ -428,13 +428,13 @@ def openProjectFolder(
 }
 
 def applyPathPrompt(
-    prompt : PathPrompt,
+    borrow var prompt : PathPrompt,
     path : string,
     activePath : TextBuilder,
-    buffer : EditorBuffer,
-    diagnostics : EditorDiagnostics,
-    search : SearchModel,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var diagnostics : EditorDiagnostics,
+    borrow var search : SearchModel,
+    borrow var status : TextBuilder
 ) : bool {
     if path == "" {
         setStatus(status, "Saisissez un chemin de fichier.")
@@ -468,8 +468,8 @@ def applyPathPrompt(
 def openExplorerFile(
     path : string,
     activePath : TextBuilder,
-    buffer : EditorBuffer,
-    status : TextBuilder
+    borrow var buffer : EditorBuffer,
+    borrow var status : TextBuilder
 ) : bool {
     if buffer.isModified() {
         setStatus(

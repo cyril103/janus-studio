@@ -11,7 +11,7 @@ import std.text
 const historyLimit : usize = usize(100)
 const historyCharacterLimit : usize = usize(4000000)
 
-private def decodeUtf8(text : string, output : Array[char]) : Unit {
+private def decodeUtf8(text : string, borrow var output : Array[char]) : Unit {
     var index : usize = usize(0)
     while index < stringLength(text) {
         val decoded : Utf8Codepoint = decodeUtf8At(text, index)
@@ -321,7 +321,7 @@ class EditorBuffer(
         characters[position] = value
     }
 
-    private def insertLineAt(position : usize, line : Array[char]) : Unit {
+    private def insertLineAt(position : usize, borrow line : Array[char]) : Unit {
         val inserted : Array[char] = new Array[char](line.size() + usize(1))
         defer delete inserted
         var index : usize = usize(0)
@@ -793,7 +793,7 @@ class EditorBuffer(
         this.eraseRange(start, end)
     }
 
-    borrow def copyCurrentLine(output : Array[char]) : bool {
+    borrow def copyCurrentLine(borrow var output : Array[char]) : bool {
         output.clear()
         if characters.isEmpty() {
             return false
@@ -808,7 +808,7 @@ class EditorBuffer(
         return true
     }
 
-    def pasteLineBelow(line : Array[char]) : Unit {
+    def pasteLineBelow(borrow line : Array[char]) : Unit {
         if characters.isEmpty() {
             this.rememberChange()
             this.insertLineAt(usize(0), line)
@@ -835,7 +835,7 @@ class EditorBuffer(
         }
     }
 
-    def pasteLineAbove(line : Array[char]) : Unit {
+    def pasteLineAbove(borrow line : Array[char]) : Unit {
         val insertion : usize = this.lineStart(cursorPosition)
         this.rememberChange()
         this.insertLineAt(insertion, line)
@@ -880,7 +880,7 @@ class EditorBuffer(
         if requestedColumn < nextLength { requestedColumn } else { nextLength }
     }
 
-    borrow def appendText(output : TextBuilder) : Unit {
+    borrow def appendText(borrow var output : TextBuilder) : Unit {
         var index : usize = usize(0)
         while index < characters.size() {
             output.appendChar(characters[index])
@@ -888,7 +888,7 @@ class EditorBuffer(
         }
     }
 
-    borrow def appendCharacters(output : Array[char]) : Unit {
+    borrow def appendCharacters(borrow var output : Array[char]) : Unit {
         output.clear()
         var index : usize = usize(0)
         while index < characters.size() {
@@ -897,7 +897,7 @@ class EditorBuffer(
         }
     }
 
-    borrow def findMatches(query : string, output : Array[usize]) : usize {
+    borrow def findMatches(query : string, borrow var output : Array[usize]) : usize {
         output.clear()
         val requested : Array[char] = new Array[char](stringLength(query))
         defer delete requested
@@ -938,7 +938,7 @@ class EditorBuffer(
         return this.lineEnd(start) - start
     }
 
-    borrow def appendSelection(output : TextBuilder) : bool {
+    borrow def appendSelection(borrow var output : TextBuilder) : bool {
         output.clear()
         if !this.hasSelection() { return false }
         var index : usize = this.selectionStart()

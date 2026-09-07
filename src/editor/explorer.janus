@@ -94,7 +94,7 @@ class ProjectExplorer(
         borrow source : Array[char],
         start : usize,
         length : usize,
-        output : TextBuilder
+        borrow var output : TextBuilder
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -106,7 +106,7 @@ class ProjectExplorer(
 
     private borrow def appendSlice(
         borrow source : Slice[char],
-        output : TextBuilder
+        borrow var output : TextBuilder
     ) : Unit {
         output.clear()
         var index : usize = usize(0)
@@ -154,7 +154,7 @@ class ProjectExplorer(
         label : string,
         fullPath : Path,
         depth : usize,
-        output : Array[ExplorerEntry]
+        borrow var output : Array[ExplorerEntry]
     ) : bool {
         val kind : int = explorerKindResult(metadata(fullPath.view()))
         if kind < 0 {
@@ -175,7 +175,7 @@ class ProjectExplorer(
         fullPath : Path,
         depth : usize,
         kind : ExplorerEntryKind,
-        output : Array[ExplorerEntry]
+        borrow var output : Array[ExplorerEntry]
     ) : bool {
         val nameStart : usize = names.size()
         val nameLength : usize = appendUtf8Characters(label, usize(0), names)
@@ -202,7 +202,7 @@ class ProjectExplorer(
         name : Path,
         parentPath : string,
         depth : usize,
-        output : Array[ExplorerEntry]
+        borrow var output : Array[ExplorerEntry]
     ) : bool {
         val label : string = name.view()
         val joined : Result[Path, SystemError] = joinPath(parentPath, label)
@@ -223,7 +223,7 @@ class ProjectExplorer(
         name : Path,
         parentPath : string,
         depth : usize,
-        output : Array[ExplorerEntry]
+        borrow var output : Array[ExplorerEntry]
     ) : int {
         this.addDirectoryEntry(move name, parentPath, depth, output)
         return 1
@@ -233,7 +233,7 @@ class ProjectExplorer(
         entry : Option[Path],
         parentPath : string,
         depth : usize,
-        output : Array[ExplorerEntry]
+        borrow var output : Array[ExplorerEntry]
     ) : int {
         return match move entry {
             Some(name) => this.continueDirectoryEntry(
@@ -250,7 +250,7 @@ class ProjectExplorer(
         result : Result[Option[Path], SystemError],
         parentPath : string,
         depth : usize,
-        output : Array[ExplorerEntry]
+        borrow var output : Array[ExplorerEntry]
     ) : int {
         return match move result {
             Ok(entry) => this.consumeOptionalDirectoryEntry(
@@ -267,7 +267,7 @@ class ProjectExplorer(
         iterator : DirectoryIterator,
         parentPath : string,
         depth : usize,
-        output : Array[ExplorerEntry]
+        borrow var output : Array[ExplorerEntry]
     ) : bool {
         var state : int = this.consumeDirectoryEntry(
             iterator.next(),
@@ -294,10 +294,10 @@ class ProjectExplorer(
     }
 
     private def copyStorageRange(
-        source : Array[char],
+        borrow source : Array[char],
         start : usize,
         length : usize,
-        output : Array[char]
+        borrow var output : Array[char]
     ) : Unit {
         var index : usize = usize(0)
         while index < length {
@@ -467,12 +467,12 @@ class ProjectExplorer(
 
     borrow def isExpanded(index : usize) : bool => entries[index].expanded
 
-    borrow def appendLabel(index : usize, output : TextBuilder) : Unit {
+    borrow def appendLabel(index : usize, borrow var output : TextBuilder) : Unit {
         val entry : ExplorerEntry = entries[index]
         this.appendCharacters(names, entry.nameStart, entry.nameLength, output)
     }
 
-    borrow def appendPath(index : usize, output : TextBuilder) : Unit {
+    borrow def appendPath(index : usize, borrow var output : TextBuilder) : Unit {
         val entry : ExplorerEntry = entries[index]
         this.appendCharacters(paths, entry.pathStart, entry.pathLength, output)
     }
@@ -538,5 +538,5 @@ def projectExplorer(root : string) : ProjectExplorer {
         move paths
     )
     explorer.open(root)
-    return explorer
+    return move explorer
 }

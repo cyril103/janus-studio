@@ -43,7 +43,7 @@ class VimController(
 ) {
     pure borrow def mode() : EditorMode => currentMode
 
-    def appendStatus(output : TextBuilder) : Unit {
+    def appendStatus(borrow var output : TextBuilder) : Unit {
         output.clear()
         output.append(match currentMode {
                 Normal => "NORMAL",
@@ -62,7 +62,7 @@ class VimController(
         }
     }
 
-    def appendCommandLine(output : TextBuilder) : Unit {
+    def appendCommandLine(borrow var output : TextBuilder) : Unit {
         output.clear()
         if currentMode == EditorMode.Command {
             output.append(":")
@@ -99,7 +99,7 @@ class VimController(
 
     def commandView() : string => command.view()
 
-    def handleNormal(value : char, buffer : EditorBuffer) : EditorAction {
+    def handleNormal(value : char, borrow var buffer : EditorBuffer) : EditorAction {
         if pendingG {
             pendingG = false
             if value == 'g' {
@@ -183,7 +183,7 @@ class VimController(
         return EditorAction.None
     }
 
-    def handleInsert(value : char, buffer : EditorBuffer) : Unit {
+    def handleInsert(value : char, borrow var buffer : EditorBuffer) : Unit {
         buffer.insertPaired(value)
     }
 

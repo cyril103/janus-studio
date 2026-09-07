@@ -95,7 +95,7 @@ def visibleDocumentTabs() : usize {
     return numericCast[usize](available / (documentTabWidth + documentTabGap))
 }
 
-def maximumFirstDocumentTab(tabs : DocumentTabs) : usize {
+def maximumFirstDocumentTab(borrow tabs : DocumentTabs) : usize {
     val visible : usize = visibleDocumentTabs()
     return if tabs.size() > visible {
         tabs.size() - visible
@@ -105,7 +105,7 @@ def maximumFirstDocumentTab(tabs : DocumentTabs) : usize {
 }
 
 def keepSelectedDocumentTabVisible(
-    tabs : DocumentTabs,
+    borrow tabs : DocumentTabs,
     first : usize
 ) : usize {
     val visible : usize = visibleDocumentTabs()
@@ -122,7 +122,7 @@ def mouseInDocumentTabs() : bool {
     mouseY() >= 10 && mouseY() < editorTop
 }
 
-def scrollDocumentTabs(tabs : DocumentTabs, first : usize) : usize {
+def scrollDocumentTabs(borrow tabs : DocumentTabs, first : usize) : usize {
     if !mouseInDocumentTabs() { return first }
     val movement : float = mouseWheelMove()
     if movement > 0.0f {
@@ -135,12 +135,12 @@ def scrollDocumentTabs(tabs : DocumentTabs, first : usize) : usize {
     return first
 }
 
-def documentTabScrollbarHovered(tabs : DocumentTabs) : bool {
+def documentTabScrollbarHovered(borrow tabs : DocumentTabs) : bool {
     return maximumFirstDocumentTab(tabs) > usize(0) &&
     pointInArea(editorLeft, editorTop - 10, screenWidth() - editorLeft - 8, 10)
 }
 
-def documentTabScrollAtMouse(tabs : DocumentTabs) : usize {
+def documentTabScrollAtMouse(borrow tabs : DocumentTabs) : usize {
     val maximum : usize = maximumFirstDocumentTab(tabs)
     if maximum == usize(0) { return usize(0) }
     val trackWidth : int = screenWidth() - editorLeft - 8
@@ -164,7 +164,7 @@ def documentTabScrollAtMouse(tabs : DocumentTabs) : usize {
     }
 }
 
-def documentTabAtMouse(tabs : DocumentTabs, first : usize) : usize {
+def documentTabAtMouse(borrow tabs : DocumentTabs, first : usize) : usize {
     if mouseY() < 10 || mouseY() >= 52 || mouseX() < editorLeft {
         return usize(-1)
     }
@@ -177,7 +177,7 @@ def documentTabAtMouse(tabs : DocumentTabs, first : usize) : usize {
 }
 
 def documentTabCloseHovered(
-    tabs : DocumentTabs,
+    borrow tabs : DocumentTabs,
     first : usize,
     index : usize
 ) : bool {
@@ -228,7 +228,7 @@ def resizeOutputToMouse() : Unit {
 }
 
 def keepCursorVisible(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     firstLine : usize,
     maximumLines : usize
 ) : usize {
@@ -243,7 +243,7 @@ def keepCursorVisible(
 }
 
 def maximumEditorFirst(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     maximumLines : usize
 ) : usize {
     return if buffer.lineCount() > maximumLines {
@@ -265,7 +265,7 @@ def visibleEditorColumns(glyphAdvance : float) : usize {
 }
 
 def maximumEditorFirstColumn(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     visibleColumns : usize
 ) : usize {
     val maximumLength : usize = buffer.maximumLineLength()
@@ -277,7 +277,7 @@ def maximumEditorFirstColumn(
 }
 
 def keepCursorHorizontallyVisible(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     firstColumn : usize,
     visibleColumns : usize
 ) : usize {
@@ -292,7 +292,7 @@ def keepCursorHorizontallyVisible(
 }
 
 def scrollEditor(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     first : usize,
     maximumLines : usize
 ) : usize {
@@ -313,7 +313,7 @@ def scrollEditor(
 }
 
 def scrollEditorHorizontally(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     first : usize,
     visibleColumns : usize
 ) : usize {
@@ -334,7 +334,7 @@ def scrollEditorHorizontally(
 }
 
 def horizontalScrollbarHovered(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     visibleColumns : usize
 ) : bool {
     return maximumEditorFirstColumn(buffer, visibleColumns) > usize(0) &&
@@ -347,7 +347,7 @@ def horizontalScrollbarHovered(
 }
 
 def horizontalScrollAtMouse(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     visibleColumns : usize
 ) : usize {
     val maximumFirst : usize = maximumEditorFirstColumn(buffer, visibleColumns)
@@ -607,7 +607,7 @@ def outputHorizontalScrollAtMouse(
 }
 
 def moveCursorToEditorMouse(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     firstLine : usize,
     firstColumn : usize,
     glyphAdvance : float,
@@ -647,7 +647,7 @@ def explorerVisibleRows() : usize {
 }
 
 def maximumExplorerFirst(
-    explorer : ProjectExplorer,
+    borrow var explorer : ProjectExplorer,
     visibleRows : usize
 ) : usize {
     return if explorer.size() > visibleRows {
@@ -658,7 +658,7 @@ def maximumExplorerFirst(
 }
 
 def scrollExplorer(
-    explorer : ProjectExplorer,
+    borrow var explorer : ProjectExplorer,
     first : usize,
     visibleRows : usize
 ) : usize {
@@ -687,9 +687,9 @@ def mouseInExplorerPanel() : bool {
 }
 
 def explorerContentWidth(
-    explorer : ProjectExplorer,
-    label : TextBuilder,
-    font : Font
+    borrow var explorer : ProjectExplorer,
+    borrow var label : TextBuilder,
+    borrow var font : Font
 ) : int {
     var maximum : int = 0
     var index : usize = usize(0)
@@ -708,9 +708,9 @@ def explorerContentWidth(
 }
 
 def maximumExplorerHorizontalOffset(
-    explorer : ProjectExplorer,
-    label : TextBuilder,
-    font : Font
+    borrow var explorer : ProjectExplorer,
+    borrow var label : TextBuilder,
+    borrow var font : Font
 ) : int {
     val visible : int = editorLeft - 28
     val content : int = explorerContentWidth(explorer, label, font)
@@ -718,9 +718,9 @@ def maximumExplorerHorizontalOffset(
 }
 
 def scrollExplorerHorizontally(
-    explorer : ProjectExplorer,
-    label : TextBuilder,
-    font : Font,
+    borrow var explorer : ProjectExplorer,
+    borrow var label : TextBuilder,
+    borrow var font : Font,
     offset : int
 ) : int {
     if mouseX() < 0 || mouseX() >= editorLeft - 12 ||
@@ -744,7 +744,7 @@ def scrollExplorerHorizontally(
 }
 
 def explorerVerticalScrollbarHovered(
-    explorer : ProjectExplorer,
+    borrow var explorer : ProjectExplorer,
     visibleRows : usize
 ) : bool {
     return maximumExplorerFirst(explorer, visibleRows) > usize(0) &&
@@ -757,9 +757,9 @@ def explorerVerticalScrollbarHovered(
 }
 
 def explorerHorizontalScrollbarHovered(
-    explorer : ProjectExplorer,
-    label : TextBuilder,
-    font : Font
+    borrow var explorer : ProjectExplorer,
+    borrow var label : TextBuilder,
+    borrow var font : Font
 ) : bool {
     return maximumExplorerHorizontalOffset(explorer, label, font) > 0 &&
     pointInArea(
@@ -771,7 +771,7 @@ def explorerHorizontalScrollbarHovered(
 }
 
 def explorerVerticalScrollAtMouse(
-    explorer : ProjectExplorer,
+    borrow var explorer : ProjectExplorer,
     visibleRows : usize
 ) : usize {
     val maximumFirst : usize = maximumExplorerFirst(explorer, visibleRows)
@@ -802,9 +802,9 @@ def explorerVerticalScrollAtMouse(
 }
 
 def explorerHorizontalScrollAtMouse(
-    explorer : ProjectExplorer,
-    label : TextBuilder,
-    font : Font
+    borrow var explorer : ProjectExplorer,
+    borrow var label : TextBuilder,
+    borrow var font : Font
 ) : int {
     val maximumOffset : int = maximumExplorerHorizontalOffset(
         explorer,
@@ -835,7 +835,7 @@ def explorerHorizontalScrollAtMouse(
 }
 
 def explorerEntryAtMouse(
-    explorer : ProjectExplorer,
+    borrow var explorer : ProjectExplorer,
     first : usize,
     visibleRows : usize
 ) : usize {
@@ -853,9 +853,9 @@ def explorerEntryAtMouse(
 }
 
 def buildStatusLine(
-    output : TextBuilder,
+    borrow var output : TextBuilder,
     path : string,
-    buffer : EditorBuffer
+    borrow var buffer : EditorBuffer
 ) : Unit {
     output.clear()
     output.append(if path == "" { "Nouveau fichier" } else { path })
@@ -867,7 +867,7 @@ def buildStatusLine(
 }
 
 def drawUiText(
-    font : Font,
+    borrow var font : Font,
     text : string,
     x : int,
     y : int,
@@ -884,7 +884,7 @@ def drawUiText(
 }
 
 def drawCodeText(
-    font : Font,
+    borrow var font : Font,
     text : string,
     x : int,
     y : int,
@@ -1000,11 +1000,11 @@ def modeColor(mode : EditorMode) : Color {
 }
 
 def drawHighlightedCode(
-    font : Font,
-    characters : Array[char],
-    spans : Array[SyntaxSpan],
-    semanticTokens : Array[SemanticToken],
-    glyph : TextBuilder,
+    borrow var font : Font,
+    borrow var characters : Array[char],
+    borrow var spans : Array[SyntaxSpan],
+    borrow var semanticTokens : Array[SemanticToken],
+    borrow var glyph : TextBuilder,
     firstLine : usize,
     x : int,
     y : int,
@@ -1098,8 +1098,8 @@ def semanticTokenContains(
 }
 
 def drawLineNumbers(
-    font : Font,
-    label : TextBuilder,
+    borrow var font : Font,
+    borrow var label : TextBuilder,
     firstLine : usize,
     maximumLines : usize,
     lineCount : usize,
@@ -1126,7 +1126,7 @@ def drawLineNumbers(
 }
 
 def drawEditorDiagnostics(
-    diagnostics : EditorDiagnostics,
+    borrow var diagnostics : EditorDiagnostics,
     firstLine : usize,
     horizontalFirst : usize,
     maximumLines : usize,
@@ -1167,8 +1167,8 @@ def drawEditorDiagnostics(
 }
 
 def drawSearchMatches(
-    search : SearchModel,
-    buffer : EditorBuffer,
+    borrow var search : SearchModel,
+    borrow var buffer : EditorBuffer,
     firstLine : usize,
     horizontalFirst : usize,
     maximumLines : usize,
@@ -1204,7 +1204,7 @@ def drawSearchMatches(
 }
 
 def drawSelection(
-    buffer : EditorBuffer,
+    borrow var buffer : EditorBuffer,
     firstLine : usize,
     horizontalFirst : usize,
     maximumLines : usize,
@@ -1252,12 +1252,12 @@ def drawSelection(
 }
 
 def drawExplorer(
-    explorer : ProjectExplorer,
+    borrow var explorer : ProjectExplorer,
     firstEntry : usize,
     horizontalOffset : int,
     visibleRows : usize,
-    label : TextBuilder,
-    font : Font,
+    borrow var label : TextBuilder,
+    borrow var font : Font,
     muted : Color
 ) : Unit {
     var index : usize = firstEntry

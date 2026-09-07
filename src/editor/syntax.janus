@@ -65,7 +65,7 @@ pure def isOperator(value : char) : bool =>
     value == '+' || value == '-' || value == '*' || value == '/' || value == '%' || value == '=' || value == '!' || value == '<' || value == '>' || value == '&' || value == '|' || value == '^' || value == '~' || value == '?' || value == ':' || value == '.'
 
 def identifierEquals(
-    source : Array[char],
+    borrow source : Array[char],
     start : usize,
     end : usize,
     expected : string
@@ -84,7 +84,7 @@ def identifierEquals(
     return true
 }
 
-def isKeyword(source : Array[char], start : usize, end : usize) : bool {
+def isKeyword(borrow source : Array[char], start : usize, end : usize) : bool {
     return identifierEquals(source, start, end, "module") ||
     identifierEquals(source, start, end, "import") ||
     identifierEquals(source, start, end, "as") ||
@@ -126,7 +126,7 @@ def isKeyword(source : Array[char], start : usize, end : usize) : bool {
     identifierEquals(source, start, end, "false")
 }
 
-def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
+def isBuiltinType(borrow source : Array[char], start : usize, end : usize) : bool {
     return identifierEquals(source, start, end, "Unit") ||
     identifierEquals(source, start, end, "bool") ||
     identifierEquals(source, start, end, "byte") ||
@@ -146,7 +146,7 @@ def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
     identifierEquals(source, start, end, "Array")
 }
 
-def previousNonWhitespace(source : Array[char], start : usize) : usize {
+def previousNonWhitespace(borrow source : Array[char], start : usize) : usize {
     var index : usize = start
     while index > usize(0) {
         index -= usize(1)
@@ -158,7 +158,7 @@ def previousNonWhitespace(source : Array[char], start : usize) : usize {
     return usize(-1)
 }
 
-def nextNonWhitespace(source : Array[char], end : usize) : usize {
+def nextNonWhitespace(borrow source : Array[char], end : usize) : usize {
     var index : usize = end
     while index < source.size() {
         val value : char = source[index]
@@ -171,7 +171,7 @@ def nextNonWhitespace(source : Array[char], end : usize) : usize {
 }
 
 def previousIdentifierEquals(
-    source : Array[char],
+    borrow source : Array[char],
     start : usize,
     expected : string
 ) : bool {
@@ -189,7 +189,7 @@ def previousIdentifierEquals(
 }
 
 def lineStartsWith(
-    source : Array[char],
+    borrow source : Array[char],
     start : usize,
     expected : string
 ) : bool {
@@ -206,23 +206,23 @@ def lineStartsWith(
     (end == source.size() || !isIdentifierPart(source[end]))
 }
 
-def isNamespacePosition(source : Array[char], start : usize) : bool {
+def isNamespacePosition(borrow source : Array[char], start : usize) : bool {
     return lineStartsWith(source, start, "module") ||
     lineStartsWith(source, start, "import")
 }
 
-def followsDot(source : Array[char], start : usize) : bool {
+def followsDot(borrow source : Array[char], start : usize) : bool {
     val previous : usize = previousNonWhitespace(source, start)
     return previous != usize(-1) && source[previous] == '.'
 }
 
-def isCallablePosition(source : Array[char], end : usize) : bool {
+def isCallablePosition(borrow source : Array[char], end : usize) : bool {
     val next : usize = nextNonWhitespace(source, end)
     return next != usize(-1) && source[next] == '('
 }
 
 def identifierKind(
-    source : Array[char],
+    borrow source : Array[char],
     start : usize,
     end : usize
 ) : SyntaxKind {
@@ -261,7 +261,7 @@ def identifierKind(
 }
 
 def appendSpan(
-    output : Array[SyntaxSpan],
+    borrow var output : Array[SyntaxSpan],
     start : usize,
     end : usize,
     kind : SyntaxKind
@@ -272,7 +272,7 @@ def appendSpan(
 }
 
 /// Classe chaque portion du texte visible sans modifier son contenu.
-def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
+def highlight(borrow source : Array[char], borrow var output : Array[SyntaxSpan]) : Unit {
     output.clear()
     var index : usize = usize(0)
     while index < source.size() {
@@ -335,7 +335,7 @@ def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
 }
 
 /// Retourne le style d'un caractère, principalement utile aux tests et au rendu.
-def syntaxKindAt(spans : Array[SyntaxSpan], index : usize) : SyntaxKind {
+def syntaxKindAt(borrow var spans : Array[SyntaxSpan], index : usize) : SyntaxKind {
     var spanIndex : usize = usize(0)
     while spanIndex < spans.size() {
         val span : SyntaxSpan = spans[spanIndex]

@@ -16,12 +16,12 @@ private class Document(
 ) {
     def pathEquals(value : string) : bool => path.view() == value
 
-    def appendPath(output : TextBuilder) : Unit {
+    def appendPath(borrow var output : TextBuilder) : Unit {
         output.clear()
         output.append(path.view())
     }
 
-    def appendLabel(output : TextBuilder) : Unit {
+    def appendLabel(borrow var output : TextBuilder) : Unit {
         val value : string = path.view()
         val data : Ptr[byte] = stringData(value)
         var start : usize = usize(0)
@@ -55,7 +55,7 @@ private class Document(
     }
 
     def capture(
-        buffer : EditorBuffer,
+        borrow var buffer : EditorBuffer,
         firstLine : usize,
         firstColumn : usize
     ) : Unit {
@@ -66,7 +66,10 @@ private class Document(
         archive = buffer.archive()
     }
 
-    def restore(buffer : EditorBuffer, activePath : TextBuilder) : Unit {
+    def restore(
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder
+    ) : Unit {
         val requested : BufferArchive = move archive
         archive = emptyBufferArchive()
         buffer.restoreArchive(move requested)
@@ -117,7 +120,7 @@ class DocumentTabs(private val documents : Array[Document]) {
     }
 
     private def snapshot(
-        buffer : EditorBuffer,
+        borrow var buffer : EditorBuffer,
         firstLine : usize,
         firstColumn : usize
     ) : Unit {
@@ -126,8 +129,8 @@ class DocumentTabs(private val documents : Array[Document]) {
     }
 
     private def restoreActive(
-        buffer : EditorBuffer,
-        activePath : TextBuilder
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder
     ) : Unit {
         borrow var current : Document = documents.getMutable(active)
         current.restore(buffer, activePath)
@@ -145,23 +148,23 @@ class DocumentTabs(private val documents : Array[Document]) {
         return current.firstColumn()
     }
 
-    def appendPath(index : usize, output : TextBuilder) : Unit {
+    def appendPath(index : usize, borrow var output : TextBuilder) : Unit {
         borrow var requested : Document = documents.getMutable(index)
         requested.appendPath(output)
     }
 
-    def appendLabel(index : usize, output : TextBuilder) : Unit {
+    def appendLabel(index : usize, borrow var output : TextBuilder) : Unit {
         borrow var requested : Document = documents.getMutable(index)
         requested.appendLabel(output)
     }
 
-    borrow def isModified(index : usize, buffer : EditorBuffer) : bool {
+    borrow def isModified(index : usize, borrow var buffer : EditorBuffer) : bool {
         if index == active { return buffer.isModified() }
         borrow val requested : Document = documents.getBorrowed(index)
         return requested.isModified()
     }
 
-    borrow def anyModified(buffer : EditorBuffer) : bool {
+    borrow def anyModified(borrow var buffer : EditorBuffer) : bool {
         var index : usize = usize(0)
         while index < documents.size() {
             if this.isModified(index, buffer) { return true }
@@ -172,8 +175,8 @@ class DocumentTabs(private val documents : Array[Document]) {
 
     def switchTo(
         index : usize,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
         firstLine : usize,
         firstColumn : usize
     ) : bool {
@@ -186,9 +189,9 @@ class DocumentTabs(private val documents : Array[Document]) {
 
     def open(
         path : string,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
-        status : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
+        borrow var status : TextBuilder,
         firstLine : usize,
         firstColumn : usize
     ) : bool {
@@ -230,11 +233,11 @@ class DocumentTabs(private val documents : Array[Document]) {
 
     def create(
         path : string,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
         firstLine : usize,
         firstColumn : usize,
-        status : TextBuilder
+        borrow var status : TextBuilder
     ) : bool {
         if this.find(path) != usize(-1) {
             setStatus(status, "Ce fichier est déjà ouvert dans un onglet.")
@@ -260,9 +263,9 @@ class DocumentTabs(private val documents : Array[Document]) {
 
     def close(
         index : usize,
-        buffer : EditorBuffer,
-        activePath : TextBuilder,
-        status : TextBuilder,
+        borrow var buffer : EditorBuffer,
+        borrow var activePath : TextBuilder,
+        borrow var status : TextBuilder,
         firstLine : usize,
         firstColumn : usize
     ) : bool {
@@ -299,7 +302,7 @@ class DocumentTabs(private val documents : Array[Document]) {
     destructor { delete documents }
 }
 
-def documentTabs(path : string, buffer : EditorBuffer) : DocumentTabs {
+def documentTabs(path : string, borrow var buffer : EditorBuffer) : DocumentTabs {
     val documents : Array[Document] = new Array[Document](usize(8))
     if path != "" {
         documents.push(document(path, buffer.isModified()))
