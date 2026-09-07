@@ -27,10 +27,10 @@ private def startsWithCharacters(
     }
     var index : usize = usize(0)
     while index < prefix.size() {
-        if value.get(index) != prefix.get(index) {
+        if value[index] != prefix[index] {
             return false
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     return true
 }
@@ -41,8 +41,8 @@ private def keepCommonPrefix(
 ) : Unit {
     var shared : usize = usize(0)
     while shared < common.size() && shared < candidate.size() &&
-    common.get(shared) == candidate.get(shared) {
-        shared = shared + usize(1)
+    common[shared] == candidate[shared] {
+        shared += usize(1)
     }
     while common.size() > shared {
         val _removed : char = common.pop()
@@ -83,8 +83,8 @@ private class PathCompletionState(
             if matches == usize(0) {
                 var index : usize = usize(0)
                 while index < candidate.size() {
-                    common.push(candidate.get(index))
-                    index = index + usize(1)
+                    common.push(candidate[index])
+                    index += usize(1)
                 }
                 uniqueDirectory = joinedPathIsDirectory(joinPath(
                     directory,
@@ -94,27 +94,16 @@ private class PathCompletionState(
                 keepCommonPrefix(common, candidate)
                 uniqueDirectory = false
             }
-            matches = matches + usize(1)
+            matches += usize(1)
         }
         delete name
         return true
     }
 
-    def count() : usize {
-        return matches
-    }
-
-    def commonSize() : usize {
-        return common.size()
-    }
-
-    def commonAt(index : usize) : char {
-        return common.get(index)
-    }
-
-    def isUniqueDirectory() : bool {
-        return uniqueDirectory
-    }
+    pure borrow def count() : usize => matches
+    pure borrow def commonSize() : usize => common.size()
+    borrow def commonAt(index : usize) : char => common[index]
+    pure borrow def isUniqueDirectory() : bool => uniqueDirectory
 
     destructor {
         delete partial
@@ -152,26 +141,19 @@ class PathPrompt(
         text.clear()
         var index : usize = usize(0)
         while index < characters.size() {
-            text.appendChar(characters.get(index))
-            index = index + usize(1)
+            text.appendChar(characters[index])
+            index += usize(1)
         }
     }
 
-    def isVisible() : bool {
-        return currentAction != PathPromptAction.None
-    }
-
-    def action() : PathPromptAction {
-        return currentAction
-    }
+    pure borrow def isVisible() : bool => currentAction != PathPromptAction.None
+    pure borrow def action() : PathPromptAction => currentAction
 
     def value() : string {
         return text.view()
     }
 
-    def cursor() : usize {
-        return cursorIndex
-    }
+    pure borrow def cursor() : usize => cursorIndex
 
     def begin(action : PathPromptAction, initialValue : string) : Unit {
         currentAction = action
@@ -185,11 +167,11 @@ class PathPrompt(
         characters.push(value)
         var index : usize = characters.size() - usize(1)
         while index > cursorIndex {
-            characters.set(index, characters.get(index - usize(1)))
-            index = index - usize(1)
+            characters[index] = characters[index - usize(1)]
+            index -= usize(1)
         }
-        characters.set(cursorIndex, value)
-        cursorIndex = cursorIndex + usize(1)
+        characters[cursorIndex] = value
+        cursorIndex += usize(1)
         this.rebuildText()
     }
 
@@ -198,7 +180,7 @@ class PathPrompt(
             return
         }
         val _removed : char = characters.remove(cursorIndex - usize(1))
-        cursorIndex = cursorIndex - usize(1)
+        cursorIndex -= usize(1)
         this.rebuildText()
     }
 
@@ -212,13 +194,13 @@ class PathPrompt(
 
     def moveLeft() : Unit {
         if cursorIndex > usize(0) {
-            cursorIndex = cursorIndex - usize(1)
+            cursorIndex -= usize(1)
         }
     }
 
     def moveRight() : Unit {
         if cursorIndex < characters.size() {
-            cursorIndex = cursorIndex + usize(1)
+            cursorIndex += usize(1)
         }
     }
 
@@ -263,13 +245,13 @@ class PathPrompt(
         var removeCount : usize = cursorIndex - segmentStart
         while removeCount > usize(0) {
             val _removed : char = characters.remove(segmentStart)
-            removeCount = removeCount - usize(1)
+            removeCount -= usize(1)
         }
         cursorIndex = segmentStart
         var commonIndex : usize = usize(0)
         while commonIndex < state.commonSize() {
             this.append(state.commonAt(commonIndex))
-            commonIndex = commonIndex + usize(1)
+            commonIndex += usize(1)
         }
         if state.count() == usize(1) && state.isUniqueDirectory() &&
         cursorIndex == characters.size() {
@@ -281,9 +263,9 @@ class PathPrompt(
     def completePath() : usize {
         var segmentStart : usize = cursorIndex
         while segmentStart > usize(0) &&
-        characters.get(segmentStart - usize(1)) != '/' &&
-        characters.get(segmentStart - usize(1)) != '\\' {
-            segmentStart = segmentStart - usize(1)
+        characters[segmentStart - usize(1)] != '/' &&
+        characters[segmentStart - usize(1)] != '\\' {
+            segmentStart -= usize(1)
         }
         val directoryText : TextBuilder = new TextBuilder()
         defer delete directoryText
@@ -292,16 +274,16 @@ class PathPrompt(
         } else {
             var directoryIndex : usize = usize(0)
             while directoryIndex < segmentStart {
-                directoryText.appendChar(characters.get(directoryIndex))
-                directoryIndex = directoryIndex + usize(1)
+                directoryText.appendChar(characters[directoryIndex])
+                directoryIndex += usize(1)
             }
         }
         val partialText : TextBuilder = new TextBuilder()
         defer delete partialText
         var partialIndex : usize = segmentStart
         while partialIndex < cursorIndex {
-            partialText.appendChar(characters.get(partialIndex))
-            partialIndex = partialIndex + usize(1)
+            partialText.appendChar(characters[partialIndex])
+            partialIndex += usize(1)
         }
         val iteratorResult : Result[DirectoryIterator, SystemError] =
         readDirectory(directoryText.view())

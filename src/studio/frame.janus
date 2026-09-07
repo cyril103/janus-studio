@@ -61,9 +61,7 @@ def visibleEditorLines(lineAdvance : float) : usize {
     ))
 }
 
-def minimum(left : usize, right : usize) : usize {
-    return if left < right { left } else { right }
-}
+pure def minimum(left : usize, right : usize) : usize => if left < right { left } else { right }
 
 def restoreSelectedDocument(app : StudioAppState, ui : StudioUiState) : Unit {
     ui.firstLine = app.tabs.firstLine()

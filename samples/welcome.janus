@@ -12,6 +12,7 @@ def greet(name : string) : Unit {
 }
 
 def main() : int {
+    val hello = () => {println("hello")}
     greet("depuis Janus Studio")
     return 0
 }

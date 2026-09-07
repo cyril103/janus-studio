@@ -14,26 +14,13 @@ import std.result
 import std.system
 import std.text
 
-def isFile(path : string) : bool {
-    return match metadata(path) {
-        Ok(value) => value.kind == FileType.File,
-        Error(error) => false
-    }
-}
+def isFile(path : string) : bool =>
+    metadata(path) .map[bool]((value) => value.kind == FileType.File) .unwrapOr(false)
 
-def isDirectory(path : string) : bool {
-    return match metadata(path) {
-        Ok(value) => value.kind == FileType.Directory,
-        Error(error) => false
-    }
-}
+def isDirectory(path : string) : bool =>
+    metadata(path) .map[bool]((value) => value.kind == FileType.Directory) .unwrapOr(false)
 
-def pathExists(path : string) : bool {
-    return match metadata(path) {
-        Ok(value) => true,
-        Error(error) => false
-    }
-}
+def pathExists(path : string) : bool => metadata(path).isOk()
 
 def validateNewPath(path : string, status : TextBuilder) : bool {
     if pathExists(path) {
@@ -55,9 +42,7 @@ def validateSaveAsPath(
     return true
 }
 
-def codeFontPath() : string {
-    return "assets/fonts/DejaVuSansMono.ttf"
-}
+pure def codeFontPath() : string => "assets/fonts/DejaVuSansMono.ttf"
 
 private def useAssetRoot(
     root : string,
@@ -120,7 +105,7 @@ private def appendCharacterRange(
     var value : int = first
     while value <= last {
         output.appendChar(char(value))
-        value = value + 1
+        value += 1
     }
 }
 
@@ -215,7 +200,7 @@ def captureParentDirectory(path : string, output : TextBuilder) : bool {
         if data.load(index) == byte(47) || data.load(index) == byte(92) {
             separator = index
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     if separator == usize(-1) { return captureWorkingDirectory(output) }
     var length : usize = separator

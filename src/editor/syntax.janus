@@ -55,22 +55,14 @@ def semanticSyntaxKind(tokenType : usize) : SyntaxKind {
     return SyntaxKind.Plain
 }
 
-def isIdentifierStart(value : char) : bool {
-    return value == '_' ||
-    (value >= 'a' && value <= 'z') ||
-    (value >= 'A' && value <= 'Z')
-}
+pure def isIdentifierStart(value : char) : bool =>
+    value == '_' || (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
 
-def isIdentifierPart(value : char) : bool {
-    return isIdentifierStart(value) || (value >= '0' && value <= '9')
-}
+pure def isIdentifierPart(value : char) : bool =>
+    isIdentifierStart(value) || (value >= '0' && value <= '9')
 
-def isOperator(value : char) : bool {
-    return value == '+' || value == '-' || value == '*' || value == '/' ||
-    value == '%' || value == '=' || value == '!' || value == '<' ||
-    value == '>' || value == '&' || value == '|' || value == '^' ||
-    value == '~' || value == '?' || value == ':' || value == '.'
-}
+pure def isOperator(value : char) : bool =>
+    value == '+' || value == '-' || value == '*' || value == '/' || value == '%' || value == '=' || value == '!' || value == '<' || value == '>' || value == '&' || value == '|' || value == '^' || value == '~' || value == '?' || value == ':' || value == '.'
 
 def identifierEquals(
     source : Array[char],
@@ -84,10 +76,10 @@ def identifierEquals(
     val bytes : Ptr[byte] = stringData(expected)
     var index : usize = usize(0)
     while index < stringLength(expected) {
-        if source.get(start + index) != char(bytes.load(index)) {
+        if source[start + index] != char(bytes.load(index)) {
             return false
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     return true
 }
@@ -97,9 +89,12 @@ def isKeyword(source : Array[char], start : usize, end : usize) : bool {
     identifierEquals(source, start, end, "import") ||
     identifierEquals(source, start, end, "as") ||
     identifierEquals(source, start, end, "extern") ||
+    identifierEquals(source, start, end, "pure") ||
+    identifierEquals(source, start, end, "tailrec") ||
     identifierEquals(source, start, end, "def") ||
     identifierEquals(source, start, end, "trait") ||
     identifierEquals(source, start, end, "extends") ||
+    identifierEquals(source, start, end, "extend") ||
     identifierEquals(source, start, end, "enum") ||
     identifierEquals(source, start, end, "class") ||
     identifierEquals(source, start, end, "struct") ||
@@ -108,6 +103,7 @@ def isKeyword(source : Array[char], start : usize, end : usize) : bool {
     identifierEquals(source, start, end, "move") ||
     identifierEquals(source, start, end, "consume") ||
     identifierEquals(source, start, end, "borrow") ||
+    identifierEquals(source, start, end, "scoped") ||
     identifierEquals(source, start, end, "defer") ||
     identifierEquals(source, start, end, "delete") ||
     identifierEquals(source, start, end, "destructor") ||
@@ -153,8 +149,8 @@ def isBuiltinType(source : Array[char], start : usize, end : usize) : bool {
 def previousNonWhitespace(source : Array[char], start : usize) : usize {
     var index : usize = start
     while index > usize(0) {
-        index = index - usize(1)
-        val value : char = source.get(index)
+        index -= usize(1)
+        val value : char = source[index]
         if value != ' ' && value != '\t' && value != '\r' {
             return index
         }
@@ -165,11 +161,11 @@ def previousNonWhitespace(source : Array[char], start : usize) : usize {
 def nextNonWhitespace(source : Array[char], end : usize) : usize {
     var index : usize = end
     while index < source.size() {
-        val value : char = source.get(index)
+        val value : char = source[index]
         if value != ' ' && value != '\t' && value != '\r' {
             return index
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     return usize(-1)
 }
@@ -180,14 +176,14 @@ def previousIdentifierEquals(
     expected : string
 ) : bool {
     val previous : usize = previousNonWhitespace(source, start)
-    if previous == usize(-1) || !isIdentifierPart(source.get(previous)) {
+    if previous == usize(-1) || !isIdentifierPart(source[previous]) {
         return false
     }
     var wordStart : usize = previous
     while wordStart > usize(0) && isIdentifierPart(
-        source.get(wordStart - usize(1))
+        source[wordStart - usize(1)]
     ) {
-        wordStart = wordStart - usize(1)
+        wordStart -= usize(1)
     }
     return identifierEquals(source, wordStart, previous + usize(1), expected)
 }
@@ -198,16 +194,16 @@ def lineStartsWith(
     expected : string
 ) : bool {
     var lineStart : usize = start
-    while lineStart > usize(0) && source.get(lineStart - usize(1)) != '\n' {
-        lineStart = lineStart - usize(1)
+    while lineStart > usize(0) && source[lineStart - usize(1)] != '\n' {
+        lineStart -= usize(1)
     }
     while lineStart < start &&
-    (source.get(lineStart) == ' ' || source.get(lineStart) == '\t') {
-        lineStart = lineStart + usize(1)
+    (source[lineStart] == ' ' || source[lineStart] == '\t') {
+        lineStart += usize(1)
     }
     val end : usize = lineStart + stringLength(expected)
     return end <= start && identifierEquals(source, lineStart, end, expected) &&
-    (end == source.size() || !isIdentifierPart(source.get(end)))
+    (end == source.size() || !isIdentifierPart(source[end]))
 }
 
 def isNamespacePosition(source : Array[char], start : usize) : bool {
@@ -217,12 +213,12 @@ def isNamespacePosition(source : Array[char], start : usize) : bool {
 
 def followsDot(source : Array[char], start : usize) : bool {
     val previous : usize = previousNonWhitespace(source, start)
-    return previous != usize(-1) && source.get(previous) == '.'
+    return previous != usize(-1) && source[previous] == '.'
 }
 
 def isCallablePosition(source : Array[char], end : usize) : bool {
     val next : usize = nextNonWhitespace(source, end)
-    return next != usize(-1) && source.get(next) == '('
+    return next != usize(-1) && source[next] == '('
 }
 
 def identifierKind(
@@ -246,7 +242,7 @@ def identifierKind(
         return SyntaxKind.Namespace
     }
     if isBuiltinType(source, start, end) ||
-    (source.get(start) >= 'A' && source.get(start) <= 'Z') {
+    (source[start] >= 'A' && source[start] <= 'Z') {
         return SyntaxKind.Type
     }
     if isCallablePosition(source, end) {
@@ -281,22 +277,22 @@ def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
     var index : usize = usize(0)
     while index < source.size() {
         val start : usize = index
-        val value : char = source.get(index)
+        val value : char = source[index]
 
         if value == '/' && index + usize(1) < source.size() &&
-        source.get(index + usize(1)) == '/' {
-            index = index + usize(2)
-            while index < source.size() && source.get(index) != '\n' {
-                index = index + usize(1)
+        source[index + usize(1)] == '/' {
+            index += usize(2)
+            while index < source.size() && source[index] != '\n' {
+                index += usize(1)
             }
             appendSpan(output, start, index, SyntaxKind.Comment)
         } else if value == '"' || value == '\'' {
             val delimiter : char = value
             var escaped : bool = false
-            index = index + usize(1)
-            while index < source.size() && source.get(index) != '\n' {
-                val current : char = source.get(index)
-                index = index + usize(1)
+            index += usize(1)
+            while index < source.size() && source[index] != '\n' {
+                val current : char = source[index]
+                index += usize(1)
                 if !escaped && current == delimiter {
                     break
                 }
@@ -313,26 +309,26 @@ def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
                 SyntaxKind.String
             )
         } else if value >= '0' && value <= '9' {
-            index = index + usize(1)
+            index += usize(1)
             while index < source.size() &&
-            (isIdentifierPart(source.get(index)) || source.get(index) == '.') {
-                index = index + usize(1)
+            (isIdentifierPart(source[index]) || source[index] == '.') {
+                index += usize(1)
             }
             appendSpan(output, start, index, SyntaxKind.Number)
         } else if isIdentifierStart(value) {
-            index = index + usize(1)
-            while index < source.size() && isIdentifierPart(source.get(index)) {
-                index = index + usize(1)
+            index += usize(1)
+            while index < source.size() && isIdentifierPart(source[index]) {
+                index += usize(1)
             }
             appendSpan(output, start, index, identifierKind(source, start, index))
         } else if isOperator(value) {
-            index = index + usize(1)
-            while index < source.size() && isOperator(source.get(index)) {
-                index = index + usize(1)
+            index += usize(1)
+            while index < source.size() && isOperator(source[index]) {
+                index += usize(1)
             }
             appendSpan(output, start, index, SyntaxKind.Operator)
         } else {
-            index = index + usize(1)
+            index += usize(1)
             appendSpan(output, start, index, SyntaxKind.Plain)
         }
     }
@@ -342,11 +338,11 @@ def highlight(source : Array[char], output : Array[SyntaxSpan]) : Unit {
 def syntaxKindAt(spans : Array[SyntaxSpan], index : usize) : SyntaxKind {
     var spanIndex : usize = usize(0)
     while spanIndex < spans.size() {
-        val span : SyntaxSpan = spans.get(spanIndex)
+        val span : SyntaxSpan = spans[spanIndex]
         if index >= span.start && index < span.start + span.length {
             return span.kind
         }
-        spanIndex = spanIndex + usize(1)
+        spanIndex += usize(1)
     }
     return SyntaxKind.Plain
 }

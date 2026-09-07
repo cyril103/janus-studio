@@ -17,9 +17,7 @@ enum CompilerCheckState derives Copy, Equality, Debug {
     Failed
 }
 
-private def isPathSeparator(value : byte) : bool {
-    return value == byte(47) || value == byte(92)
-}
+private pure def isPathSeparator(value : byte) : bool => value == byte(47) || value == byte(92)
 
 private def isTestSourcePath(path : string) : bool {
     val data : Ptr[byte] = stringData(path)
@@ -44,7 +42,7 @@ private def isTestSourcePath(path : string) : bool {
         isPathSeparator(data.load(index + usize(5))) {
             return true
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     return false
 }
@@ -90,16 +88,10 @@ def runCompilerWorker(path : string, workspace : string) : int {
     }
 }
 
-private def argumentEqualsWorker(argument : Option[string]) : bool {
-    return match argument {
-        Some(value) => value == "--check-worker",
-        None => false
-    }
-}
+private def argumentEqualsWorker(argument : Option[string]) : bool =>
+    argument.map[bool]((value) => value == "--check-worker").unwrapOr(false)
 
-def compilerWorkerRequested() : bool {
-    return argumentEqualsWorker(programArgument(usize(1)))
-}
+def compilerWorkerRequested() : bool => programArgument(usize(1)) |> argumentEqualsWorker
 
 private def runWorkerArguments(
     pathArgument : Option[string],
@@ -173,12 +165,7 @@ class CompilerJob(
         return true
     }
 
-    borrow def isRunning() : bool {
-        return match process {
-            Some(child) => true,
-            None => false
-        }
-    }
+    borrow def isRunning() : bool => process.isSome()
 
     private def keepRunning(child : ChildProcess) : CompilerCheckState {
         delete process
@@ -290,7 +277,7 @@ class CompilerJob(
             } else {
                 reading = false
             }
-            attempts = attempts + usize(1)
+            attempts += usize(1)
         }
         if failed { return this.failChild(move child, output) }
         if reading { return this.keepRunning(move child) }
@@ -338,9 +325,7 @@ private def jobForExecutable(executable : Option[string]) : CompilerJob {
     }
 }
 
-def compilerJobForProgram() : CompilerJob {
-    return jobForExecutable(programArgument(usize(0)))
-}
+def compilerJobForProgram() : CompilerJob => jobForExecutable(programArgument(usize(0)))
 
 private def collectProcessResult(
     process : ProcessResult,

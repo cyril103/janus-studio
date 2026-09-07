@@ -19,21 +19,10 @@ class CompletionModel(
     private var visible : bool = false
     private var filtering : bool = false
 
-    def isVisible() : bool {
-        return visible
-    }
-
-    def size() : usize {
-        return itemCount
-    }
-
-    def selected() : usize {
-        return selectedIndex
-    }
-
-    def isFiltering() : bool {
-        return filtering
-    }
+    pure borrow def isVisible() : bool => visible
+    pure borrow def size() : usize => itemCount
+    pure borrow def selected() : usize => selectedIndex
+    pure borrow def isFiltering() : bool => filtering
 
     private def rebuildFilter() : Unit {
         labels.clear()
@@ -45,7 +34,7 @@ class CompletionModel(
             var labelEnd : usize = lineStart
             while labelEnd < stringLength(source) &&
             data.load(labelEnd) != byte(9) && data.load(labelEnd) != byte(10) {
-                labelEnd = labelEnd + usize(1)
+                labelEnd += usize(1)
             }
             candidate.clear()
             val _decoded : usize = appendUtf8CharacterRange(
@@ -57,22 +46,22 @@ class CompletionModel(
             var matches : bool = prefix.size() <= candidate.size()
             var prefixIndex : usize = usize(0)
             while matches && prefixIndex < prefix.size() {
-                if candidate.get(prefixIndex) != prefix.get(prefixIndex) {
+                if candidate[prefixIndex] != prefix[prefixIndex] {
                     matches = false
                 }
-                prefixIndex = prefixIndex + usize(1)
+                prefixIndex += usize(1)
             }
             var lineEnd : usize = labelEnd
             while lineEnd < stringLength(source) &&
             data.load(lineEnd) != byte(10) {
-                lineEnd = lineEnd + usize(1)
+                lineEnd += usize(1)
             }
             if lineEnd < stringLength(source) {
-                lineEnd = lineEnd + usize(1)
+                lineEnd += usize(1)
             }
             if matches {
                 appendUtf8TextRange(source, lineStart, lineEnd, labels)
-                itemCount = itemCount + usize(1)
+                itemCount += usize(1)
             }
             lineStart = lineEnd
         }
@@ -138,14 +127,14 @@ class CompletionModel(
         var position : usize = usize(0)
         while position < stringLength(source) && current < index {
             if data.load(position) == byte(10) {
-                current = current + usize(1)
+                current += usize(1)
             }
-            position = position + usize(1)
+            position += usize(1)
         }
         val itemStart : usize = position
         while position < stringLength(source) && data.load(position) != byte(9) &&
         data.load(position) != byte(10) {
-            position = position + usize(1)
+            position += usize(1)
         }
         appendUtf8TextRange(source, itemStart, position, output)
     }
@@ -161,23 +150,23 @@ class CompletionModel(
         var position : usize = usize(0)
         while position < stringLength(source) && current < index {
             if data.load(position) == byte(10) {
-                current = current + usize(1)
+                current += usize(1)
             }
-            position = position + usize(1)
+            position += usize(1)
         }
         val lineStart : usize = position
         while position < stringLength(source) &&
         data.load(position) != byte(9) && data.load(position) != byte(10) {
-            position = position + usize(1)
+            position += usize(1)
         }
         if position < stringLength(source) && data.load(position) == byte(9) {
-            position = position + usize(1)
+            position += usize(1)
         } else {
             position = lineStart
         }
         val displayStart : usize = position
         while position < stringLength(source) && data.load(position) != byte(10) {
-            position = position + usize(1)
+            position += usize(1)
         }
         appendUtf8TextRange(source, displayStart, position, output)
     }
@@ -195,7 +184,7 @@ class CompletionModel(
             this.appendDisplayItem(index, selectedLabel)
             output.append(selectedLabel.view())
             output.append("\n")
-            index = index + usize(1)
+            index += usize(1)
         }
     }
 

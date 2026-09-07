@@ -35,7 +35,7 @@ private def baseNameStart(path : string) : usize {
         if value == byte(47) || value == byte(92) {
             start = index + usize(1)
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     return if start < stringLength(path) { start } else { usize(0) }
 }
@@ -99,8 +99,8 @@ class ProjectExplorer(
         output.clear()
         var index : usize = usize(0)
         while index < length {
-            output.appendChar(source.get(start + index))
-            index = index + usize(1)
+            output.appendChar(source[start + index])
+            index += usize(1)
         }
     }
 
@@ -112,7 +112,7 @@ class ProjectExplorer(
         var index : usize = usize(0)
         while index < source.size() {
             output.appendChar(source.get(index))
-            index = index + usize(1)
+            index += usize(1)
         }
     }
 
@@ -130,12 +130,12 @@ class ProjectExplorer(
             right.nameLength
         }
         while index < common {
-            val leftValue : char = names.get(left.nameStart + index)
-            val rightValue : char = names.get(right.nameStart + index)
+            val leftValue : char = names[left.nameStart + index]
+            val rightValue : char = names[right.nameStart + index]
             if leftValue != rightValue {
                 return int(leftValue) < int(rightValue)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
         return left.nameLength < right.nameLength
     }
@@ -144,10 +144,10 @@ class ProjectExplorer(
         entries.push(entry)
         var cursor : usize = entries.size() - usize(1)
         while cursor > index {
-            entries.set(cursor, entries.get(cursor - usize(1)))
-            cursor = cursor - usize(1)
+            entries[cursor] = entries[cursor - usize(1)]
+            cursor -= usize(1)
         }
-        entries.set(index, entry)
+        entries[index] = entry
     }
 
     private def addJoinedEntry(
@@ -301,8 +301,8 @@ class ProjectExplorer(
     ) : Unit {
         var index : usize = usize(0)
         while index < length {
-            output.push(source.get(start + index))
-            index = index + usize(1)
+            output.push(source[start + index])
+            index += usize(1)
         }
     }
 
@@ -311,7 +311,7 @@ class ProjectExplorer(
         val compactedPaths : Array[char] = new Array[char](paths.size())
         var index : usize = usize(0)
         while index < entries.size() {
-            val entry : ExplorerEntry = entries.get(index)
+            val entry : ExplorerEntry = entries[index]
             val nameStart : usize = compactedNames.size()
             val pathStart : usize = compactedPaths.size()
             this.copyStorageRange(
@@ -326,7 +326,7 @@ class ProjectExplorer(
                 entry.pathLength,
                 compactedPaths
             )
-            entries.set(index, new ExplorerEntry(
+            entries[index] = new ExplorerEntry(
                 nameStart,
                 entry.nameLength,
                 pathStart,
@@ -334,8 +334,8 @@ class ProjectExplorer(
                 entry.depth,
                 entry.kind,
                 entry.expanded
-            ))
-            index = index + usize(1)
+            )
+            index += usize(1)
         }
         delete names
         names = move compactedNames
@@ -377,18 +377,16 @@ class ProjectExplorer(
         while childIndex < children.size() {
             this.insertEntry(
                 index + usize(1) + childIndex,
-                children.get(childIndex)
+                children[childIndex]
             )
-            childIndex = childIndex + usize(1)
+            childIndex += usize(1)
         }
         return true
     }
 
-    borrow def size() : usize {
-        return entries.size()
-    }
+    pure borrow def size() : usize => entries.size()
 
-    borrow def storageSize() : usize { return names.size() + paths.size() }
+    borrow def storageSize() : usize => names.size() + paths.size()
 
     def open(root : string) : bool {
         if explorerKindResult(metadata(root)) != int(ExplorerEntryKind.Directory) {
@@ -403,18 +401,18 @@ class ProjectExplorer(
         defer delete previousPaths
         var index : usize = usize(0)
         while index < entries.size() {
-            previousEntries.push(entries.get(index))
-            index = index + usize(1)
+            previousEntries.push(entries[index])
+            index += usize(1)
         }
         index = usize(0)
         while index < names.size() {
-            previousNames.push(names.get(index))
-            index = index + usize(1)
+            previousNames.push(names[index])
+            index += usize(1)
         }
         index = usize(0)
         while index < paths.size() {
-            previousPaths.push(paths.get(index))
-            index = index + usize(1)
+            previousPaths.push(paths[index])
+            index += usize(1)
         }
         val previousSelection : usize = selectedIndex
         entries.clear()
@@ -427,18 +425,18 @@ class ProjectExplorer(
             paths.clear()
             index = usize(0)
             while index < previousEntries.size() {
-                entries.push(previousEntries.get(index))
-                index = index + usize(1)
+                entries.push(previousEntries[index])
+                index += usize(1)
             }
             index = usize(0)
             while index < previousNames.size() {
-                names.push(previousNames.get(index))
-                index = index + usize(1)
+                names.push(previousNames[index])
+                index += usize(1)
             }
             index = usize(0)
             while index < previousPaths.size() {
-                paths.push(previousPaths.get(index))
-                index = index + usize(1)
+                paths.push(previousPaths[index])
+                index += usize(1)
             }
             selectedIndex = previousSelection
             return false
@@ -454,9 +452,7 @@ class ProjectExplorer(
         selectedIndex = usize(-1)
     }
 
-    borrow def selected() : usize {
-        return selectedIndex
-    }
+    pure borrow def selected() : usize => selectedIndex
 
     def select(index : usize) : Unit {
         if index < entries.size() {
@@ -464,25 +460,20 @@ class ProjectExplorer(
         }
     }
 
-    borrow def depth(index : usize) : usize {
-        return entries.get(index).depth
-    }
+    borrow def depth(index : usize) : usize => entries[index].depth
 
-    borrow def isDirectory(index : usize) : bool {
-        return entries.get(index).kind == ExplorerEntryKind.Directory
-    }
+    borrow def isDirectory(index : usize) : bool =>
+        entries[index].kind == ExplorerEntryKind.Directory
 
-    borrow def isExpanded(index : usize) : bool {
-        return entries.get(index).expanded
-    }
+    borrow def isExpanded(index : usize) : bool => entries[index].expanded
 
     borrow def appendLabel(index : usize, output : TextBuilder) : Unit {
-        val entry : ExplorerEntry = entries.get(index)
+        val entry : ExplorerEntry = entries[index]
         this.appendCharacters(names, entry.nameStart, entry.nameLength, output)
     }
 
     borrow def appendPath(index : usize, output : TextBuilder) : Unit {
-        val entry : ExplorerEntry = entries.get(index)
+        val entry : ExplorerEntry = entries[index]
         this.appendCharacters(paths, entry.pathStart, entry.pathLength, output)
     }
 
@@ -490,15 +481,15 @@ class ProjectExplorer(
         if index >= entries.size() || !this.isDirectory(index) {
             return false
         }
-        val entry : ExplorerEntry = entries.get(index)
+        val entry : ExplorerEntry = entries[index]
         if entry.expanded {
             var removed : usize = usize(0)
             while index + usize(1) < entries.size() &&
-            entries.get(index + usize(1)).depth > entry.depth {
+            entries[index + usize(1)].depth > entry.depth {
                 val _discarded : ExplorerEntry = entries.remove(index + usize(1))
-                removed = removed + usize(1)
+                removed += usize(1)
             }
-            entries.set(index, new ExplorerEntry(
+            entries[index] = new ExplorerEntry(
                 entry.nameStart,
                 entry.nameLength,
                 entry.pathStart,
@@ -506,11 +497,11 @@ class ProjectExplorer(
                 entry.depth,
                 entry.kind,
                 false
-            ))
+            )
             if selectedIndex > index && selectedIndex <= index + removed {
                 selectedIndex = index
             } else if selectedIndex > index + removed {
-                selectedIndex = selectedIndex - removed
+                selectedIndex -= removed
             }
             this.compactStorage()
             return true
@@ -518,7 +509,7 @@ class ProjectExplorer(
         if !this.loadChildren(index, entry) {
             return false
         }
-        entries.set(index, new ExplorerEntry(
+        entries[index] = new ExplorerEntry(
             entry.nameStart,
             entry.nameLength,
             entry.pathStart,
@@ -526,7 +517,7 @@ class ProjectExplorer(
             entry.depth,
             entry.kind,
             true
-        ))
+        )
         return true
     }
 

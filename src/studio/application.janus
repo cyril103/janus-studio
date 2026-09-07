@@ -19,9 +19,7 @@ class StudioDisplay(
     val outputGlyphAdvance : float,
     val outputLineAdvance : float
 ) {
-    def isValid() : bool {
-        return uiFont.isValid() && codeFont.isValid()
-    }
+    def isValid() : bool => uiFont.isValid() && codeFont.isValid()
 
     destructor {
         delete uiFont
@@ -94,13 +92,11 @@ def studioDisplay() : StudioDisplay {
     )
 }
 
-def glyphWidth(font : Font, oneGlyph : Vector2, size : float) : float {
-    return font.measure("MM", size, codeFontSpacing).x - oneGlyph.x
-}
+def glyphWidth(font : Font, oneGlyph : Vector2, size : float) : float =>
+    font.measure("MM", size, codeFontSpacing).x - oneGlyph.x
 
-def lineHeight(font : Font, oneGlyph : Vector2, size : float) : float {
-    return font.measure("M\nM", size, codeFontSpacing).y - oneGlyph.y
-}
+def lineHeight(font : Font, oneGlyph : Vector2, size : float) : float =>
+    font.measure("M\nM", size, codeFontSpacing).y - oneGlyph.y
 
 def runStudioSession(
     app : StudioAppState,

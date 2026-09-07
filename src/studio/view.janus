@@ -42,9 +42,7 @@ const documentTabGap : int = 4
 const minimumWindowWidth : int = 720
 const minimumWindowHeight : int = 520
 
-def editorCodeLeft() : int {
-    return editorLeft + editorGutterWidth
-}
+def editorCodeLeft() : int => editorLeft + editorGutterWidth
 def constrainStudioLayout() : Unit {
     if screenWidth() < minimumWindowWidth || screenHeight() < minimumWindowHeight {
         setWindowSize(
@@ -190,9 +188,8 @@ def documentTabCloseHovered(
     return pointInArea(x + documentTabWidth - 34, 17, 28, 28)
 }
 
-def distance(left : int, right : int) : int {
-    return if left >= right { left - right } else { right - left }
-}
+pure def distance(left : int, right : int) : int =>
+    if left >= right { left - right } else { right - left }
 
 def explorerSeparatorHovered() : bool {
     return distance(mouseX(), editorLeft - 12) <= separatorHitWidth &&
@@ -406,9 +403,9 @@ def outputLineCount(value : string) : usize {
     var index : usize = usize(0)
     while index < stringLength(value) {
         if data.load(index) == byte(10) {
-            lines = lines + usize(1)
+            lines += usize(1)
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     return lines
 }
@@ -425,22 +422,18 @@ def outputMaximumColumns(value : string) : usize {
                 maximum = current
             }
             current = usize(0)
-            index = index + usize(1)
+            index += usize(1)
         } else {
-            current = current + usize(1)
-            index = index + utf8SequenceWidth(value, index)
+            current += usize(1)
+            index += utf8SequenceWidth(value, index)
         }
     }
     return if current > maximum { current } else { maximum }
 }
 
-def outputContentTop() : int {
-    return editorBottom + 49
-}
+def outputContentTop() : int => editorBottom + 49
 
-def outputContentBottom() : int {
-    return screenHeight() - statusBarHeight - commandLineHeight - 10
-}
+def outputContentBottom() : int => screenHeight() - statusBarHeight - commandLineHeight - 10
 
 def visibleOutputRows(lineAdvance : float) : usize {
     val available : int = outputContentBottom() - outputContentTop()
@@ -686,9 +679,7 @@ def scrollExplorer(
     return first
 }
 
-def explorerContentBottom() : int {
-    return screenHeight() - statusBarHeight - commandLineHeight - 10
-}
+def explorerContentBottom() : int => screenHeight() - statusBarHeight - commandLineHeight - 10
 
 def mouseInExplorerPanel() : bool {
     return mouseX() >= 0 && mouseX() < editorLeft - 12 &&
@@ -711,7 +702,7 @@ def explorerContentWidth(
         if width > maximum {
             maximum = width
         }
-        index = index + usize(1)
+        index += usize(1)
     }
     return maximum
 }
@@ -1025,37 +1016,37 @@ def drawHighlightedCode(
     var utf16Column : usize = usize(0)
     var semanticIndex : usize = usize(0)
     while semanticIndex < semanticTokens.size() &&
-    semanticTokens.get(semanticIndex).line < firstLine {
-        semanticIndex = semanticIndex + usize(1)
+    semanticTokens[semanticIndex].line < firstLine {
+        semanticIndex += usize(1)
     }
     var spanIndex : usize = usize(0)
     while spanIndex < spans.size() {
-        val span : SyntaxSpan = spans.get(spanIndex)
+        val span : SyntaxSpan = spans[spanIndex]
         var index : usize = span.start
         val end : usize = span.start + span.length
         while index < end {
-            val value : char = characters.get(index)
+            val value : char = characters[index]
             if value == '\n' {
-                line = line + usize(1)
+                line += usize(1)
                 column = usize(0)
                 utf16Column = usize(0)
             } else {
                 val absoluteLine : usize = firstLine + line
                 while semanticIndex < semanticTokens.size() &&
                 semanticTokenBefore(
-                    semanticTokens.get(semanticIndex),
+                    semanticTokens[semanticIndex],
                     absoluteLine,
                     utf16Column
                 ) {
-                    semanticIndex = semanticIndex + usize(1)
+                    semanticIndex += usize(1)
                 }
                 val kind : SyntaxKind = if semanticIndex < semanticTokens.size() &&
                 semanticTokenContains(
-                    semanticTokens.get(semanticIndex),
+                    semanticTokens[semanticIndex],
                     absoluteLine,
                     utf16Column
                 ) {
-                    semanticTokens.get(semanticIndex).kind
+                    semanticTokens[semanticIndex].kind
                 } else {
                     span.kind
                 }
@@ -1075,16 +1066,16 @@ def drawHighlightedCode(
                         syntaxColor(kind)
                     )
                 }
-                column = column + usize(1)
+                column += usize(1)
                 utf16Column = utf16Column + if int(value) > 65535 {
                     usize(2)
                 } else {
                     usize(1)
                 }
             }
-            index = index + usize(1)
+            index += usize(1)
         }
-        spanIndex = spanIndex + usize(1)
+        spanIndex += usize(1)
     }
 }
 
@@ -1130,7 +1121,7 @@ def drawLineNumbers(
             14.0f,
             color
         )
-        row = row + usize(1)
+        row += usize(1)
     }
 }
 
@@ -1171,7 +1162,7 @@ def drawEditorDiagnostics(
                 )
             }
         }
-        index = index + usize(1)
+        index += usize(1)
     }
 }
 
@@ -1208,7 +1199,7 @@ def drawSearchMatches(
                 }
             )
         }
-        index = index + usize(1)
+        index += usize(1)
     }
 }
 
@@ -1256,7 +1247,7 @@ def drawSelection(
                 )
             }
         }
-        line = line + usize(1)
+        line += usize(1)
     }
 }
 
@@ -1336,7 +1327,7 @@ def drawExplorer(
             15.0f,
             labelColor
         )
-        index = index + usize(1)
-        row = row + usize(1)
+        index += usize(1)
+        row += usize(1)
     }
 }

@@ -11,13 +11,9 @@ import tooling.lsp
 import std.graphics
 import std.text
 
-def controlDown() : bool {
-    return isKeyDown(Key.LeftControl) || isKeyDown(Key.RightControl)
-}
+def controlDown() : bool => isKeyDown(Key.LeftControl) || isKeyDown(Key.RightControl)
 
-def shiftDown() : bool {
-    return isKeyDown(Key.LeftShift) || isKeyDown(Key.RightShift)
-}
+def shiftDown() : bool => isKeyDown(Key.LeftShift) || isKeyDown(Key.RightShift)
 
 def resolveQuitRequest(
     requested : bool,

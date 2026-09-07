@@ -17,14 +17,14 @@ private def decodeUtf8(text : string, output : Array[char]) : Unit {
         val decoded : Utf8Codepoint = decodeUtf8At(text, index)
         if decoded.value == '\r' {
             output.push('\n')
-            index = index + decoded.width
+            index += decoded.width
             if index < stringLength(text) &&
             decodeUtf8At(text, index).value == '\n' {
-                index = index + usize(1)
+                index += usize(1)
             }
         } else {
             output.push(decoded.value)
-            index = index + decoded.width
+            index += decoded.width
         }
     }
 }
@@ -36,7 +36,7 @@ private def contentFingerprint(text : string) : usize {
     while index < stringLength(text) {
         value = (value << usize(5)) ^ (value >> usize(2)) ^
         numericCast[usize](int(data.load(index)) & 255)
-        index = index + usize(1)
+        index += usize(1)
     }
     return value
 }
@@ -46,21 +46,13 @@ class BufferSnapshot(
     private val cursorPosition : usize,
     private val documentRevision : usize
 ) {
-    borrow def size() : usize {
-        return characters.size()
-    }
+    pure borrow def size() : usize => characters.size()
 
-    borrow def get(index : usize) : char {
-        return characters.get(index)
-    }
+    borrow def get(index : usize) : char => characters[index]
 
-    borrow def cursor() : usize {
-        return cursorPosition
-    }
+    pure borrow def cursor() : usize => cursorPosition
 
-    borrow def revision() : usize {
-        return documentRevision
-    }
+    pure borrow def revision() : usize => documentRevision
 
     destructor {
         delete characters
@@ -87,15 +79,15 @@ class BufferArchive(
         return move previous
     }
 
-    borrow def cursor() : usize { return cursorPosition }
-    borrow def revision() : usize { return currentRevision }
-    borrow def saved() : usize { return savedRevision }
-    borrow def next() : usize { return nextRevision }
-    borrow def anchor() : usize { return selectionAnchor }
-    borrow def hasSelection() : bool { return selecting }
-    borrow def trackedDiskSize() : usize { return diskSize }
-    borrow def trackedDiskFingerprint() : usize { return diskFingerprint }
-    borrow def hasTrackedDiskContent() : bool { return tracksDiskContent }
+    borrow def cursor() : usize => cursorPosition
+    borrow def revision() : usize => currentRevision
+    borrow def saved() : usize => savedRevision
+    borrow def next() : usize => nextRevision
+    borrow def anchor() : usize => selectionAnchor
+    borrow def hasSelection() : bool => selecting
+    borrow def trackedDiskSize() : usize => diskSize
+    borrow def trackedDiskFingerprint() : usize => diskFingerprint
+    borrow def hasTrackedDiskContent() : bool => tracksDiskContent
 
     def takeUndoStates() : Deque[BufferSnapshot] {
         val previous : Deque[BufferSnapshot] = move undoStates
@@ -122,13 +114,13 @@ private def trimSnapshotDeque(states : Deque[BufferSnapshot]) : Unit {
     var index : usize = usize(0)
     while index < count {
         val state : BufferSnapshot = states.popFront()
-        characters = characters + state.size()
+        characters += state.size()
         states.pushBack(move state)
-        index = index + usize(1)
+        index += usize(1)
     }
     while characters > historyCharacterLimit && states.size() > usize(1) {
         val oldest : BufferSnapshot = states.popFront()
-        characters = characters - oldest.size()
+        characters -= oldest.size()
         delete oldest
     }
 }
@@ -207,9 +199,7 @@ class EditorBuffer(
         delete archive
     }
 
-    borrow def hasSelection() : bool {
-        return selecting && selectionAnchor != cursorPosition
-    }
+    pure borrow def hasSelection() : bool => selecting && selectionAnchor != cursorPosition
 
     borrow def selectionStart() : usize {
         return if selectionAnchor < cursorPosition {
@@ -250,8 +240,8 @@ class EditorBuffer(
         val copied : Array[char] = new Array[char](characters.size())
         var index : usize = usize(0)
         while index < characters.size() {
-            copied.push(characters.get(index))
-            index = index + usize(1)
+            copied.push(characters[index])
+            index += usize(1)
         }
         return new BufferSnapshot(move copied, cursorPosition, currentRevision)
     }
@@ -261,7 +251,7 @@ class EditorBuffer(
         var index : usize = usize(0)
         while index < state.size() {
             characters.push(state.get(index))
-            index = index + usize(1)
+            index += usize(1)
         }
         cursorPosition = state.cursor()
         currentRevision = state.revision()
@@ -279,20 +269,20 @@ class EditorBuffer(
         trimSnapshotDeque(undoStates)
         redoStates.clear()
         currentRevision = nextRevision
-        nextRevision = nextRevision + usize(1)
+        nextRevision += usize(1)
     }
 
     private def eraseRange(start : usize, end : usize) : Unit {
         val removed : usize = end - start
         var source : usize = end
         while source < characters.size() {
-            characters.set(start + source - end, characters.get(source))
-            source = source + usize(1)
+            characters[start + source - end] = characters[source]
+            source += usize(1)
         }
         var remaining : usize = removed
         while remaining > usize(0) {
             val _discarded : char = characters.pop()
-            remaining = remaining - usize(1)
+            remaining -= usize(1)
         }
         cursorPosition = start
     }
@@ -307,17 +297,17 @@ class EditorBuffer(
         var appended : usize = usize(0)
         while appended < inserted.size() {
             characters.push('\0')
-            appended = appended + usize(1)
+            appended += usize(1)
         }
         var source : usize = previousSize
         while source > position {
-            source = source - usize(1)
-            characters.set(source + inserted.size(), characters.get(source))
+            source -= usize(1)
+            characters[source + inserted.size()] = characters[source]
         }
         var index : usize = usize(0)
         while index < inserted.size() {
-            characters.set(position + index, inserted.get(index))
-            index = index + usize(1)
+            characters[position + index] = inserted[index]
+            index += usize(1)
         }
     }
 
@@ -325,10 +315,10 @@ class EditorBuffer(
         characters.push('\0')
         var index : usize = characters.size() - usize(1)
         while index > position {
-            characters.set(index, characters.get(index - usize(1)))
-            index = index - usize(1)
+            characters[index] = characters[index - usize(1)]
+            index -= usize(1)
         }
-        characters.set(position, value)
+        characters[position] = value
     }
 
     private def insertLineAt(position : usize, line : Array[char]) : Unit {
@@ -336,26 +326,20 @@ class EditorBuffer(
         defer delete inserted
         var index : usize = usize(0)
         while index < line.size() {
-            inserted.push(line.get(index))
-            index = index + usize(1)
+            inserted.push(line[index])
+            index += usize(1)
         }
         inserted.push('\n')
         this.insertCharactersAt(position, inserted)
     }
 
-    borrow def size() : usize {
-        return characters.size()
-    }
+    pure borrow def size() : usize => characters.size()
 
-    borrow def cursor() : usize {
-        return cursorPosition
-    }
+    pure borrow def cursor() : usize => cursorPosition
 
-    borrow def isModified() : bool {
-        return currentRevision != savedRevision
-    }
+    pure borrow def isModified() : bool => currentRevision != savedRevision
 
-    borrow def revision() : usize { return currentRevision }
+    borrow def revision() : usize => currentRevision
 
     def markSaved() : Unit {
         savedRevision = currentRevision
@@ -372,7 +356,7 @@ class EditorBuffer(
         diskFingerprint == contentFingerprint(text)
     }
 
-    borrow def hasDiskContent() : bool { return tracksDiskContent }
+    borrow def hasDiskContent() : bool => tracksDiskContent
 
     def undo() : bool {
         if undoStates.isEmpty() {
@@ -441,7 +425,7 @@ class EditorBuffer(
         this.rememberChange()
         this.removeSelection()
         this.insertAt(cursorPosition, value)
-        cursorPosition = cursorPosition + usize(1)
+        cursorPosition += usize(1)
     }
 
     private borrow def matchingClosing(value : char) : char {
@@ -461,8 +445,8 @@ class EditorBuffer(
     def insertPaired(value : char) : Unit {
         if !this.hasSelection() && this.isAutomaticClosing(value) &&
         cursorPosition < characters.size() &&
-        characters.get(cursorPosition) == value {
-            cursorPosition = cursorPosition + usize(1)
+        characters[cursorPosition] == value {
+            cursorPosition += usize(1)
             return
         }
         val closing : char = this.matchingClosing(value)
@@ -474,7 +458,7 @@ class EditorBuffer(
         this.removeSelection()
         this.insertAt(cursorPosition, value)
         this.insertAt(cursorPosition + usize(1), closing)
-        cursorPosition = cursorPosition + usize(1)
+        cursorPosition += usize(1)
     }
 
     def insertText(text : string) : Unit {
@@ -487,7 +471,7 @@ class EditorBuffer(
         this.rememberChange()
         this.removeSelection()
         this.insertCharactersAt(cursorPosition, decoded)
-        cursorPosition = cursorPosition + decoded.size()
+        cursorPosition += decoded.size()
     }
 
     def insertSpaces(count : usize) : Unit {
@@ -501,10 +485,10 @@ class EditorBuffer(
         var index : usize = usize(0)
         while index < count {
             spaces.push(' ')
-            index = index + usize(1)
+            index += usize(1)
         }
         this.insertCharactersAt(cursorPosition, spaces)
-        cursorPosition = cursorPosition + count
+        cursorPosition += count
     }
 
     def insertIndentedNewline() : Unit {
@@ -512,36 +496,36 @@ class EditorBuffer(
             this.rememberChange()
             this.removeSelection()
             this.insertAt(cursorPosition, '\n')
-            cursorPosition = cursorPosition + usize(1)
+            cursorPosition += usize(1)
             return
         }
         val start : usize = this.lineStart(cursorPosition)
         var indentation : usize = usize(0)
         while start + indentation < cursorPosition &&
-        (characters.get(start + indentation) == ' ' ||
-            characters.get(start + indentation) == '\t') {
-            indentation = indentation + usize(1)
+        (characters[start + indentation] == ' ' ||
+            characters[start + indentation] == '\t') {
+            indentation += usize(1)
         }
         val afterOpening : bool = cursorPosition > usize(0) &&
-        characters.get(cursorPosition - usize(1)) == char(123)
+        characters[cursorPosition - usize(1)] == char(123)
         val beforeClosing : bool = cursorPosition < characters.size() &&
-        characters.get(cursorPosition) == char(125)
+        characters[cursorPosition] == char(125)
 
         this.rememberChange()
         this.insertAt(cursorPosition, '\n')
-        cursorPosition = cursorPosition + usize(1)
+        cursorPosition += usize(1)
         var index : usize = usize(0)
         while index < indentation {
-            this.insertAt(cursorPosition, characters.get(start + index))
-            cursorPosition = cursorPosition + usize(1)
-            index = index + usize(1)
+            this.insertAt(cursorPosition, characters[start + index])
+            cursorPosition += usize(1)
+            index += usize(1)
         }
         if afterOpening {
             index = usize(0)
             while index < usize(4) {
                 this.insertAt(cursorPosition, ' ')
-                cursorPosition = cursorPosition + usize(1)
-                index = index + usize(1)
+                cursorPosition += usize(1)
+                index += usize(1)
             }
         }
         if afterOpening && beforeClosing {
@@ -551,9 +535,9 @@ class EditorBuffer(
             while index < indentation {
                 this.insertAt(
                     contentCursor + usize(1) + index,
-                    characters.get(start + index)
+                    characters[start + index]
                 )
-                index = index + usize(1)
+                index += usize(1)
             }
             cursorPosition = contentCursor
         }
@@ -569,14 +553,14 @@ class EditorBuffer(
             return
         }
         this.rememberChange()
-        val opening : char = characters.get(cursorPosition - usize(1))
+        val opening : char = characters[cursorPosition - usize(1)]
         val closing : char = this.matchingClosing(opening)
         if closing != '\0' && cursorPosition < characters.size() &&
-        characters.get(cursorPosition) == closing {
+        characters[cursorPosition] == closing {
             val _closingRemoved : char = characters.remove(cursorPosition)
         }
         val _removed : char = characters.remove(cursorPosition - usize(1))
-        cursorPosition = cursorPosition - usize(1)
+        cursorPosition -= usize(1)
     }
 
     def deleteForward() : Unit {
@@ -594,20 +578,20 @@ class EditorBuffer(
 
     def moveLeft() : Unit {
         if cursorPosition > usize(0) {
-            cursorPosition = cursorPosition - usize(1)
+            cursorPosition -= usize(1)
         }
     }
 
     def moveRight() : Unit {
         if cursorPosition < characters.size() {
-            cursorPosition = cursorPosition + usize(1)
+            cursorPosition += usize(1)
         }
     }
 
     def moveRightInLine() : Unit {
         if cursorPosition < characters.size() &&
-        characters.get(cursorPosition) != '\n' {
-            cursorPosition = cursorPosition + usize(1)
+        characters[cursorPosition] != '\n' {
+            cursorPosition += usize(1)
         }
     }
 
@@ -621,15 +605,15 @@ class EditorBuffer(
 
     def moveHome() : Unit {
         while cursorPosition > usize(0) &&
-        characters.get(cursorPosition - usize(1)) != '\n' {
-            cursorPosition = cursorPosition - usize(1)
+        characters[cursorPosition - usize(1)] != '\n' {
+            cursorPosition -= usize(1)
         }
     }
 
     def moveEnd() : Unit {
         while cursorPosition < characters.size() &&
-        characters.get(cursorPosition) != '\n' {
-            cursorPosition = cursorPosition + usize(1)
+        characters[cursorPosition] != '\n' {
+            cursorPosition += usize(1)
         }
     }
 
@@ -637,12 +621,12 @@ class EditorBuffer(
         var currentLine : usize = usize(0)
         var start : usize = usize(0)
         while currentLine < line && start < characters.size() {
-            while start < characters.size() && characters.get(start) != '\n' {
-                start = start + usize(1)
+            while start < characters.size() && characters[start] != '\n' {
+                start += usize(1)
             }
             if start < characters.size() {
-                start = start + usize(1)
-                currentLine = currentLine + usize(1)
+                start += usize(1)
+                currentLine += usize(1)
             }
         }
         if currentLine < line {
@@ -658,10 +642,10 @@ class EditorBuffer(
         var result : usize = usize(0)
         var index : usize = usize(0)
         while index < cursorPosition {
-            if characters.get(index) == '\n' {
-                result = result + usize(1)
+            if characters[index] == '\n' {
+                result += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
         return result
     }
@@ -670,10 +654,10 @@ class EditorBuffer(
         var result : usize = usize(1)
         var index : usize = usize(0)
         while index < characters.size() {
-            if characters.get(index) == '\n' {
-                result = result + usize(1)
+            if characters[index] == '\n' {
+                result += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
         return result
     }
@@ -683,15 +667,15 @@ class EditorBuffer(
         var current : usize = usize(0)
         var index : usize = usize(0)
         while index < characters.size() {
-            if characters.get(index) == '\n' {
+            if characters[index] == '\n' {
                 if current > maximum {
                     maximum = current
                 }
                 current = usize(0)
             } else {
-                current = current + usize(1)
+                current += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
         return if current > maximum { current } else { maximum }
     }
@@ -699,9 +683,9 @@ class EditorBuffer(
     borrow def column() : usize {
         var result : usize = usize(0)
         var index : usize = cursorPosition
-        while index > usize(0) && characters.get(index - usize(1)) != '\n' {
-            result = result + usize(1)
-            index = index - usize(1)
+        while index > usize(0) && characters[index - usize(1)] != '\n' {
+            result += usize(1)
+            index -= usize(1)
         }
         return result
     }
@@ -710,42 +694,41 @@ class EditorBuffer(
         var currentLine : usize = usize(0)
         var index : usize = usize(0)
         while currentLine < line && index < characters.size() {
-            if characters.get(index) == '\n' {
-                currentLine = currentLine + usize(1)
+            if characters[index] == '\n' {
+                currentLine += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
         var consumed : usize = usize(0)
         var result : usize = usize(0)
         while consumed < column && index < characters.size() &&
-        characters.get(index) != '\n' {
-            val codepoint : int = int(characters.get(index))
+        characters[index] != '\n' {
+            val codepoint : int = int(characters[index])
             result = result + if codepoint > 65535 { usize(2) } else { usize(1) }
-            consumed = consumed + usize(1)
-            index = index + usize(1)
+            consumed += usize(1)
+            index += usize(1)
         }
         return result
     }
 
     private borrow def lineStart(position : usize) : usize {
         var result : usize = position
-        while result > usize(0) && characters.get(result - usize(1)) != '\n' {
-            result = result - usize(1)
+        while result > usize(0) && characters[result - usize(1)] != '\n' {
+            result -= usize(1)
         }
         return result
     }
 
     private borrow def lineEnd(start : usize) : usize {
         var result : usize = start
-        while result < characters.size() && characters.get(result) != '\n' {
-            result = result + usize(1)
+        while result < characters.size() && characters[result] != '\n' {
+            result += usize(1)
         }
         return result
     }
 
-    private borrow def isWhitespace(value : char) : bool {
-        return value == ' ' || value == '\t' || value == '\n' || value == '\r'
-    }
+    private pure borrow def isWhitespace(value : char) : bool =>
+        value == ' ' || value == '\t' || value == '\n' || value == '\r'
 
     private borrow def isWord(value : char) : bool {
         return value == '_' ||
@@ -758,15 +741,15 @@ class EditorBuffer(
         if cursorPosition >= characters.size() {
             return
         }
-        val startsOnWord : bool = this.isWord(characters.get(cursorPosition))
+        val startsOnWord : bool = this.isWord(characters[cursorPosition])
         while cursorPosition < characters.size() &&
-        !this.isWhitespace(characters.get(cursorPosition)) &&
-        this.isWord(characters.get(cursorPosition)) == startsOnWord {
-            cursorPosition = cursorPosition + usize(1)
+        !this.isWhitespace(characters[cursorPosition]) &&
+        this.isWord(characters[cursorPosition]) == startsOnWord {
+            cursorPosition += usize(1)
         }
         while cursorPosition < characters.size() &&
-        this.isWhitespace(characters.get(cursorPosition)) {
-            cursorPosition = cursorPosition + usize(1)
+        this.isWhitespace(characters[cursorPosition]) {
+            cursorPosition += usize(1)
         }
     }
 
@@ -774,22 +757,22 @@ class EditorBuffer(
         if cursorPosition == usize(0) {
             return
         }
-        cursorPosition = cursorPosition - usize(1)
+        cursorPosition -= usize(1)
         while cursorPosition > usize(0) &&
-        this.isWhitespace(characters.get(cursorPosition)) {
-            cursorPosition = cursorPosition - usize(1)
+        this.isWhitespace(characters[cursorPosition]) {
+            cursorPosition -= usize(1)
         }
-        val endsOnWord : bool = this.isWord(characters.get(cursorPosition))
+        val endsOnWord : bool = this.isWord(characters[cursorPosition])
         while cursorPosition > usize(0) &&
-        !this.isWhitespace(characters.get(cursorPosition - usize(1))) &&
-        this.isWord(characters.get(cursorPosition - usize(1))) == endsOnWord {
-            cursorPosition = cursorPosition - usize(1)
+        !this.isWhitespace(characters[cursorPosition - usize(1)]) &&
+        this.isWord(characters[cursorPosition - usize(1)]) == endsOnWord {
+            cursorPosition -= usize(1)
         }
     }
 
     def deleteCharacter() : Unit {
         if cursorPosition >= characters.size() ||
-        characters.get(cursorPosition) == '\n' {
+        characters[cursorPosition] == '\n' {
             return
         }
         this.deleteForward()
@@ -802,9 +785,9 @@ class EditorBuffer(
         var start : usize = this.lineStart(cursorPosition)
         var end : usize = this.lineEnd(start)
         if end < characters.size() {
-            end = end + usize(1)
+            end += usize(1)
         } else if start > usize(0) {
-            start = start - usize(1)
+            start -= usize(1)
         }
         this.rememberChange()
         this.eraseRange(start, end)
@@ -819,8 +802,8 @@ class EditorBuffer(
         val end : usize = this.lineEnd(start)
         var index : usize = start
         while index < end {
-            output.push(characters.get(index))
-            index = index + usize(1)
+            output.push(characters[index])
+            index += usize(1)
         }
         return true
     }
@@ -845,8 +828,8 @@ class EditorBuffer(
             val insertion : usize = end + usize(1)
             var index : usize = usize(0)
             while index < line.size() {
-                this.insertAt(insertion + index, line.get(index))
-                index = index + usize(1)
+                this.insertAt(insertion + index, line[index])
+                index += usize(1)
             }
             cursorPosition = insertion
         }
@@ -900,8 +883,8 @@ class EditorBuffer(
     borrow def appendText(output : TextBuilder) : Unit {
         var index : usize = usize(0)
         while index < characters.size() {
-            output.appendChar(characters.get(index))
-            index = index + usize(1)
+            output.appendChar(characters[index])
+            index += usize(1)
         }
     }
 
@@ -909,8 +892,8 @@ class EditorBuffer(
         output.clear()
         var index : usize = usize(0)
         while index < characters.size() {
-            output.push(characters.get(index))
-            index = index + usize(1)
+            output.push(characters[index])
+            index += usize(1)
         }
     }
 
@@ -925,13 +908,13 @@ class EditorBuffer(
             var index : usize = usize(0)
             var matches : bool = true
             while matches && index < requested.size() {
-                if characters.get(start + index) != requested.get(index) {
+                if characters[start + index] != requested[index] {
                     matches = false
                 }
-                index = index + usize(1)
+                index += usize(1)
             }
             if matches { output.push(start) }
-            start = start + usize(1)
+            start += usize(1)
         }
         return requested.size()
     }
@@ -948,8 +931,8 @@ class EditorBuffer(
         var line : usize = usize(0)
         var start : usize = usize(0)
         while line < requestedLine && start < characters.size() {
-            if characters.get(start) == '\n' { line = line + usize(1) }
-            start = start + usize(1)
+            if characters[start] == '\n' { line = line + usize(1) }
+            start += usize(1)
         }
         if line != requestedLine { return usize(0) }
         return this.lineEnd(start) - start
@@ -960,8 +943,8 @@ class EditorBuffer(
         if !this.hasSelection() { return false }
         var index : usize = this.selectionStart()
         while index < this.selectionEnd() {
-            output.appendChar(characters.get(index))
-            index = index + usize(1)
+            output.appendChar(characters[index])
+            index += usize(1)
         }
         return true
     }
@@ -981,8 +964,8 @@ class EditorBuffer(
             characters.size()
         }
         while index < end {
-            if characters.get(index) == '\n' { line = line + usize(1) }
-            index = index + usize(1)
+            if characters[index] == '\n' { line = line + usize(1) }
+            index += usize(1)
         }
         return line
     }
@@ -994,9 +977,9 @@ class EditorBuffer(
         } else {
             characters.size()
         }
-        while index > usize(0) && characters.get(index - usize(1)) != '\n' {
-            column = column + usize(1)
-            index = index - usize(1)
+        while index > usize(0) && characters[index - usize(1)] != '\n' {
+            column += usize(1)
+            index -= usize(1)
         }
         return column
     }
@@ -1009,20 +992,20 @@ class EditorBuffer(
         var index : usize = usize(0)
         var lineIndex : usize = usize(0)
         while index < characters.size() && lineIndex < firstLine {
-            if characters.get(index) == '\n' {
-                lineIndex = lineIndex + usize(1)
+            if characters[index] == '\n' {
+                lineIndex += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
 
         var emittedLines : usize = usize(0)
         while index < characters.size() && emittedLines < maximumLines {
-            val value : char = characters.get(index)
+            val value : char = characters[index]
             output.appendChar(value)
             if value == '\n' {
-                emittedLines = emittedLines + usize(1)
+                emittedLines += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
     }
 
@@ -1035,20 +1018,20 @@ class EditorBuffer(
         var index : usize = usize(0)
         var lineIndex : usize = usize(0)
         while index < characters.size() && lineIndex < firstLine {
-            if characters.get(index) == '\n' {
-                lineIndex = lineIndex + usize(1)
+            if characters[index] == '\n' {
+                lineIndex += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
 
         var emittedLines : usize = usize(0)
         while index < characters.size() && emittedLines < maximumLines {
-            val value : char = characters.get(index)
+            val value : char = characters[index]
             output.push(value)
             if value == '\n' {
-                emittedLines = emittedLines + usize(1)
+                emittedLines += usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
     }
 

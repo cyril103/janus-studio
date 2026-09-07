@@ -14,9 +14,7 @@ private class Document(
     private var firstVisibleLine : usize,
     private var firstVisibleColumn : usize
 ) {
-    def pathEquals(value : string) : bool {
-        return path.view() == value
-    }
+    def pathEquals(value : string) : bool => path.view() == value
 
     def appendPath(output : TextBuilder) : Unit {
         output.clear()
@@ -32,7 +30,7 @@ private class Document(
             if data.load(index) == byte(47) || data.load(index) == byte(92) {
                 start = index + usize(1)
             }
-            index = index + usize(1)
+            index += usize(1)
         }
         output.clear()
         if start == stringLength(value) {
@@ -47,9 +45,9 @@ private class Document(
         }
     }
 
-    borrow def isModified() : bool { return modified }
-    borrow def firstLine() : usize { return firstVisibleLine }
-    borrow def firstColumn() : usize { return firstVisibleColumn }
+    borrow def isModified() : bool => modified
+    borrow def firstLine() : usize => firstVisibleLine
+    borrow def firstColumn() : usize => firstVisibleColumn
 
     def updatePath(value : string) : Unit {
         path.clear()
@@ -96,8 +94,8 @@ private def document(path : string, modified : bool) : Document {
 class DocumentTabs(private val documents : Array[Document]) {
     private var active : usize = usize(0)
 
-    borrow def size() : usize { return documents.size() }
-    borrow def selected() : usize { return active }
+    borrow def size() : usize => documents.size()
+    borrow def selected() : usize => active
 
     private def documentPathEquals(index : usize, path : string) : bool {
         borrow var candidate : Document = documents.getMutable(index)
@@ -108,7 +106,7 @@ class DocumentTabs(private val documents : Array[Document]) {
         var index : usize = usize(0)
         while index < documents.size() {
             if this.documentPathEquals(index, path) { return index }
-            index = index + usize(1)
+            index += usize(1)
         }
         return usize(-1)
     }
@@ -167,7 +165,7 @@ class DocumentTabs(private val documents : Array[Document]) {
         var index : usize = usize(0)
         while index < documents.size() {
             if this.isModified(index, buffer) { return true }
-            index = index + usize(1)
+            index += usize(1)
         }
         return false
     }

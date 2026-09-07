@@ -41,9 +41,7 @@ class VimController(
     private val command : TextBuilder,
     private val lineRegister : Array[char]
 ) {
-    def mode() : EditorMode {
-        return currentMode
-    }
+    pure borrow def mode() : EditorMode => currentMode
 
     def appendStatus(output : TextBuilder) : Unit {
         output.clear()
@@ -99,9 +97,7 @@ class VimController(
         command.clear()
     }
 
-    def commandView() : string {
-        return command.view()
-    }
+    def commandView() : string => command.view()
 
     def handleNormal(value : char, buffer : EditorBuffer) : EditorAction {
         if pendingG {
@@ -208,7 +204,7 @@ class VimController(
         while end > usize(0) {
             val value : int = unsignedByte(data.load(end))
             if value < 128 || value > 191 { break }
-            end = end - usize(1)
+            end -= usize(1)
         }
         shortened.append(stringView(data, end))
         command.clear()

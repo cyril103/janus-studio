@@ -59,6 +59,25 @@ def highlightsCharacterAndGenericTypes() : Unit {
 }
 
 /// @test
+def highlightsCurrentLanguageKeywords() : Unit {
+    val characters : Array[char] = new Array[char](usize(96))
+    defer delete characters
+    val spans : Array[SyntaxSpan] = new Array[SyntaxSpan](usize(32))
+    defer delete spans
+    highlightedSource(
+        "pure tailrec def walk(scoped step : () => Unit) => true\nextend[T] Box[T] {}",
+        characters,
+        spans
+    )
+
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(0)), SyntaxKind.Keyword)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(5)), SyntaxKind.Keyword)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(13)), SyntaxKind.Keyword)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(22)), SyntaxKind.Keyword)
+    assertEqual[SyntaxKind](syntaxKindAt(spans, usize(60)), SyntaxKind.Keyword)
+}
+
+/// @test
 def distinguishesSymbolsLikeVsCode() : Unit {
     val characters : Array[char] = new Array[char](usize(128))
     defer delete characters

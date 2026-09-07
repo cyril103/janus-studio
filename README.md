@@ -44,7 +44,7 @@ Cette première version fournit :
 
 ## Prérequis
 
-- Janus 0.21.0 ou plus récent, avec `janus-lsp` ;
+- Janus 0.23.0 ou plus récent, avec `janus-lsp` ;
 - raylib 6 disponible pour l'exécution de l'interface graphique.
 
 Le compilateur peut construire l'application sans raylib. Le backend graphique
@@ -116,6 +116,12 @@ que lors de l'installation. Sous Windows, le dossier ajouté au `PATH` est
 - `src/studio/render.janus` assemble ces composants pour dessiner une frame complète ;
 - `src/editor/` regroupe les modèles d'édition indépendants de l'interface ;
 - `src/tooling/` contient les intégrations avec le compilateur et le LSP.
+
+Le code cible les idiomes Janus 0.23 : observateurs `pure borrow`, corps
+expression, affectations composées, indexation sûre des tableaux, lambdas à
+paramètres contextuels, pipeline `|>` et combinateurs chaînables
+`Option`/`Result`. La propriété reste explicite sur les chemins qui déplacent
+des buffers, processus ou documents.
 
 ## Lancer
 

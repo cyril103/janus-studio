@@ -193,8 +193,8 @@ def drawStudio(
             tabIndex
             ) { accent } else { muted }
         )
-        tabIndex = tabIndex + usize(1)
-        tabSlot = tabSlot + usize(1)
+        tabIndex += usize(1)
+        tabSlot += usize(1)
     }
     val maximumFirstTab : usize = maximumFirstDocumentTab(tabs)
     if maximumFirstTab > usize(0) {

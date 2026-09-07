@@ -12,7 +12,7 @@ private def matchesAt(source : string, marker : string, start : usize) : bool {
     var index : usize = usize(0)
     while index < stringLength(marker) {
         if data.load(start + index) != expected.load(index) { return false }
-        index = index + usize(1)
+        index += usize(1)
     }
     return true
 }
@@ -25,7 +25,7 @@ private def parseNumber(source : string, start : usize) : usize {
     data.load(index) >= byte(48) && data.load(index) <= byte(57) {
         value = value * usize(10) +
         numericCast[usize](int(data.load(index)) - 48)
-        index = index + usize(1)
+        index += usize(1)
     }
     return value
 }
@@ -47,10 +47,10 @@ class EditorDiagnostics(
         messages.clear()
     }
 
-    borrow def size() : usize { return lines.size() }
-    borrow def line(index : usize) : usize { return lines.get(index) }
-    borrow def column(index : usize) : usize { return columns.get(index) }
-    borrow def isError(index : usize) : bool { return severities.get(index) == 2 }
+    borrow def size() : usize => lines.size()
+    borrow def line(index : usize) : usize => lines[index]
+    borrow def column(index : usize) : usize => columns[index]
+    borrow def isError(index : usize) : bool => severities[index] == 2
 
     def appendForLine(requestedLine : usize, output : TextBuilder) : bool {
         output.clear()
@@ -61,13 +61,13 @@ class EditorDiagnostics(
                 output.append(if this.isError(index) { "Erreur : " } else { "Avertissement : " })
                 appendDecodedUtf8Range(
                     source,
-                    messageStarts.get(index),
-                    messageLengths.get(index),
+                    messageStarts[index],
+                    messageLengths[index],
                     output
                 )
                 return true
             }
-            index = index + usize(1)
+            index += usize(1)
         }
         return false
     }
@@ -138,12 +138,12 @@ class EditorDiagnostics(
             output.append(" — ")
             appendDecodedUtf8Range(
                 source,
-                messageStarts.get(index),
-                messageLengths.get(index),
+                messageStarts[index],
+                messageLengths[index],
                 output
             )
             output.append("\n")
-            index = index + usize(1)
+            index += usize(1)
         }
     }
 
